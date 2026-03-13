@@ -41,5 +41,13 @@ export function getAuthRedirectUrl(): string {
   if (typeof chrome !== 'undefined' && chrome?.runtime?.id) {
     return `chrome-extension://${chrome.runtime.id}/index.extension.html`;
   }
-  return `${window.location.origin}/auth/callback`;
+  // Always use HTTPS for the OAuth redirect URL. If the page is somehow still
+  // on HTTP (e.g. SSL not yet provisioned), the PKCE code_verifier would be
+  // stored in http:// localStorage but the callback would land on https://
+  // (Supabase's Site URL) — a different origin — breaking the exchange.
+  const origin =
+    window.location.protocol === 'http:' && window.location.hostname !== 'localhost'
+      ? `https://${window.location.host}`
+      : window.location.origin;
+  return `${origin}/auth/callback`;
 }

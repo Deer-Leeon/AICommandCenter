@@ -8,8 +8,17 @@
     <meta name="theme-color" content="#f0f0f8" media="(prefers-color-scheme: light)" />
     <title>NEXUS — AI Command Center</title>
 
-    <!--
-      Critical CSS: applied before ANY external stylesheet or JS loads.
+  <!-- Force HTTPS: must run before any app code so localStorage (PKCE verifier,
+       session) is always in the same origin. HTTP→HTTPS cross-origin splits
+       localStorage and breaks the PKCE code exchange. Skip on localhost. -->
+  <script>
+    if (location.protocol === 'http:' && location.hostname !== 'localhost') {
+      location.replace('https://' + location.host + location.pathname + location.search + location.hash);
+    }
+  </script>
+
+  <!--
+    Critical CSS: applied before ANY external stylesheet or JS loads.
       Prevents the white-flash on first paint and matches the app shell exactly.
       Dark mode default; light mode via media query.
     -->
