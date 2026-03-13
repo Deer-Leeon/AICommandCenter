@@ -1,0 +1,14 @@
+# Railway config for the NEXUS backend service
+# In Railway dashboard → Service → Settings → Source:
+#   Set "Root Directory" to "nexus"
+# Railway will find this file and use Dockerfile.backend automatically.
+
+[build]
+  builder = "DOCKERFILE"
+  dockerfilePath = "Dockerfile.backend"
+
+[deploy]
+  healthcheckPath = "/api/health"
+  healthcheckTimeout = 30
+  restartPolicyType = "ON_FAILURE"
+  restartPolicyMaxRetries = 3
