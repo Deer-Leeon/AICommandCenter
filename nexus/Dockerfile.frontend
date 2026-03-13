@@ -30,4 +30,5 @@ COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 4173
 
-CMD ["nginx", "-g", "daemon off;"]
+# Railway injects a dynamic $PORT — swap the hardcoded 4173 for it at startup.
+CMD ["/bin/sh", "-c", "sed -i \"s/listen 4173/listen ${PORT:-4173}/\" /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
