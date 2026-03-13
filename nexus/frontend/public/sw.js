@@ -9,7 +9,7 @@
  *   everything else → Network-first with cache fallback
  */
 
-const SHELL_CACHE  = 'nexus-shell-v2';
+const SHELL_CACHE  = 'nexus-shell-v3';
 const ASSETS_CACHE = 'nexus-assets-v2';
 const FONT_CACHE   = 'nexus-fonts-v2';
 
@@ -72,9 +72,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // HTML navigation → stale-while-revalidate so shell renders instantly from cache
+  // HTML navigation → network-first so deployments take effect immediately.
+  // Stale-while-revalidate would serve an old index.html (e.g. one without a
+  // critical inline redirect) and only update on the *next* visit, which breaks
+  // things like the HTTP→HTTPS redirect we rely on for PKCE auth.
   if (request.mode === 'navigate') {
-    event.respondWith(staleWhileRevalidate(SHELL_CACHE, request));
+    event.respondWith(networkFirstWithCache(SHELL_CACHE, request));
     return;
   }
 
