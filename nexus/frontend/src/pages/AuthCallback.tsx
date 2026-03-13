@@ -8,14 +8,19 @@ const DEBUG = true;
 export default function AuthCallback() {
   const navigate = useNavigate();
   const [authError, setAuthError] = useState<string | null>(null);
-  const [debugInfo] = useState(() => ({
-    protocol: window.location.protocol,
-    hasCode: new URLSearchParams(window.location.search).has('code'),
-    hasHashToken: window.location.hash.includes('access_token'),
-    hasError: window.location.hash.includes('error') || new URLSearchParams(window.location.search).has('error'),
-    hash: window.location.hash.slice(0, 40) || '(empty)',
-    search: window.location.search.slice(0, 40) || '(empty)',
-  }));
+  const [debugInfo] = useState(() => {
+    const verifierRaw = localStorage.getItem('nexus-auth-code-verifier');
+    const cookieKey = encodeURIComponent('nexus-auth-code-verifier') + '=';
+    const cookieFound = document.cookie.split(';').some(c => c.trim().startsWith(cookieKey));
+    return {
+      protocol: window.location.protocol,
+      hasCode: new URLSearchParams(window.location.search).has('code'),
+      hasHashToken: window.location.hash.includes('access_token'),
+      hasError: window.location.hash.includes('error') || new URLSearchParams(window.location.search).has('error'),
+      verifier: verifierRaw ? `FOUND (${verifierRaw.length} chars)` : 'NOT FOUND',
+      cookie: cookieFound ? 'FOUND IN COOKIE' : 'NOT IN COOKIE',
+    };
+  });
 
   useEffect(() => {
     // Check for OAuth error params in both hash (implicit) and query (PKCE)
@@ -113,10 +118,10 @@ export default function AuthCallback() {
           }}
         >
 {`Protocol:   ${debugInfo.protocol}
-Has #token: ${debugInfo.hasHashToken}   Has ?code: ${debugInfo.hasCode}
+Has ?code:  ${debugInfo.hasCode}   Has #token: ${debugInfo.hasHashToken}
 Has error:  ${debugInfo.hasError}
-Hash:       ${debugInfo.hash}
-Search:     ${debugInfo.search}`}
+Verifier:   ${debugInfo.verifier}
+Cookie:     ${debugInfo.cookie}`}
         </pre>
       )}
     </div>

@@ -8,16 +8,60 @@ const supabaseAnonKey =
   import.meta.env.VITE_SUPABASE_ANON_KEY ||
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0cWpobGtucHFvYmZkbnNjaWlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1OTQ4ODUsImV4cCI6MjA4ODE3MDg4NX0.44nVoOojTZdJmMK3tZDHkiyqsW3PVGGszTOApnQ8p-k';
 
-// Use implicit flow: the access_token arrives in the URL hash on the callback
-// page — no code_verifier is generated, so there is no cross-origin
-// localStorage problem (http:// verifier vs https:// callback).
+// ── Cross-protocol cookie storage ─────────────────────────────────────────────
+// The PKCE code_verifier must survive the OAuth redirect chain. We store it in
+// BOTH localStorage AND a cookie so it is readable even if the sign-in page
+// and the callback page run on different protocols (http:// vs https://).
+// Cookies without the Secure flag are shared across both protocols on the same
+// hostname, bridging the gap while localStorage is origin-partitioned.
+
+const COOKIE_MAX_AGE = 60 * 10; // 10 minutes — only needed for the auth round-trip
+
+function cookieGet(key: string): string | null {
+  const prefix = encodeURIComponent(key) + '=';
+  for (const part of document.cookie.split(';')) {
+    const c = part.trimStart();
+    if (c.startsWith(prefix)) return decodeURIComponent(c.slice(prefix.length));
+  }
+  return null;
+}
+
+function cookieSet(key: string, value: string) {
+  document.cookie =
+    `${encodeURIComponent(key)}=${encodeURIComponent(value)}` +
+    `;path=/;max-age=${COOKIE_MAX_AGE};SameSite=Lax`;
+}
+
+function cookieDel(key: string) {
+  document.cookie = `${encodeURIComponent(key)}=;path=/;max-age=0;SameSite=Lax`;
+}
+
+const crossProtocolStorage = {
+  getItem(key: string): string | null {
+    // Cookie first — survives http:// → https:// redirect.
+    const fromCookie = cookieGet(key);
+    if (fromCookie !== null) return fromCookie;
+    return window.localStorage.getItem(key);
+  },
+  setItem(key: string, value: string): void {
+    window.localStorage.setItem(key, value);
+    // Mirror small values (like the code_verifier) into a cookie.
+    if (value.length < 3800) cookieSet(key, value);
+  },
+  removeItem(key: string): void {
+    window.localStorage.removeItem(key);
+    cookieDel(key);
+  },
+};
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     storageKey: 'nexus-auth',
+    storage: crossProtocolStorage,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    flowType: 'implicit',
+    flowType: 'pkce',
   },
 });
 

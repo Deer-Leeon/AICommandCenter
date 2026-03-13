@@ -45,13 +45,19 @@ export function useAuth() {
   }, []);
 
   const signInWithGoogle = async () => {
+    // PKCE stores the code_verifier in localStorage which is partitioned by
+    // origin (http:// ≠ https://). If the user somehow ended up on HTTP, force
+    // a redirect to HTTPS BEFORE generating the verifier so both pages share
+    // the same origin and can read/write to the same localStorage.
+    if (window.location.protocol === 'http:' && window.location.hostname !== 'localhost') {
+      window.location.replace(
+        `https://${window.location.host}${window.location.pathname}${window.location.search}`,
+      );
+      return;
+    }
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: {
-        redirectTo: getAuthRedirectUrl(),
-        // No extra queryParams — access_type/prompt are for Google Calendar/Docs
-        // OAuth (handled separately in ConnectServicesPage), not for basic login.
-      },
+      options: { redirectTo: getAuthRedirectUrl() },
     });
   };
 
