@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, getAuthRedirectUrl } from '../lib/supabase';
 import type { User, Session } from '@supabase/supabase-js';
 
 function readCachedUser(): User | null {
@@ -34,10 +34,25 @@ export function useAuth() {
     return () => subscription.unsubscribe();
   }, []);
 
+  const signInWithGoogle = async () => {
+    // Ensure HTTPS before starting PKCE — the code_verifier must be stored in
+    // the same origin (https://) that will receive the OAuth callback.
+    if (window.location.protocol === 'http:' && window.location.hostname !== 'localhost') {
+      window.location.replace(
+        `https://${window.location.host}${window.location.pathname}${window.location.search}`,
+      );
+      return;
+    }
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: getAuthRedirectUrl() },
+    });
+  };
+
   const signOut = async () => {
     localStorage.removeItem('nexus_onboarding_done');
     await supabase.auth.signOut();
   };
 
-  return { user, session, loading, signOut };
+  return { user, session, loading, signInWithGoogle, signOut };
 }
