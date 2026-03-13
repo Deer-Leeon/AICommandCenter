@@ -1,7 +1,38 @@
+import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabase';
 
 export default function LoginPage() {
   const { signInWithGoogle } = useAuth();
+
+  const [mode, setMode]       = useState<'login' | 'signup'>('login');
+  const [email, setEmail]     = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError]     = useState<string | null>(null);
+  const [info, setInfo]       = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleEmailAuth(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setInfo(null);
+    setLoading(true);
+    try {
+      if (mode === 'signup') {
+        const { error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        setInfo('Check your email for a confirmation link, then sign in.');
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        // onAuthStateChange in useAuth will update the session automatically
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div
@@ -25,28 +56,10 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Feature list */}
-        <div className="space-y-3 mb-8 text-left">
-          {[
-            'Google Calendar integration',
-            'Google Docs access',
-            'AI assistant powered by local LLM',
-            'Slack, Obsidian, Weather &amp; more',
-          ].map((feat) => (
-            <div key={feat} className="flex items-center gap-3" style={{ color: 'var(--text-muted)' }}>
-              <span style={{ color: 'var(--teal)' }}>✓</span>
-              <span
-                className="text-sm"
-                dangerouslySetInnerHTML={{ __html: feat }}
-              />
-            </div>
-          ))}
-        </div>
-
-        {/* Sign-in button */}
+        {/* Google sign-in */}
         <button
           onClick={signInWithGoogle}
-          className="w-full flex items-center justify-center gap-3 font-semibold py-3 px-6 rounded-xl transition-colors"
+          className="w-full flex items-center justify-center gap-3 font-semibold py-3 px-6 rounded-xl transition-colors mb-6"
           style={{ background: '#ffffff', color: '#1a1a2e', border: '1px solid rgba(0,0,0,0.12)', boxShadow: '0 1px 4px rgba(0,0,0,0.1)' }}
           onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = '#f5f5f5')}
           onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = '#ffffff')}
@@ -59,6 +72,83 @@ export default function LoginPage() {
           </svg>
           Continue with Google
         </button>
+
+        {/* Divider */}
+        <div className="flex items-center gap-3 mb-6">
+          <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
+          <span className="text-xs" style={{ color: 'var(--text-faint)' }}>or</span>
+          <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
+        </div>
+
+        {/* Mode toggle */}
+        <div className="flex rounded-lg overflow-hidden mb-5" style={{ border: '1px solid var(--border)' }}>
+          {(['login', 'signup'] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => { setMode(m); setError(null); setInfo(null); }}
+              className="flex-1 py-2 text-sm font-medium transition-colors"
+              style={{
+                background: mode === m ? 'var(--accent)' : 'transparent',
+                color: mode === m ? '#000' : 'var(--text-muted)',
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              {m === 'login' ? 'Sign in' : 'Create account'}
+            </button>
+          ))}
+        </div>
+
+        {/* Email / password form */}
+        <form onSubmit={handleEmailAuth} className="space-y-3 text-left">
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="w-full py-2.5 px-4 rounded-lg text-sm outline-none"
+            style={{
+              background: 'var(--bg)',
+              border: '1px solid var(--border)',
+              color: 'var(--text)',
+            }}
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            minLength={6}
+            className="w-full py-2.5 px-4 rounded-lg text-sm outline-none"
+            style={{
+              background: 'var(--bg)',
+              border: '1px solid var(--border)',
+              color: 'var(--text)',
+            }}
+          />
+          {error && (
+            <p className="text-xs" style={{ color: '#ea4335' }}>{error}</p>
+          )}
+          {info && (
+            <p className="text-xs" style={{ color: 'var(--teal)' }}>{info}</p>
+          )}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-3 rounded-xl font-semibold text-sm transition-opacity"
+            style={{
+              background: 'var(--accent)',
+              color: '#000',
+              opacity: loading ? 0.6 : 1,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              border: 'none',
+            }}
+          >
+            {loading ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
+          </button>
+        </form>
 
         <p className="text-xs mt-6" style={{ color: 'var(--text-faint)' }}>
           By signing in you agree to let NEXUS access your Google Calendar and Docs
