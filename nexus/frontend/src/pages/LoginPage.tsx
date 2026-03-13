@@ -2,15 +2,29 @@ import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 
+const inputStyle = {
+  background: 'var(--bg)',
+  border: '1px solid var(--border)',
+  color: 'var(--text)',
+} as const;
+
 export default function LoginPage() {
   const { signInWithGoogle } = useAuth();
 
-  const [mode, setMode]         = useState<'login' | 'signup'>('login');
-  const [email, setEmail]       = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError]       = useState<string | null>(null);
-  const [info, setInfo]         = useState<string | null>(null);
-  const [loading, setLoading]   = useState(false);
+  const [mode, setMode]           = useState<'login' | 'signup'>('login');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName]   = useState('');
+  const [email, setEmail]         = useState('');
+  const [password, setPassword]   = useState('');
+  const [error, setError]         = useState<string | null>(null);
+  const [info, setInfo]           = useState<string | null>(null);
+  const [loading, setLoading]     = useState(false);
+
+  function switchMode(m: 'login' | 'signup') {
+    setMode(m);
+    setError(null);
+    setInfo(null);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -19,7 +33,24 @@ export default function LoginPage() {
     setLoading(true);
     try {
       if (mode === 'signup') {
-        const { error } = await supabase.auth.signUp({ email, password });
+        const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            // Store the same metadata fields that Google OAuth populates so the
+            // rest of the app can read user.user_metadata.full_name / avatar_url
+            // without caring how the user signed up.
+            data: {
+              full_name:      fullName,
+              name:           fullName,
+              first_name:     firstName.trim(),
+              last_name:      lastName.trim(),
+              avatar_url:     null,
+              email_verified: false,
+            },
+          },
+        });
         if (error) throw error;
         setInfo('Check your email for a confirmation link, then sign in.');
       } else {
@@ -54,17 +85,11 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Google sign-in */}
+        {/* Google */}
         <button
           onClick={signInWithGoogle}
           className="w-full flex items-center justify-center gap-3 font-semibold py-3 px-6 rounded-xl transition-colors"
-          style={{
-            background: '#ffffff',
-            color: '#1a1a2e',
-            border: '1px solid rgba(0,0,0,0.12)',
-            boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
-            cursor: 'pointer',
-          }}
+          style={{ background: '#ffffff', color: '#1a1a2e', border: '1px solid rgba(0,0,0,0.12)', boxShadow: '0 1px 4px rgba(0,0,0,0.1)', cursor: 'pointer' }}
           onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = '#f5f5f5')}
           onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = '#ffffff')}
         >
@@ -77,19 +102,18 @@ export default function LoginPage() {
           Continue with Google
         </button>
 
-        {/* Divider */}
         <div className="flex items-center gap-3 my-5">
           <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
           <span className="text-xs" style={{ color: 'var(--text-faint)' }}>or</span>
           <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
         </div>
 
-        {/* Email / password */}
+        {/* Mode toggle */}
         <div className="flex rounded-lg overflow-hidden mb-4" style={{ border: '1px solid var(--border)' }}>
           {(['login', 'signup'] as const).map((m) => (
             <button
               key={m}
-              onClick={() => { setMode(m); setError(null); setInfo(null); }}
+              onClick={() => switchMode(m)}
               className="flex-1 py-2 text-sm font-medium transition-colors"
               style={{
                 background: mode === m ? 'var(--accent)' : 'transparent',
@@ -104,6 +128,29 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
+          {/* Name fields — only shown during sign-up */}
+          {mode === 'signup' && (
+            <div className="flex gap-3">
+              <input
+                type="text"
+                placeholder="First name"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                required
+                className="flex-1 py-2.5 px-4 rounded-lg text-sm outline-none"
+                style={inputStyle}
+              />
+              <input
+                type="text"
+                placeholder="Last name"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className="flex-1 py-2.5 px-4 rounded-lg text-sm outline-none"
+                style={inputStyle}
+              />
+            </div>
+          )}
+
           <input
             type="email"
             placeholder="Email"
@@ -111,7 +158,7 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
             className="w-full py-2.5 px-4 rounded-lg text-sm outline-none"
-            style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)' }}
+            style={inputStyle}
           />
           <input
             type="password"
@@ -121,7 +168,7 @@ export default function LoginPage() {
             required
             minLength={6}
             className="w-full py-2.5 px-4 rounded-lg text-sm outline-none"
-            style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text)' }}
+            style={inputStyle}
           />
 
           {error && <p className="text-xs" style={{ color: '#ea4335' }}>{error}</p>}
