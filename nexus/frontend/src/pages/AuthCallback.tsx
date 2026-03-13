@@ -7,35 +7,28 @@ export default function AuthCallback() {
   const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
-    // ── Check for OAuth error params before waiting for a session ──────────────
-    // Supabase redirects here with #error=... when sign-in fails (e.g. the
-    // database trigger that creates a new user's profile throws an exception).
+    // Check for OAuth error params in both hash (implicit) and query (PKCE)
     const hash  = new URLSearchParams(window.location.hash.replace(/^#/, ''));
     const query = new URLSearchParams(window.location.search);
 
     const errorCode = hash.get('error') ?? query.get('error');
     if (errorCode) {
       if (errorCode === 'access_denied') {
-        // User cancelled the Google OAuth screen — silently go back to login.
         navigate('/', { replace: true });
         return;
       }
-      // Any other error (e.g. server_error from a failed DB trigger) — show it.
       const desc = hash.get('error_description') ?? query.get('error_description') ?? errorCode;
       setAuthError(decodeURIComponent(desc.replace(/\+/g, ' ')));
       return;
     }
 
     let done = false;
-
     function goHome() {
       if (done) return;
       done = true;
       navigate('/', { replace: true });
     }
 
-    // Watch for Supabase to fire SIGNED_IN once it has processed the
-    // OAuth code/token in the URL and written the session to localStorage.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') && session) {
         subscription.unsubscribe();
@@ -43,16 +36,29 @@ export default function AuthCallback() {
       }
     });
 
-    // Also check if a session is already present
-    // (handles the case where the session was established before this effect ran).
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        subscription.unsubscribe();
-        goHome();
-      }
-    });
+    // ── PKCE flow: exchange the `code` query param for a session ─────────────
+    // With flowType:'pkce', Supabase redirects here with ?code=xxx rather than
+    // putting tokens in the hash. We must explicitly exchange the code.
+    const code = query.get('code');
+    if (code) {
+      supabase.auth.exchangeCodeForSession(window.location.href).then(({ error }) => {
+        if (error) {
+          subscription.unsubscribe();
+          setAuthError(error.message);
+        }
+        // On success, onAuthStateChange fires SIGNED_IN and calls goHome().
+      });
+    } else {
+      // Implicit flow / session already present fallback
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          subscription.unsubscribe();
+          goHome();
+        }
+      });
+    }
 
-    // Hard timeout fallback — navigate anyway after 8 s so the user is never stuck.
+    // Hard timeout fallback — never leave the user stuck on "Signing you in…"
     const timer = setTimeout(() => {
       subscription.unsubscribe();
       goHome();
