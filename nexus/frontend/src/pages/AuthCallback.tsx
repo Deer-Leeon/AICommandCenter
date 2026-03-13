@@ -36,27 +36,15 @@ export default function AuthCallback() {
       }
     });
 
-    // ── PKCE flow: exchange the `code` query param for a session ─────────────
-    // With flowType:'pkce', Supabase redirects here with ?code=xxx rather than
-    // putting tokens in the hash. We must explicitly exchange the code.
-    const code = query.get('code');
-    if (code) {
-      supabase.auth.exchangeCodeForSession(window.location.href).then(({ error }) => {
-        if (error) {
-          subscription.unsubscribe();
-          setAuthError(error.message);
-        }
-        // On success, onAuthStateChange fires SIGNED_IN and calls goHome().
-      });
-    } else {
-      // Implicit flow / session already present fallback
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session) {
-          subscription.unsubscribe();
-          goHome();
-        }
-      });
-    }
+    // getSession() awaits Supabase's internal initializePromise, which already
+    // handles the PKCE code exchange via detectSessionInUrl: true. By the time
+    // this resolves, the session is either established or the exchange failed.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        subscription.unsubscribe();
+        goHome();
+      }
+    });
 
     // Hard timeout fallback — never leave the user stuck on "Signing you in…"
     const timer = setTimeout(() => {
