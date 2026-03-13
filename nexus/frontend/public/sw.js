@@ -9,7 +9,7 @@
  *   everything else → Network-first with cache fallback
  */
 
-const SHELL_CACHE  = 'nexus-shell-v3';
+const SHELL_CACHE  = 'nexus-shell-v4';
 const ASSETS_CACHE = 'nexus-assets-v2';
 const FONT_CACHE   = 'nexus-fonts-v2';
 
@@ -20,7 +20,7 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(SHELL_CACHE)
       .then((cache) => cache.addAll(['/']))
-      .then(() => self.skipWaiting()), // activate on next navigation (no clients.claim so no repaint)
+      .then(() => self.skipWaiting()), // take over immediately
   );
 });
 
@@ -35,8 +35,8 @@ self.addEventListener('activate', (event) => {
             .map((k) => caches.delete(k)),
         ),
       )
-    // clients.claim() intentionally omitted — we don't want to interrupt existing
-    // page loads. The SW takes effect on the next navigation (next new tab open).
+      // Claim all existing clients so this SW serves them immediately.
+      .then(() => self.clients.claim()),
   );
 });
 

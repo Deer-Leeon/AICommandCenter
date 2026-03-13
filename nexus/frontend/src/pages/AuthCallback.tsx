@@ -13,12 +13,8 @@ export default function AuthCallback() {
     hasCode: new URLSearchParams(window.location.search).has('code'),
     hasHashToken: window.location.hash.includes('access_token'),
     hasError: window.location.hash.includes('error') || new URLSearchParams(window.location.search).has('error'),
-    verifier: localStorage.getItem('nexus-auth-code-verifier') ?? 'NOT FOUND',
-    cookieVerifier: (() => {
-      const key = encodeURIComponent('nexus-auth-code-verifier') + '=';
-      const match = document.cookie.split(';').find(c => c.trim().startsWith(key));
-      return match ? 'FOUND IN COOKIE' : 'NOT IN COOKIE';
-    })(),
+    hash: window.location.hash.slice(0, 40) || '(empty)',
+    search: window.location.search.slice(0, 40) || '(empty)',
   }));
 
   useEffect(() => {
@@ -44,6 +40,8 @@ export default function AuthCallback() {
       navigate('/', { replace: true });
     }
 
+    // With implicit flow, detectSessionInUrl:true parses the #access_token hash
+    // automatically. We just wait for the SIGNED_IN event.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') && session) {
         subscription.unsubscribe();
@@ -51,9 +49,8 @@ export default function AuthCallback() {
       }
     });
 
-    // getSession() awaits Supabase's internal initializePromise, which already
-    // handles the PKCE code exchange via detectSessionInUrl: true. By the time
-    // this resolves, the session is either established or the exchange failed.
+    // getSession() awaits Supabase's internal initializePromise which parses
+    // the URL. By the time this resolves the session is established or not.
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         subscription.unsubscribe();
@@ -111,16 +108,15 @@ export default function AuthCallback() {
             padding: '12px 16px',
             fontSize: 11,
             color: 'var(--text-muted)',
-            maxWidth: 420,
+            maxWidth: 460,
             textAlign: 'left',
           }}
         >
-{`Protocol:      ${debugInfo.protocol}
-Has ?code:     ${debugInfo.hasCode}
-Has #token:    ${debugInfo.hasHashToken}
-Has error:     ${debugInfo.hasError}
-localStorage:  ${debugInfo.verifier.slice(0, 20)}${debugInfo.verifier.length > 20 ? '…' : ''}
-Cookie:        ${debugInfo.cookieVerifier}`}
+{`Protocol:   ${debugInfo.protocol}
+Has #token: ${debugInfo.hasHashToken}   Has ?code: ${debugInfo.hasCode}
+Has error:  ${debugInfo.hasError}
+Hash:       ${debugInfo.hash}
+Search:     ${debugInfo.search}`}
         </pre>
       )}
     </div>
