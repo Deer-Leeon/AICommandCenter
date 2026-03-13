@@ -54,8 +54,10 @@ export default function App() {
   }, [user]);
   const revealTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load layout from server on mount, save back on every change
-  useLayoutPersistence();
+  // Load layout from server, scoped to the logged-in user.
+  // Passing user?.id ensures that when accounts switch the grid is cleared
+  // and reloaded from the new account's server-side layout.
+  useLayoutPersistence(user?.id);
 
   // Once the layout is known, register every widget on the dashboard as
   // "pending" and start the hard-timeout fallback.

@@ -129,9 +129,32 @@ interface NexusStore {
 // Read the cached layout before the store is created so the very FIRST render
 // already has the correct grid and layoutLoaded=true. This eliminates the
 // null → App flash caused by the async useEffect in useLayoutPersistence.
+//
+// The cache key is USER-SCOPED (nexus_layout_v2_<userId>) so that logging in
+// with a different account never pre-populates the grid with another user's
+// widgets. The user ID is read synchronously from the Supabase auth session
+// that is already in localStorage under 'nexus-auth'.
+
+function getBootUserId(): string | null {
+  try {
+    const raw = localStorage.getItem('nexus-auth');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { user?: { id?: string } };
+    return parsed?.user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function layoutCacheKey(userId: string) {
+  return `nexus_layout_v2_${userId}`;
+}
+
 function bootLayout(): { grid: Record<string, WidgetType | null>; gridSpans: Record<string, GridSpan>; gridConnections: Record<string, string>; layoutLoaded: boolean } {
   try {
-    const raw = localStorage.getItem('nexus_layout_v2');
+    const userId = getBootUserId();
+    if (!userId) return { grid: {}, gridSpans: {}, gridConnections: {}, layoutLoaded: false };
+    const raw = localStorage.getItem(layoutCacheKey(userId));
     if (!raw) return { grid: {}, gridSpans: {}, gridConnections: {}, layoutLoaded: false };
     const parsed = JSON.parse(raw) as { v?: number; widgets?: Record<string, WidgetType>; spans?: Record<string, GridSpan>; connections?: Record<string, string> };
     if (parsed?.v === 2 && parsed.widgets) {
