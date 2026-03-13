@@ -49,10 +49,8 @@ export function useAuth() {
       provider: 'google',
       options: {
         redirectTo: getAuthRedirectUrl(),
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        },
+        // No extra queryParams — access_type/prompt are for Google Calendar/Docs
+        // OAuth (handled separately in ConnectServicesPage), not for basic login.
       },
     });
   };

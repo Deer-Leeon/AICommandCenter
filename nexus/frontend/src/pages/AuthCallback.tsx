@@ -2,9 +2,24 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
+// Remove this after auth is confirmed working
+const DEBUG = true;
+
 export default function AuthCallback() {
   const navigate = useNavigate();
   const [authError, setAuthError] = useState<string | null>(null);
+  const [debugInfo] = useState(() => ({
+    protocol: window.location.protocol,
+    hasCode: new URLSearchParams(window.location.search).has('code'),
+    hasHashToken: window.location.hash.includes('access_token'),
+    hasError: window.location.hash.includes('error') || new URLSearchParams(window.location.search).has('error'),
+    verifier: localStorage.getItem('nexus-auth-code-verifier') ?? 'NOT FOUND',
+    cookieVerifier: (() => {
+      const key = encodeURIComponent('nexus-auth-code-verifier') + '=';
+      const match = document.cookie.split(';').find(c => c.trim().startsWith(key));
+      return match ? 'FOUND IN COOKIE' : 'NOT IN COOKIE';
+    })(),
+  }));
 
   useEffect(() => {
     // Check for OAuth error params in both hash (implicit) and query (PKCE)
@@ -81,15 +96,33 @@ export default function AuthCallback() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center"
+      className="min-h-screen flex flex-col items-center justify-center gap-4"
       style={{ background: 'var(--bg)' }}
     >
-      <p
-        className="font-mono text-sm animate-pulse"
-        style={{ color: 'var(--text-muted)' }}
-      >
+      <p className="font-mono text-sm animate-pulse" style={{ color: 'var(--text-muted)' }}>
         Signing you in…
       </p>
+      {DEBUG && (
+        <pre
+          style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            padding: '12px 16px',
+            fontSize: 11,
+            color: 'var(--text-muted)',
+            maxWidth: 420,
+            textAlign: 'left',
+          }}
+        >
+{`Protocol:      ${debugInfo.protocol}
+Has ?code:     ${debugInfo.hasCode}
+Has #token:    ${debugInfo.hasHashToken}
+Has error:     ${debugInfo.hasError}
+localStorage:  ${debugInfo.verifier.slice(0, 20)}${debugInfo.verifier.length > 20 ? '…' : ''}
+Cookie:        ${debugInfo.cookieVerifier}`}
+        </pre>
+      )}
     </div>
   );
 }
