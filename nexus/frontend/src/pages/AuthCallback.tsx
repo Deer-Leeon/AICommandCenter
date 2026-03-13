@@ -2,28 +2,11 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
-// Remove this after auth is confirmed working
-const DEBUG = true;
-
 export default function AuthCallback() {
   const navigate = useNavigate();
   const [authError, setAuthError] = useState<string | null>(null);
-  const [debugInfo] = useState(() => {
-    const verifierRaw = localStorage.getItem('nexus-auth-code-verifier');
-    const cookieKey = encodeURIComponent('nexus-auth-code-verifier') + '=';
-    const cookieFound = document.cookie.split(';').some(c => c.trim().startsWith(cookieKey));
-    return {
-      protocol: window.location.protocol,
-      hasCode: new URLSearchParams(window.location.search).has('code'),
-      hasHashToken: window.location.hash.includes('access_token'),
-      hasError: window.location.hash.includes('error') || new URLSearchParams(window.location.search).has('error'),
-      verifier: verifierRaw ? `FOUND (${verifierRaw.length} chars)` : 'NOT FOUND',
-      cookie: cookieFound ? 'FOUND IN COOKIE' : 'NOT IN COOKIE',
-    };
-  });
 
   useEffect(() => {
-    // Check for OAuth error params in both hash (implicit) and query (PKCE)
     const hash  = new URLSearchParams(window.location.hash.replace(/^#/, ''));
     const query = new URLSearchParams(window.location.search);
 
@@ -45,8 +28,6 @@ export default function AuthCallback() {
       navigate('/', { replace: true });
     }
 
-    // With implicit flow, detectSessionInUrl:true parses the #access_token hash
-    // automatically. We just wait for the SIGNED_IN event.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') && session) {
         subscription.unsubscribe();
@@ -54,8 +35,6 @@ export default function AuthCallback() {
       }
     });
 
-    // getSession() awaits Supabase's internal initializePromise which parses
-    // the URL. By the time this resolves the session is established or not.
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         subscription.unsubscribe();
@@ -63,7 +42,6 @@ export default function AuthCallback() {
       }
     });
 
-    // Hard timeout fallback — never leave the user stuck on "Signing you in…"
     const timer = setTimeout(() => {
       subscription.unsubscribe();
       goHome();
@@ -98,32 +76,12 @@ export default function AuthCallback() {
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center gap-4"
+      className="min-h-screen flex items-center justify-center"
       style={{ background: 'var(--bg)' }}
     >
       <p className="font-mono text-sm animate-pulse" style={{ color: 'var(--text-muted)' }}>
         Signing you in…
       </p>
-      {DEBUG && (
-        <pre
-          style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 8,
-            padding: '12px 16px',
-            fontSize: 11,
-            color: 'var(--text-muted)',
-            maxWidth: 460,
-            textAlign: 'left',
-          }}
-        >
-{`Protocol:   ${debugInfo.protocol}
-Has ?code:  ${debugInfo.hasCode}   Has #token: ${debugInfo.hasHashToken}
-Has error:  ${debugInfo.hasError}
-Verifier:   ${debugInfo.verifier}
-Cookie:     ${debugInfo.cookie}`}
-        </pre>
-      )}
     </div>
   );
 }
