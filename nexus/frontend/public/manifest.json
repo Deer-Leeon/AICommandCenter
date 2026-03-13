@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "NEXUS — AI Command Center",
+  "short_name": "NEXUS",
+  "version": "1.0.0",
+  "description": "Your personal AI command center. Lightning-fast new tab dashboard.",
+
+  "chrome_url_overrides": {
+    "newtab": "index.extension.html"
+  },
+
+  "permissions": [
+    "storage"
+  ],
+
+  "host_permissions": [
+    "https://nexus-api.lj-buchmiller.com/*",
+    "https://*.supabase.co/*",
+    "https://fonts.googleapis.com/*",
+    "https://fonts.gstatic.com/*"
+  ],
+
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src https://nexus-api.lj-buchmiller.com https://*.supabase.co wss://*.supabase.co https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;"
+  }
+}

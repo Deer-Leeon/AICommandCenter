@@ -1,0 +1,17 @@
+---
+description: "TypeScript standards"
+globs: ["**/*.ts", "**/*.tsx"]
+alwaysApply: false
+---
+
+# TypeScript Rules
+
+- Strict mode is ON — tsconfig has "strict": true
+- Never use `any`. Use `unknown` if type is truly unknown, then narrow with guards
+- Always define interfaces for component props — name them `[ComponentName]Props`
+- Always define return types for functions that return non-trivial values
+- Use `type` for unions/intersections, `interface` for object shapes
+- API response types live in frontend/src/types/index.ts — always import from there
+- Use optional chaining `?.` and nullish coalescing `??` instead of manual null checks
+- Enums are forbidden — use const objects with `as const` instead
+- All async functions must have try/catch blocks

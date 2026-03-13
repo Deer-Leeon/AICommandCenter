@@ -1,0 +1,20 @@
+---
+description: "Environment and secrets rules"
+alwaysApply: true
+---
+
+# Environment Rules
+
+- All secrets/config in .env file at project root
+- .env is gitignored — never commit it
+- .env.example has every variable with comments explaining how to get the value
+- Access env vars in backend via process.env.VARIABLE_NAME
+- If a required env var is missing, log a clear error message and exit gracefully
+- Never log the actual values of API keys or tokens — only log their presence/absence
+- The Google refresh token is stored in tokens.json (gitignored) at project root
+- Ollama has no API key — it's just a local HTTP server
+
+## Required .env variables (all must exist):
+OLLAMA_BASE_URL, OLLAMA_MODEL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+GOOGLE_REDIRECT_URI, SLACK_BOT_TOKEN, SLACK_SIGNING_SECRET,
+OBSIDIAN_API_URL, OBSIDIAN_API_KEY, PORT, SESSION_SECRET

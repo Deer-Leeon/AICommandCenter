@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f0f0f8" media="(prefers-color-scheme: light)" />
+    <title>NEXUS — AI Command Center</title>
+
+    <!--
+      Critical CSS: applied before ANY external stylesheet or JS loads.
+      Prevents the white-flash on first paint and matches the app shell exactly.
+      Dark mode default; light mode via media query.
+    -->
+    <style>
+      /* CSS variables defined inline so var(--bg) works before index.css loads.
+         This means ALL components that use var(--bg) get the right color on the
+         very first paint — no transparent-background flash. */
+      :root{
+        --bg:#0a0a0f;
+        --surface:#111118;
+        --surface2:#1a1a24;
+        --text:#e8e8f0;
+        --text-muted:#7a7a90;
+        --text-faint:#3a3a50;
+        --teal:#3de8b0;
+        --accent:#7c6aff;
+        --border:rgba(255,255,255,0.06);
+      }
+      @media(prefers-color-scheme:light){
+        :root{
+          --bg:#f0f0f8;
+          --surface:#ffffff;
+          --surface2:#f5f5fd;
+          --text:#1a1a2e;
+          --text-muted:#5a5a78;
+          --text-faint:#b0b0c8;
+          --border:rgba(0,0,0,0.08);
+        }
+      }
+      *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+      html,body{height:100%;width:100%}
+      body{
+        background:var(--bg);
+        color:var(--text);
+        font-family:'Space Mono',ui-monospace,monospace;
+        -webkit-font-smoothing:antialiased;
+        -moz-osx-font-smoothing:grayscale;
+      }
+      #root{height:100%;width:100%}
+    </style>
+
+    <!-- Preconnect to every origin the app hits during boot — DNS + TLS
+         handshakes complete before any JS runs, eliminating that round-trip
+         from the critical path. -->
+    <link rel="preconnect" href="https://nexus-api.lj-buchmiller.com" />
+    <link rel="preconnect" href="https://gtqjhlknpqobfdnsciid.supabase.co" crossorigin />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+      font-display=optional: browser uses the font only if it loads within a very short
+      window (~100 ms). No visible swap after first paint — eliminates FOUT entirely.
+      On repeat visits the font is served from service worker cache so it always loads
+      within that window.
+    -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=optional"
+      rel="stylesheet"
+    />
+
+    <!--
+      Predictive prefetch: fires API requests BEFORE React mounts.
+      Reads the saved layout + auth token from localStorage and starts
+      fetching data for every widget currently on the dashboard.
+      Results are stored in window.__nexusPrefetch keyed by endpoint path.
+      When each widget's hook fires (50-100 ms later) the response is
+      often already in-flight or complete — no duplicate request is made.
+    -->
+    <script>
+    (function(){
+      try{
+        var API='https://nexus-api.lj-buchmiller.com';
+        var session=JSON.parse(localStorage.getItem('nexus-auth')||'null');
+        if(!session||!session.access_token)return;
+        var token=session.access_token;
+        var layout=JSON.parse(localStorage.getItem('nexus_layout_v2')||'null');
+        if(!layout||!layout.widgets)return;
+        var widgets=Object.values(layout.widgets);
+        // Map widget type → primary API endpoint to prefetch
+        var MAP={
+          calendar:'/api/calendar/events?days=7',
+          weather:'/api/weather',
+          slack:'/api/slack/messages?limit=10',
+          todo:'/api/todos',
+          tasks:'/api/tasks',
+          docs:'/api/docs/list',
+          stocks:'/api/stocks/overview',
+          plaid:'/api/plaid/accounts',
+          pomodoro:'/api/pomodoro/stats',
+          f1:'/api/f1/status',
+          football:'/api/football/today',
+          news:'/api/news/articles'
+        };
+        var hdrs={
+          'Content-Type':'application/json',
+          'Authorization':'Bearer '+token
+        };
+        window.__nexusPrefetch={};
+        var seen={};
+        for(var i=0;i<widgets.length;i++){
+          var w=widgets[i];
+          var ep=MAP[w];
+          if(ep&&!seen[ep]){
+            seen[ep]=1;
+            // .catch(() => null) prevents unhandled-rejection warnings.
+            // awaitPrefetchOrFetch() in each widget treats null as a
+            // network error and falls back to a fresh apiFetch() call.
+            window.__nexusPrefetch[ep]=fetch(API+ep,{headers:hdrs}).catch(function(){return null});
+          }
+        }
+        // Chess widgets use per-connection endpoints — prefetch each one individually.
+        var conns=layout.connections||{};
+        for(var slot in layout.widgets){
+          if(layout.widgets[slot]==='shared_chess'&&conns[slot]){
+            var chessEp='/api/chess/'+conns[slot];
+            if(!seen[chessEp]){
+              seen[chessEp]=1;
+              window.__nexusPrefetch[chessEp]=fetch(API+chessEp,{headers:hdrs}).catch(function(){return null});
+            }
+          }
+        }
+      }catch(e){}
+    })();
+    </script>
+  </head>
+  <body>
+    <!--
+      Static pre-React cover: painted by the browser before any JS runs.
+      Prevents ANY app chrome (sidebar, grid, status bar) from flashing visible
+      during the gap between first paint and React mount.
+      RevealOverlay removes this element the moment it mounts and takes over.
+    -->
+    <div id="nexus-preload" style="position:fixed;inset:0;background:var(--bg);z-index:9997;pointer-events:all;"></div>
+    <div id="root"></div>
+    <!--
+      Type-ahead buffer: captures every printable keystroke from the very first
+      byte of HTML — before React, before fonts, before any JS bundle loads.
+      AIInputBar drains window.__nexusTypeBuffer on its first focus and replays
+      every character as if the user typed them into the focused input.
+      __nexusTypeBufferActive is flipped to false the instant AIInputBar takes over,
+      so no keystroke is ever counted twice.
+    -->
+    <script>
+    (function(){
+      window.__nexusTypeBuffer='';
+      window.__nexusTypeBufferActive=true;
+      document.addEventListener('keydown',function(e){
+        if(!window.__nexusTypeBufferActive)return;
+        // Ignore shortcuts (Ctrl/Meta/Alt), non-printable keys (F-keys, arrows, etc.)
+        if(e.key.length===1&&!e.ctrlKey&&!e.metaKey&&!e.altKey){
+          window.__nexusTypeBuffer+=e.key;
+        }else if(e.key==='Backspace'&&window.__nexusTypeBuffer.length>0){
+          window.__nexusTypeBuffer=window.__nexusTypeBuffer.slice(0,-1);
+        }
+      },true); // capture phase — fires before any React handler
+    })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

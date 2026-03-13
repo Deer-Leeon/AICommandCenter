@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0a0a0f" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f0f0f8" media="(prefers-color-scheme: light)" />
+    <title>NEXUS</title>
+
+    <!--
+      Critical CSS: applied before ANY external stylesheet or JS loads.
+      Prevents the white-flash on first paint and matches the app shell exactly.
+    -->
+    <style>
+      :root{
+        --bg:#0a0a0f;
+        --surface:#111118;
+        --surface2:#1a1a24;
+        --text:#e8e8f0;
+        --text-muted:#7a7a90;
+        --text-faint:#3a3a50;
+        --teal:#3de8b0;
+        --accent:#7c6aff;
+        --border:rgba(255,255,255,0.06);
+      }
+      @media(prefers-color-scheme:light){
+        :root{
+          --bg:#f0f0f8;
+          --surface:#ffffff;
+          --surface2:#f5f5fd;
+          --text:#1a1a2e;
+          --text-muted:#5a5a78;
+          --text-faint:#b0b0c8;
+          --border:rgba(0,0,0,0.08);
+        }
+      }
+      *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+      html,body{height:100%;width:100%}
+      body{
+        background:var(--bg);
+        color:var(--text);
+        font-family:'Space Mono',ui-monospace,monospace;
+        -webkit-font-smoothing:antialiased;
+        -moz-osx-font-smoothing:grayscale;
+      }
+      #root{height:100%;width:100%}
+    </style>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=optional"
+      rel="stylesheet"
+    />
+
+    <!--
+      Extension-safe init: predictive prefetch + type-ahead buffer.
+      Manifest V3 forbids inline scripts — this external file does the same work.
+    -->
+    <script src="ext-init.js"></script>
+    <script type="module" crossorigin src="./assets/index.extension-CHx45i7K.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/vendor-BfvK_4o8.js">
+    <link rel="modulepreload" crossorigin href="./assets/vendor-supabase-CMNq-gt9.js">
+    <link rel="stylesheet" crossorigin href="./assets/index-BRYvT6qd.css">
+  </head>
+  <body>
+    <!--
+      Static pre-React cover: painted by the browser before any JS runs.
+      Prevents ANY app chrome from flashing during the gap between first paint
+      and React mount.  RevealOverlay removes this element once it mounts.
+    -->
+    <div id="nexus-preload" style="position:fixed;inset:0;background:var(--bg);z-index:9997;pointer-events:all;"></div>
+    <div id="root"></div>
+  </body>
+</html>

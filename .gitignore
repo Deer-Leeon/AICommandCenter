@@ -1,0 +1,31 @@
+# ── OS / Editor ───────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# ── Secrets — NEVER commit ────────────────────
+nexus/.env
+nexus/tokens.json
+
+# ── Node ──────────────────────────────────────
+node_modules/
+nexus/node_modules/
+nexus/backend/node_modules/
+nexus/frontend/node_modules/
+
+# ── Build output ──────────────────────────────
+nexus/frontend/dist/
+nexus/backend/dist/
+
+# ── Logs ──────────────────────────────────────
+nexus/logs/
+*.log
+npm-debug.log*
+
+# ── Docker ────────────────────────────────────
+# (keep docker-compose.yml and Dockerfiles — Railway needs them)
+
+# ── Misc ──────────────────────────────────────
+nexus/chrome-extension.zip

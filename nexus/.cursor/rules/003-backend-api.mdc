@@ -1,0 +1,18 @@
+---
+description: "Backend Express API patterns"
+globs: ["backend/**/*.ts"]
+alwaysApply: false
+---
+
+# Backend API Rules
+
+- All routes return JSON. Successful responses: { data: T, success: true }
+- Error responses: { error: string, success: false, code?: string }
+- Every route handler wrapped in try/catch — never let unhandled errors crash the server
+- Service functions (in backend/src/services/) do the actual work — routes just call them
+- Environment variables accessed via process.env.VAR_NAME — never hardcoded
+- Use async/await not .then()/.catch() chains
+- Log errors with console.error before returning error response
+- CORS configured to only allow http://localhost:5173 in development
+- All Google API calls use the shared OAuth2 client from googleAuthClient.ts
+- Ollama is called ONLY from ollamaService.ts — never inline in routes

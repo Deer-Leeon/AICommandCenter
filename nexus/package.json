@@ -1,0 +1,22 @@
+{
+  "name": "nexus",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NEXUS — AI-powered personal command center",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && tsx watch src/index.ts",
+    "dev:frontend": "cd frontend && npx vite",
+    "build": "npm run build:backend && npm run build:frontend",
+    "build:backend": "cd backend && npx tsc",
+    "build:frontend": "cd frontend && npx vite build",
+    "start": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
+    "start:backend": "cd backend && node dist/index.js",
+    "start:frontend": "cd frontend && npx vite preview --port 4173",
+    "mcp": "cd backend && tsx src/mcp/mcpServer.ts"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "tsx": "^4.16.2"
+  }
+}

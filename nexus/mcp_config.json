@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "nexus": {
+      "command": "node",
+      "args": ["./backend/dist/mcp/mcpServer.js"],
+      "env": {
+        "GOOGLE_REFRESH_TOKEN": "${GOOGLE_REFRESH_TOKEN}",
+        "SLACK_BOT_TOKEN": "${SLACK_BOT_TOKEN}",
+        "OBSIDIAN_API_KEY": "${OBSIDIAN_API_KEY}"
+      }
+    }
+  }
+}

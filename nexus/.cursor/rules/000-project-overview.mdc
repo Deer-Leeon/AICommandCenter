@@ -1,0 +1,38 @@
+---
+description: "Core project context — always applied"
+alwaysApply: true
+---
+
+# NEXUS Project Overview
+This is a full-stack personal AI command center called NEXUS.
+
+## Architecture
+- Frontend: React 18 + TypeScript + Vite, running on port 5173
+- Backend: Node.js + Express + TypeScript, running on port 3001  
+- AI: Ollama running locally on port 11434 (model: llama3 or mistral)
+- State: Zustand
+- Drag & Drop: @dnd-kit/core
+- Styling: Tailwind CSS only — never write raw CSS or inline styles
+
+## Key Constraints
+- The app MUST be non-scrollable. html, body, and #root must have overflow:hidden and height:100%
+- Widget cards are absolutely positioned over a grid using getBoundingClientRect()
+- Never use localStorage or sessionStorage
+- All API keys live in .env — never hardcode credentials
+- The backend is the ONLY place that calls Ollama — never call it from the frontend
+
+## File Structure Reference
+- Frontend components: frontend/src/components/
+- Widget components: frontend/src/components/widgets/
+- Custom hooks: frontend/src/hooks/
+- Zustand store: frontend/src/store/useStore.ts
+- Backend routes: backend/src/routes/
+- Backend services: backend/src/services/
+- MCP server: backend/src/mcp/
+
+## Current Stack Versions
+- React: 18
+- Node: 20
+- TypeScript: 5
+- Vite: 5
+- Tailwind: 3

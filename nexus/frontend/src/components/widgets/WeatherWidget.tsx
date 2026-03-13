@@ -1,0 +1,122 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+import type { WeatherData } from '../../types';
+import { apiFetch } from '../../lib/api';
+import { wcRead, wcWrite, wcIsStale, WC_KEY, WC_TTL, awaitPrefetchOrFetch } from '../../lib/widgetCache';
+import { useWidgetReady } from '../../hooks/useWidgetReady';
+
+interface WeatherWidgetProps {
+  onClose: () => void;
+}
+
+export function WeatherWidget({ onClose: _onClose }: WeatherWidgetProps) {
+  const [weather, setWeather] = useState<WeatherData | null>(
+    () => wcRead<WeatherData>(WC_KEY.WEATHER)?.data ?? null,
+  );
+  const [isStale, setIsStale] = useState(
+    () => wcIsStale(WC_KEY.WEATHER, WC_TTL.WEATHER),
+  );
+  const [hasError, setHasError] = useState(false);
+
+  // hasLoaded: immediately true when we have cached data
+  const [hasLoaded, setHasLoaded] = useState(
+    () => wcRead(WC_KEY.WEATHER) !== null,
+  );
+
+  const hasFetchedOnce = useRef(weather !== null);
+
+  // Signal the reveal orchestrator
+  useWidgetReady('weather', hasLoaded);
+
+  const fetchWeather = useCallback(async (lat: number | null, lon: number | null) => {
+    try {
+      const params = lat !== null && lon !== null ? `?lat=${lat}&lon=${lon}` : '';
+      const endpoint = `/api/weather${params}`;
+      const res = !params
+        ? await awaitPrefetchOrFetch('/api/weather', () => apiFetch(endpoint))
+        : await apiFetch(endpoint);
+      if (res.ok) {
+        const data: WeatherData = await res.json();
+        setWeather(data);
+        wcWrite(WC_KEY.WEATHER, data);
+        setHasError(false);
+        setIsStale(false);
+        hasFetchedOnce.current = true;
+      } else if (!hasFetchedOnce.current) {
+        setHasError(true);
+      }
+    } catch {
+      if (!hasFetchedOnce.current) setHasError(true);
+    } finally {
+      setHasLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          fetchWeather(latitude, longitude);
+        },
+        () => fetchWeather(null, null),
+        { timeout: 5000 }
+      );
+    } else {
+      fetchWeather(null, null);
+    }
+
+    const interval = setInterval(() => fetchWeather(null, null), 600_000);
+    return () => clearInterval(interval);
+  }, [fetchWeather]);
+
+  if (hasError || !weather) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-3 text-center gap-2">
+        <span style={{ fontSize: '24px' }}>🌤</span>
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Not available</p>
+        <p className="text-xs" style={{ color: 'var(--text-faint)' }}>
+          Add OPENWEATHER_API_KEY to .env
+        </p>
+      </div>
+    );
+  }
+
+  const tempF = Math.round((weather.temp - 273.15) * 9 / 5 + 32);
+  const feelsF = Math.round((weather.feelsLike - 273.15) * 9 / 5 + 32);
+
+  return (
+    <div className="h-full flex flex-col items-center justify-center p-3 gap-1" style={{ position: 'relative' }}>
+      {isStale && (
+        <span
+          title="Showing cached data — refreshing in background"
+          style={{ position: 'absolute', top: 6, right: 8, fontSize: 9, color: 'var(--text-faint)', opacity: 0.7 }}
+        >
+          ↻
+        </span>
+      )}
+      <p className="font-mono text-xs" style={{ color: 'var(--text-muted)', fontSize: '11px' }}>
+        {weather.city}
+      </p>
+      <div className="flex items-end gap-2">
+        <span style={{ fontSize: '32px', lineHeight: 1 }}>{weather.icon}</span>
+        <span
+          className="font-mono"
+          style={{ color: 'var(--color-warning)', fontSize: '28px', fontWeight: 700, lineHeight: 1 }}
+        >
+          {tempF}°
+        </span>
+      </div>
+      <p className="text-xs capitalize" style={{ color: 'var(--text)', fontSize: '12px' }}>
+        {weather.description}
+      </p>
+      <div className="flex items-center gap-3 mt-1">
+        <span className="font-mono text-xs" style={{ color: 'var(--text-faint)', fontSize: '10px' }}>
+          Feels {feelsF}°
+        </span>
+        <span className="font-mono text-xs" style={{ color: 'var(--text-faint)', fontSize: '10px' }}>
+          Humidity {weather.humidity}%
+        </span>
+      </div>
+    </div>
+  );
+}

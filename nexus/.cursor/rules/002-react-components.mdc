@@ -1,0 +1,19 @@
+---
+description: "React component patterns"
+globs: ["frontend/**/*.tsx"]
+alwaysApply: false
+---
+
+# React Component Rules
+
+- Always use functional components — never class components
+- Props interface defined directly above the component, named `[Name]Props`
+- Default export at the bottom of the file
+- Hooks called only at the top level of components or custom hooks
+- Extract any logic > 5 lines into a custom hook in frontend/src/hooks/
+- Use React.memo() on widgets that receive stable props to prevent re-renders
+- Loading states: show a skeleton UI — never just blank space or a spinner alone
+- Error states: show an inline error message with a retry button
+- Empty states: show a descriptive empty state with an icon
+- Never put API calls directly in components — use custom hooks
+- Event handler functions named with `handle` prefix: handleClick, handleSubmit, etc.

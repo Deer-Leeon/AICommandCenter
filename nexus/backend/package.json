@@ -1,0 +1,36 @@
+{
+  "name": "nexus-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "@slack/web-api": "^7.3.4",
+    "@supabase/supabase-js": "^2.98.0",
+    "chess.js": "^1.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "google-auth-library": "^9.13.0",
+    "googleapis": "^140.0.1",
+    "jsonwebtoken": "^9.0.3",
+    "node-fetch": "^3.3.2",
+    "plaid": "^41.3.0",
+    "rss-parser": "^3.13.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/express-session": "^1.18.0",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^20.14.11",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.3"
+  }
+}
