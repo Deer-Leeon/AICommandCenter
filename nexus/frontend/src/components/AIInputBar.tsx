@@ -4,6 +4,9 @@ import {
 } from 'react';
 import { useAI } from '../hooks/useAI';
 import { useOmnibarStore } from '../store/useOmnibarStore';
+import { useAuth } from '../hooks/useAuth';
+
+const ALLOWED_AI_EMAILS = new Set(['lj.buchmiller@gmail.com']);
 
 type Mode = 'google' | 'ai';
 
@@ -61,6 +64,9 @@ const SOURCE_LABEL: Record<Suggestion['type'], string> = {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function AIInputBar() {
+  const { user } = useAuth();
+  const hasAIAccess = ALLOWED_AI_EMAILS.has((user?.email ?? '').toLowerCase());
+
   const [mode, setMode]               = useState<Mode>('google');
   const [input, setInput]             = useState('');
   const [focused, setFocused]         = useState(false);
@@ -370,8 +376,8 @@ export function AIInputBar() {
             className="nexus-omnibar-input"
           />
 
-          {/* AI Mode toggle pill */}
-          <button
+          {/* AI Mode toggle pill — only visible to allowed users */}
+          {hasAIAccess && <button
             onClick={() => switchMode()}
             title={mode === 'google' ? 'Switch to NEXUS AI (Tab)' : 'Switch to Google Search (Tab)'}
             style={{
@@ -406,7 +412,7 @@ export function AIInputBar() {
               </svg>
             </span>
             AI Mode
-          </button>
+          </button>}
 
           {/* Loading spinner */}
           {isLoading && (

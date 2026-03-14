@@ -5,10 +5,27 @@ import { dispatchIntent } from '../services/intentRouter.js';
 
 export const aiRouter = Router();
 
+// Emails allowed to use AI features — comma-separated env var, falls back to owner
+const ALLOWED_AI_EMAILS = new Set(
+  (process.env.ALLOWED_AI_EMAILS || 'lj.buchmiller@gmail.com')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean)
+);
+
+function requireAIAccess(req: AuthRequest, res: Response, next: () => void) {
+  const email = (req.user?.email ?? '').toLowerCase();
+  if (!ALLOWED_AI_EMAILS.has(email)) {
+    res.status(403).json({ error: 'AI features are not enabled for your account.' });
+    return;
+  }
+  next();
+}
+
 // ── GET /api/ai/config ────────────────────────────────────────────────────────
 // Returns the configured Ollama model name so the browser can call local Ollama
 // directly without the model name being hardcoded on the client side.
-aiRouter.get('/config', requireAuth, (_req, res: Response) => {
+aiRouter.get('/config', requireAuth, requireAIAccess, (_req, res: Response) => {
   res.json({ model: process.env.OLLAMA_MODEL || 'llama3.2' });
 });
 
@@ -17,7 +34,7 @@ aiRouter.get('/config', requireAuth, (_req, res: Response) => {
 // client) and executes the corresponding action (calendar, Slack, Obsidian…).
 // This lets the user's own machine handle LLM inference while Railway handles
 // the privileged API calls that require stored OAuth tokens.
-aiRouter.post('/dispatch', requireAuth, async (req: AuthRequest, res: Response) => {
+aiRouter.post('/dispatch', requireAuth, requireAIAccess, async (req: AuthRequest, res: Response) => {
   const { intent, confidence, humanResponse, params, suggestedActions, timezone, activeSlackChannel } = req.body as {
     intent: string;
     confidence: number;
@@ -69,7 +86,7 @@ aiRouter.post('/dispatch', requireAuth, async (req: AuthRequest, res: Response) 
 // ── POST /api/ai ──────────────────────────────────────────────────────────────
 // Full server-side path: calls OLLAMA_BASE_URL (for self-hosted / local-network
 // setups). Falls back automatically when the client can't reach localhost:11434.
-aiRouter.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
+aiRouter.post('/', requireAuth, requireAIAccess, async (req: AuthRequest, res: Response) => {
   const { message, activeContexts, timezone, activeSlackChannel } = req.body as {
     message: string;
     activeContexts: string[];
