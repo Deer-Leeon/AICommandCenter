@@ -6,6 +6,7 @@ import { useOmnibarStore } from '../store/useOmnibarStore';
 import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
 import { ConnectionsPanel } from './ConnectionsPanel';
+import { supabase } from '../lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,6 +41,32 @@ function AccountPanel() {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Password section
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  // Detect whether the user already has an email/password identity
+  const hasPasswordLogin = user?.identities?.some((id) => id.provider === 'email') ?? false;
+
+  const handleSetPassword = useCallback(async () => {
+    setPasswordError(null);
+    if (newPassword.length < 8) { setPasswordError('Password must be at least 8 characters'); return; }
+    if (newPassword !== confirmPassword) { setPasswordError('Passwords do not match'); return; }
+    setPasswordSaving(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setPasswordSaving(false);
+    if (error) { setPasswordError(error.message); return; }
+    setPasswordSuccess(true);
+    setShowPasswordForm(false);
+    setNewPassword('');
+    setConfirmPassword('');
+    setTimeout(() => setPasswordSuccess(false), 3000);
+  }, [newPassword, confirmPassword]);
 
   useEffect(() => {
     if (profile?.username) setUsernameValue(profile.username);
@@ -194,6 +221,76 @@ function AccountPanel() {
         </div>
         {saveSuccess && <p style={{ fontSize: 11, color: 'var(--teal)' }}>✓ Username updated</p>}
         {saveError && <p style={{ fontSize: 11, color: 'var(--color-danger)' }}>{saveError}</p>}
+      </div>
+
+      {/* ── Password ── */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between p-4 rounded-xl" style={{ background: 'var(--surface2)', border: '1px solid var(--border)' }}>
+          <div>
+            <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>Password</p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+              {hasPasswordLogin
+                ? 'A password is set — you can sign in with email and password'
+                : 'No password set — sign in with Google only'}
+            </p>
+          </div>
+          <button
+            onClick={() => { setShowPasswordForm((v) => !v); setPasswordError(null); setNewPassword(''); setConfirmPassword(''); }}
+            style={{ fontSize: 11, padding: '4px 12px', borderRadius: 6, background: 'transparent', color: 'var(--text-faint)', border: '1px solid var(--border)', cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, marginLeft: 12 }}
+          >
+            {showPasswordForm ? 'Cancel' : hasPasswordLogin ? 'Change' : 'Set password'}
+          </button>
+        </div>
+
+        {showPasswordForm && (
+          <div className="flex flex-col gap-3 p-4 rounded-xl" style={{ background: 'var(--surface2)', border: '1px solid var(--border)' }}>
+            <div className="flex flex-col gap-1">
+              <label className="font-mono text-xs" style={{ color: 'var(--text-muted)' }}>New password</label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Min. 8 characters"
+                autoFocus
+                style={{
+                  padding: '7px 10px', fontSize: 13, borderRadius: 8,
+                  background: 'var(--surface)', border: '1px solid var(--border)',
+                  color: 'var(--text)', outline: 'none', fontFamily: 'inherit',
+                }}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="font-mono text-xs" style={{ color: 'var(--text-muted)' }}>Confirm password</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Repeat password"
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSetPassword(); }}
+                style={{
+                  padding: '7px 10px', fontSize: 13, borderRadius: 8,
+                  background: 'var(--surface)', border: '1px solid var(--border)',
+                  color: 'var(--text)', outline: 'none', fontFamily: 'inherit',
+                }}
+              />
+            </div>
+            {passwordError && <p style={{ fontSize: 11, color: 'var(--color-danger)' }}>{passwordError}</p>}
+            <button
+              onClick={handleSetPassword}
+              disabled={passwordSaving}
+              style={{
+                alignSelf: 'flex-start', padding: '6px 16px', fontSize: 12, borderRadius: 8, cursor: 'pointer',
+                background: 'rgba(61,232,176,0.15)', color: 'var(--teal)',
+                border: '1px solid rgba(61,232,176,0.35)', fontFamily: 'inherit',
+                opacity: passwordSaving ? 0.6 : 1,
+              }}
+            >
+              {passwordSaving ? 'Saving…' : hasPasswordLogin ? 'Update password' : 'Set password'}
+            </button>
+          </div>
+        )}
+
+        {passwordSuccess && <p style={{ fontSize: 11, color: 'var(--teal)' }}>✓ Password {hasPasswordLogin ? 'updated' : 'set'} — you can now sign in with email and password</p>}
       </div>
     </div>
   );
