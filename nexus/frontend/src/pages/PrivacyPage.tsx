@@ -1,7 +1,8 @@
 export default function PrivacyPage() {
   return (
     <div style={{
-      minHeight: '100vh',
+      position: 'fixed',
+      inset: 0,
       background: '#0a0a0f',
       color: '#e0e0e8',
       fontFamily: 'system-ui, -apple-system, sans-serif',
