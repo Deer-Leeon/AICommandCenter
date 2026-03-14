@@ -210,12 +210,28 @@ export function useAI() {
 
         if (localAvailable) {
           // ── Local path: browser → localhost:11434 → backend /dispatch ──────
-          const systemPrompt = buildSystemPrompt(timezone);
-          data = await runLocalInference(message, systemPrompt, contextHint, timezone, activeSlackChannel);
+          try {
+            const systemPrompt = buildSystemPrompt(timezone);
+            data = await runLocalInference(message, systemPrompt, contextHint, timezone, activeSlackChannel);
+          } catch (localErr) {
+            // Local Ollama is up but failed (e.g. model not pulled yet) —
+            // fall back to the server/tunnel path automatically.
+            console.warn('[NEXUS AI] Local Ollama failed, falling back to server:', localErr);
+            ollamaAvailable = false; // reset cache so next call re-checks
+            const res = await apiFetch('/api/ai', {
+              method: 'POST',
+              body: JSON.stringify({ message, activeContexts, timezone, activeSlackChannel }),
+            });
+            if (!res.ok) {
+              const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+              throw new Error((err as { error?: string }).error || 'AI request failed');
+            }
+            data = await res.json() as AIResponse;
+          }
         } else {
           // ── Server path: browser → Railway backend → OLLAMA_BASE_URL ───────
-          // Used when the user accesses NEXUS without their local machine running
-          // (e.g. from a phone), or has Ollama at a custom network address.
+          // Used when local Ollama is unavailable (e.g. accessing from phone,
+          // or model not yet pulled). Railway calls Ollama via the tunnel.
           const res = await apiFetch('/api/ai', {
             method: 'POST',
             body: JSON.stringify({ message, activeContexts, timezone, activeSlackChannel }),
