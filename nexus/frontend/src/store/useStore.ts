@@ -385,9 +385,9 @@ export const useStore = create<NexusStore>((set) => ({
       set((state) => ({
         serviceStates: Object.fromEntries(
           SERVICES.map((key) => {
-            if (perUserServices.has(key)) return [key, state.serviceStates[key]];
+            const prev = state.serviceStates[key] ?? initialState();
+            if (perUserServices.has(key)) return [key, prev];
             const isConnected = data[API_KEY_MAP[key]] === true;
-            const prev = state.serviceStates[key];
             return [key, { connected: isConnected, lastConfirmedAt: isConnected ? now : prev.lastConfirmedAt, checking: false }];
           })
         ),
@@ -409,7 +409,7 @@ export const useStore = create<NexusStore>((set) => ({
               ...state.serviceStates,
               [storeKey]: {
                 connected,
-                lastConfirmedAt: connected ? now : state.serviceStates[storeKey].lastConfirmedAt,
+                lastConfirmedAt: connected ? now : (state.serviceStates[storeKey] ?? initialState()).lastConfirmedAt,
                 checking: false,
               },
             },
@@ -434,7 +434,7 @@ export const useStore = create<NexusStore>((set) => ({
             ...state.serviceStates,
             plaid: {
               connected,
-              lastConfirmedAt: connected ? now : state.serviceStates.plaid.lastConfirmedAt,
+              lastConfirmedAt: connected ? now : (state.serviceStates.plaid ?? initialState()).lastConfirmedAt,
               checking: false,
             },
           },
@@ -452,7 +452,7 @@ export const useStore = create<NexusStore>((set) => ({
           ...state.serviceStates,
           slack: {
             connected,
-            lastConfirmedAt: connected ? now : state.serviceStates.slack.lastConfirmedAt,
+              lastConfirmedAt: connected ? now : (state.serviceStates.slack ?? initialState()).lastConfirmedAt,
             checking: false,
           },
         },
