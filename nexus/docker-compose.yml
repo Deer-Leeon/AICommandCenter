@@ -1,31 +1,90 @@
 version: '3.8'
 
+# ── Local development stack ──────────────────────────────────────────────────
+# For PRODUCTION use, Railway hosts the frontend + backend.
+# Run this compose on your Mac for:
+#   1. Ollama (local LLM inference)
+#   2. Cloudflare Tunnel (exposes Ollama at ollama.lj-buchmiller.com so
+#      the Railway backend can reach it even though it runs on your machine)
+#
+# Quick start (production mode — just Ollama + tunnel):
+#   docker-compose --profile prod up -d
+#
+# Full local dev (everything):
+#   docker-compose --profile dev up -d
+#
+# Prerequisites for the tunnel:
+#   In Cloudflare Zero Trust → Tunnels → your NEXUS tunnel → Public Hostnames:
+#   Add:  ollama.lj-buchmiller.com  →  http://nexus-ollama:11434
+#   (Then set OLLAMA_BASE_URL=https://ollama.lj-buchmiller.com in Railway)
+
 services:
+
+  # ── Ollama (local LLM) ─────────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: nexus-ollama
+    restart: unless-stopped
+    profiles: ["prod", "dev"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      # Allow requests from the NEXUS web app (browser direct-call path)
+      # and from the Cloudflare tunnel (Railway backend path)
+      - OLLAMA_ORIGINS=https://nexus.lj-buchmiller.com,https://ollama.lj-buchmiller.com,*
+    networks:
+      - nexus-net
+    # Uncomment if you have an NVIDIA GPU:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # ── Cloudflare Tunnel ──────────────────────────────────────────────────────
+  # Exposes local services to the internet securely without opening firewall ports.
+  # Routes are configured in the Cloudflare Zero Trust dashboard.
+  cloudflare-tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: nexus-tunnel
+    restart: unless-stopped
+    profiles: ["prod", "dev"]
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - ollama
+    networks:
+      - nexus-net
+
+  # ── Backend (local dev only) ───────────────────────────────────────────────
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
     container_name: nexus-backend
     restart: unless-stopped
+    profiles: ["dev"]
     ports:
       - "3001:3001"
     env_file:
       - .env
     environment:
       - NODE_ENV=production
-      - OLLAMA_BASE_URL=http://host.docker.internal:11434
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      # Backend-to-Ollama path (container networking, no tunnel needed locally)
+      - OLLAMA_BASE_URL=http://nexus-ollama:11434
     volumes:
       - ./tokens.json:/app/tokens.json
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3001/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    depends_on:
+      - ollama
     networks:
       - nexus-net
 
+  # ── Frontend (local dev only) ──────────────────────────────────────────────
   frontend:
     build:
       context: .
@@ -35,6 +94,7 @@ services:
         VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
     container_name: nexus-frontend
     restart: unless-stopped
+    profiles: ["dev"]
     ports:
       - "4173:4173"
     depends_on:
@@ -42,18 +102,9 @@ services:
     networks:
       - nexus-net
 
-  cloudflare-tunnel:
-    image: cloudflare/cloudflared:latest
-    container_name: nexus-tunnel
-    restart: unless-stopped
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
-    environment:
-      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
-    depends_on:
-      - frontend
-      - backend
-    networks:
-      - nexus-net
+volumes:
+  ollama_data:
+    # Named volume persists downloaded models across container restarts
 
 networks:
   nexus-net:

@@ -80,27 +80,37 @@ Always respond with valid JSON only. No markdown code blocks, no explanation out
 }
 
 export async function ollamaComplete(prompt: string, systemPrompt: string): Promise<string> {
-  const fullPrompt = `${systemPrompt}\n\nUser: ${prompt}`;
+  const base = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+  const model = process.env.OLLAMA_MODEL || 'llama3.2';
+  const url = `${base}/api/generate`;
 
-  console.log(`[Ollama] Calling ${process.env.OLLAMA_BASE_URL}/api/generate with model ${process.env.OLLAMA_MODEL}`);
+  console.log(`[Ollama] Calling ${url} with model ${model}`);
 
-  const response = await fetch(`${process.env.OLLAMA_BASE_URL}/api/generate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: process.env.OLLAMA_MODEL,
-      prompt: fullPrompt,
-      stream: false
-    })
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        prompt: `${systemPrompt}\n\nUser: ${prompt}`,
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(60_000),
+    });
+  } catch (err) {
+    const hint = base.includes('localhost') || base.includes('127.0.0.1')
+      ? 'Ollama is not reachable at localhost. Run `docker-compose --profile prod up -d` on your Mac and set OLLAMA_BASE_URL=https://ollama.lj-buchmiller.com in Railway.'
+      : `Cannot reach Ollama at ${base}. Check that the Cloudflare tunnel is running on your Mac.`;
+    throw new Error(hint);
+  }
 
   if (!response.ok) {
     throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
   }
 
   const data = await response.json() as OllamaGenerateResponse;
-  const text = data.response;
-  return text;
+  return data.response;
 }
 
 // TODO: implement streaming with SSE/WebSocket
