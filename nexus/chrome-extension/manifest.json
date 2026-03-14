@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "NEXUS New Tab",
   "version": "1.1.0",
-  "description": "Turn every new tab into your personal command center — live sports, stocks, AI assistant, calendar, tasks, and Spotify. All in one place.",
+  "description": "Turn every new tab into your command center — live sports, stocks, AI assistant, calendar, tasks, and Spotify. All in one place.",
   "chrome_url_overrides": {
     "newtab": "newtab.html"
   },
