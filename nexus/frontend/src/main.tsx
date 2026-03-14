@@ -1,5 +1,18 @@
 import { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
+
+// Silence all console output in production — nothing should be visible to end users
+if (!import.meta.env.DEV) {
+  const noop = () => {};
+  console.log   = noop;
+  console.warn  = noop;
+  console.error = noop;
+  console.debug = noop;
+  console.info  = noop;
+  console.group = noop;
+  console.groupCollapsed = noop;
+  console.groupEnd = noop;
+}
 import { BrowserRouter, HashRouter, Routes, Route } from 'react-router-dom';
 import './index.css';
 import { useAuth } from './hooks/useAuth';

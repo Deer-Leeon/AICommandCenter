@@ -1055,7 +1055,7 @@ export function FootballWidget({ onClose: _onClose }: { onClose: () => void }) {
       {/* Tab content — always rendered */}
       <div style={{ flex: 1, overflow: 'hidden' }}>
         {tab === 'live' && <LiveTab liveMatches={liveMatches} todayGroups={todayGroups} onOpen={openMatch} flashMap={flashMap} mode={mode} />}
-        {tab === 'standings' && <StandingsTab selected={selectedComp} onSelectComp={setSelectedComp} favComps={favorites.competitions} standingsMap={standingsMap} onLoad={fetchStandings} onOpen={(id, name) => console.log(id, name)} mode={mode} />}
+        {tab === 'standings' && <StandingsTab selected={selectedComp} onSelectComp={setSelectedComp} favComps={favorites.competitions} standingsMap={standingsMap} onLoad={fetchStandings} onOpen={openMatch} mode={mode} />}
         {tab === 'fixtures' && <FixturesTab selected={selectedComp} onSelectComp={setSelectedComp} favComps={favorites.competitions} fixturesMap={fixturesMap} onLoad={fetchFixtures} onOpen={openMatch} mode={mode} />}
         {tab === 'my_teams' && <MyTeamsTab favorites={favorites} onAddTeam={addTeam} onRemoveTeam={removeTeam} onAddComp={addComp} onRemoveComp={removeComp} onMoveComp={moveComp} mode={mode} />}
       </div>
