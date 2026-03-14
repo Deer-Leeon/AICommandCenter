@@ -29,7 +29,7 @@ const C = {
 };
 
 const TTL = {
-  status:    60_000,        // 1 min
+  status:    30_000,        // 30 sec — shorter during live sessions
   standings: 1_800_000,    // 30 min
   schedule:  86_400_000,   // 24 hours
   lastRace:  3_600_000,    // 1 hour
@@ -254,17 +254,27 @@ f1Router.get('/status', requireAuth, async (_req: AuthRequest, res: Response) =>
     let isLive = false;
 
     if (session) {
-      const startMs = new Date(session.date_start).getTime();
-      const fourHoursAgo = now - 4 * 3_600_000;
+      const startMs  = new Date(session.date_start).getTime();
+      const endMs    = session.date_end ? new Date(session.date_end).getTime() : startMs + 3 * 3_600_000;
+      const sixHoursAgo  = now - 6 * 3_600_000;
       const oneHourAhead = now + 3_600_000;
-      if (startMs >= fourHoursAgo && startMs <= oneHourAhead) {
+      const sessionStatus = (session.status ?? '').toLowerCase();
+
+      // A session is "current" if it started within 6 h ago or starts within 1 h
+      const isTimingWindow = startMs >= sixHoursAgo && startMs <= oneHourAhead;
+      // OpenF1 marks active sessions as 'started'; also consider it live if we're
+      // between its scheduled start and end time
+      const isActiveByStatus = ['started', 'active', 'live'].some(s => sessionStatus.includes(s));
+      const isActiveByTime   = startMs <= now && now <= endMs + 30 * 60_000; // 30 min grace after end
+
+      if (isTimingWindow || isActiveByStatus) {
         currentSession = {
           type:       session.session_type,
           name:       session.session_name,
           status:     session.status ?? 'unknown',
           sessionKey: session.session_key,
         };
-        isLive = startMs >= fourHoursAgo && startMs <= now;
+        isLive = isActiveByStatus || isActiveByTime || (startMs <= now && startMs >= sixHoursAgo);
       }
     }
 
