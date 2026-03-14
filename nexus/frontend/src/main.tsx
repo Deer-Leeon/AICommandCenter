@@ -66,8 +66,13 @@ function Root() {
   //      they already went through onboarding. This handles existing users whose
   //      browser pre-dates the 'nexus_onboarding_done' flag.
   const [servicesConnected, setServicesConnected] = useState(() => {
-    const hasFlag   = localStorage.getItem('nexus_onboarding_done') === '1';
-    const hasLayout = localStorage.getItem('nexus_layout_v2') !== null;
+    const hasFlag = localStorage.getItem('nexus_onboarding_done') === '1';
+    // Check for a user-scoped layout key (nexus_layout_v2_<userId>) or the legacy key
+    const hasLayout =
+      Object.keys(localStorage).some((k) => k.startsWith('nexus_layout_v2')) ||
+      localStorage.getItem('nexus_layout_v2') !== null;
+    // Persist the flag so future checks are instant
+    if (hasLayout && !hasFlag) localStorage.setItem('nexus_onboarding_done', '1');
     return hasFlag || hasLayout;
   });
 
