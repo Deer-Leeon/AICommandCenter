@@ -9,7 +9,7 @@ const LOCAL_OLLAMA = 'http://localhost:11434';
 // call after Ollama starts working is still snappy.
 let ollamaAvailable: boolean | null = null;
 let ollamaCheckedAt = 0;
-let ollamaModel = 'llama3.2'; // updated from /api/ai/config on first use
+let ollamaModel = 'llama3.2:3b'; // updated from /api/ai/config on first use
 
 async function isLocalOllamaAvailable(): Promise<boolean> {
   const now = Date.now();

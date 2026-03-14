@@ -81,7 +81,7 @@ Always respond with valid JSON only. No markdown code blocks, no explanation out
 
 export async function ollamaComplete(prompt: string, systemPrompt: string): Promise<string> {
   const base = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
-  const model = process.env.OLLAMA_MODEL || 'llama3.2';
+  const model = process.env.OLLAMA_MODEL || 'llama3.2:3b';
   const url = `${base}/api/generate`;
 
   console.log(`[Ollama] Calling ${url} with model ${model}`);
