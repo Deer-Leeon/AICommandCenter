@@ -96,17 +96,23 @@ export async function ollamaComplete(prompt: string, systemPrompt: string): Prom
         prompt: `${systemPrompt}\n\nUser: ${prompt}`,
         stream: false,
       }),
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(180_000), // 3 min — cold model start can be slow
     });
   } catch (err) {
-    const hint = base.includes('localhost') || base.includes('127.0.0.1')
-      ? 'Ollama is not reachable at localhost. Run `docker-compose --profile prod up -d` on your Mac and set OLLAMA_BASE_URL=https://ollama.lj-buchmiller.com in Railway.'
-      : `Cannot reach Ollama at ${base}. Check that the Cloudflare tunnel is running on your Mac.`;
+    const isTimeout = err instanceof Error && err.name === 'TimeoutError';
+    const hint = isTimeout
+      ? `Ollama timed out after 3 minutes at ${base}. The model may still be loading — try again in a moment.`
+      : base.includes('localhost') || base.includes('127.0.0.1')
+        ? 'Ollama is not reachable at localhost. Run `docker-compose --profile prod up -d` on your Mac and set OLLAMA_BASE_URL=https://ollama.lj-buchmiller.com in Railway.'
+        : `Cannot reach Ollama at ${base}. Check that the Cloudflare tunnel is running on your Mac.`;
+    console.error(`[Ollama] Error:`, err);
     throw new Error(hint);
   }
 
   if (!response.ok) {
-    throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+    const body = await response.text().catch(() => '');
+    console.error(`[Ollama] HTTP ${response.status}: ${body}`);
+    throw new Error(`Ollama error: ${response.status} ${response.statusText}${body ? ` — ${body}` : ''}`);
   }
 
   const data = await response.json() as OllamaGenerateResponse;
