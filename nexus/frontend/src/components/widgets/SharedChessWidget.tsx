@@ -207,6 +207,7 @@ export function SharedChessWidget({ connectionId, onClose }: Props) {
   }, []);
 
   const refetchGame = useCallback(() => {
+    if (!connectionId) return;
     apiFetch(`/api/chess/${connectionId}`)
       .then(r => {
         if (r.status === 403) { setDissolved(true); return null; }
@@ -221,6 +222,7 @@ export function SharedChessWidget({ connectionId, onClose }: Props) {
   // Does NOT reset loading=true — if we have a cache hit loading is already false;
   // the server response will silently update the board via applyIfNewer.
   useEffect(() => {
+    if (!connectionId) { setLoading(false); return; }
     let cancelled = false;
     const endpoint = `/api/chess/${connectionId}`;
     awaitPrefetchOrFetch(endpoint, () => apiFetch(endpoint))
@@ -246,7 +248,7 @@ export function SharedChessWidget({ connectionId, onClose }: Props) {
   // Uses a ref for the latest updatedAt to keep the interval stable and avoid
   // re-creating it on every game state change.
   useEffect(() => {
-    if (dissolved) return;
+    if (dissolved || !connectionId) return;
     const id = setInterval(() => {
       apiFetch(`/api/chess/${connectionId}`)
         .then(r => {
