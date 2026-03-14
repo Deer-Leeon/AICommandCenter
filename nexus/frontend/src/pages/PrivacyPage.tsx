@@ -6,6 +6,7 @@ export default function PrivacyPage() {
       color: '#e0e0e8',
       fontFamily: 'system-ui, -apple-system, sans-serif',
       padding: '60px 24px',
+      overflowY: 'auto',
     }}>
       <div style={{ maxWidth: 720, margin: '0 auto' }}>
 
@@ -23,10 +24,11 @@ export default function PrivacyPage() {
           <section>
             <h2 style={h2}>Overview</h2>
             <p style={p}>
-              NEXUS ("we", "our", or "us") is a personal dashboard application available at{' '}
+              NEXUS is a personal dashboard application built and operated by Leon Buchmiller,
+              available at{' '}
               <a href="https://nexus.lj-buchmiller.com" style={link}>nexus.lj-buchmiller.com</a> and
-              as a Chrome extension ("NEXUS New Tab"). This privacy policy explains what data we
-              collect, how we use it, and your rights.
+              as a Chrome extension ("NEXUS New Tab"). This privacy policy explains what data is
+              collected, how it is used, and your rights.
             </p>
           </section>
 
@@ -52,18 +54,18 @@ export default function PrivacyPage() {
             </ul>
             <p style={p}>
               This information is used solely to identify your account and personalise your dashboard.
-              We do not sell or share this data with third parties.
+              This data is never sold or shared with third parties.
             </p>
           </section>
 
           <section>
             <h2 style={h2}>Dashboard & Widget Data</h2>
             <p style={p}>
-              NEXUS stores your widget layout and preferences in our database so your dashboard
+              NEXUS stores your widget layout and preferences in a secure database so your dashboard
               syncs across devices. This includes widget positions, sizes, and configuration — no
               content of external services (calendar events, messages, financial data) is stored
-              permanently on our servers. That data is fetched live from the respective services
-              on your behalf and cached temporarily (minutes to hours) to reduce API usage.
+              permanently. That data is fetched live from the respective services on your behalf
+              and cached temporarily (minutes to hours) to reduce API usage.
             </p>
           </section>
 
@@ -100,7 +102,7 @@ export default function PrivacyPage() {
             <h2 style={h2}>Your Rights</h2>
             <p style={p}>
               You may request deletion of your account and all associated data at any time by
-              contacting us. Upon deletion, all personal data stored on our servers will be
+              reaching out via the contact below. Upon deletion, all personal data will be
               permanently removed.
             </p>
           </section>
