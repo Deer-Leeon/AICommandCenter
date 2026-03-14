@@ -24,6 +24,7 @@ import { UsernameOnboardingModal } from './components/UsernameOnboardingModal';
 import { ProfileProvider } from './contexts/ProfileContext';
 import App from './App';
 import MobileApp from './mobile/MobileApp';
+import PrivacyPage from './pages/PrivacyPage';
 import { isMobileDevice } from './mobile/useMobileDetect';
 
 // Detect once at module load time (viewport/UA won't change mid-session)
@@ -112,6 +113,7 @@ function Root() {
         {!IS_EXTENSION && (
           <Route path="/auth/callback" element={<AuthCallback />} />
         )}
+        <Route path="/privacy" element={<PrivacyPage />} />
         <Route
           path="/*"
           element={
