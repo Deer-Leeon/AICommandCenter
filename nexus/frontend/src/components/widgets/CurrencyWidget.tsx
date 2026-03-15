@@ -152,6 +152,56 @@ function getCurrencyTint(code: string): string {
   return 'transparent';
 }
 
+// ── Frontend exchange fee definitions (mirrors backend) ───────────────────────
+
+const EXCHANGE_FEES: Record<string, { label: string; fee: number }> = {
+  wise:          { label: 'Wise',            fee: 0.007 },
+  revolut:       { label: 'Revolut',         fee: 0.005 },
+  credit_card:   { label: 'Credit Card',     fee: 0.028 },
+  bank_transfer: { label: 'Bank Transfer',   fee: 0.035 },
+  atm_abroad:    { label: 'ATM Abroad',      fee: 0.030 },
+  paypal:        { label: 'PayPal',          fee: 0.044 },
+  cash_exchange: { label: 'Cash Exchange',   fee: 0.055 },
+  no_fee:        { label: 'No Fee / Crypto', fee: 0.000 },
+};
+
+// ── Module-level rates cache (persists across re-renders) ─────────────────────
+
+interface CachedFxRates { rates: Record<string, number>; timestamp: string; ts: number }
+const _fxCache = new Map<string, CachedFxRates>();
+const FX_TTL = 60 * 60 * 1000; // 1 hour
+
+async function ensureRates(base: string): Promise<CachedFxRates> {
+  const cached = _fxCache.get(base);
+  if (cached && Date.now() - cached.ts < FX_TTL) return cached;
+  const r = await apiFetch(`/api/currency/rates?base=${base}`);
+  if (!r.ok) throw new Error('rates fetch failed');
+  const d = await r.json() as { rates: Record<string, number>; time_last_update_utc: string; stale: boolean };
+  const entry: CachedFxRates = { rates: d.rates, timestamp: d.time_last_update_utc, ts: Date.now() };
+  _fxCache.set(base, entry);
+  return entry;
+}
+
+function computeResult(
+  from: string, to: string, amount: number,
+  cached: CachedFxRates,
+): ConvertResult {
+  const rate = cached.rates[to] ?? 1;
+  const inverseRate = 1 / rate;
+  const converted = amount * rate;
+  const withFees: ConvertResult['withFees'] = {};
+  for (const [method, { label, fee }] of Object.entries(EXCHANGE_FEES)) {
+    const feeAmount = amount * fee;
+    withFees[method] = { label, fee, feeAmount, received: (amount - feeAmount) * rate, youLose: feeAmount };
+  }
+  return {
+    from, to, amount, rate, converted, inverseRate,
+    ratesTimestamp: cached.timestamp,
+    stale: Date.now() - cached.ts > FX_TTL,
+    withFees,
+  };
+}
+
 function getLayoutMode(w: number, h: number): LayoutMode {
   if (w < 200 || h < 160) return 'micro';
   if (w < 420 || h < 280) return 'slim';
@@ -559,31 +609,42 @@ export function CurrencyWidget({ onClose: _onClose }: { onClose: () => void }) {
     writePersisted({ from: fromCode, to: toCode, amount: amountStr, feesOpen, feeMethod, recentPairs });
   }, [fromCode, toCode, amountStr, feesOpen, feeMethod, recentPairs]);
 
-  // Convert
+  // Convert — instant from cache; only fetches once per base currency
   const convertTimer = useRef<ReturnType<typeof setTimeout>>();
   const doConvert = useCallback(() => {
     const amount = parseFloat(amountStr.replace(/,/g, '')) || 0;
     if (!fromCode || !toCode || amount <= 0) return;
     clearTimeout(convertTimer.current);
+
+    // If rates already cached → compute and display with zero delay
+    const cached = _fxCache.get(fromCode);
+    if (cached && Date.now() - cached.ts < FX_TTL) {
+      const res = computeResult(fromCode, toCode, amount, cached);
+      setResult(res);
+      setHasLoaded(true);
+      setRecentPairs(prev => {
+        const key = `${fromCode}:${toCode}`;
+        const filtered = prev.filter(p => `${p.from}:${p.to}` !== key);
+        return [{ from: fromCode, to: toCode }, ...filtered].slice(0, 8);
+      });
+      return;
+    }
+
+    // Rates not cached yet — fetch once, then compute instantly
     convertTimer.current = setTimeout(async () => {
       setLoading(true);
       try {
-        const r = await apiFetch(
-          `/api/currency/convert?from=${fromCode}&to=${toCode}&amount=${amount}`,
-        );
-        if (r.ok) {
-          const data = await r.json() as ConvertResult;
-          setResult(data);
-          setHasLoaded(true);
-          // Track recent pair
-          setRecentPairs(prev => {
-            const key = `${fromCode}:${toCode}`;
-            const filtered = prev.filter(p => `${p.from}:${p.to}` !== key);
-            return [{ from: fromCode, to: toCode }, ...filtered].slice(0, 8);
-          });
-        }
+        const entry = await ensureRates(fromCode);
+        const res = computeResult(fromCode, toCode, amount, entry);
+        setResult(res);
+        setHasLoaded(true);
+        setRecentPairs(prev => {
+          const key = `${fromCode}:${toCode}`;
+          const filtered = prev.filter(p => `${p.from}:${p.to}` !== key);
+          return [{ from: fromCode, to: toCode }, ...filtered].slice(0, 8);
+        });
       } catch { /* silent */ } finally { setLoading(false); }
-    }, 200);
+    }, 120);
   }, [fromCode, toCode, amountStr]);
 
   useEffect(() => {
