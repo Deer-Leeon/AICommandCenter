@@ -594,33 +594,37 @@ export function CurrencyWidget({ onClose: _onClose }: { onClose: () => void }) {
   // Mark ready if we have persisted data
   useEffect(() => { if (persisted.from && persisted.to) setHasLoaded(true); }, [persisted]);
 
+  const swapTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
   function handleSwap() {
-    setSwapping(true);
-    // Instantly flip result using already-known inverse rate — no API wait
-    if (result) {
-      const flipped: ConvertResult = {
-        ...result,
-        from: result.to,
-        to: result.from,
-        rate: result.inverseRate,
-        converted: result.amount * result.inverseRate,
-        inverseRate: result.rate,
+    // Swap codes immediately — no delay, no stale closure issues
+    setFromCode(prev => { setToCode(prev); return toCode; });
+
+    // Instantly flip the displayed result using the already-known inverse rate
+    setResult(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        from: prev.to,
+        to: prev.from,
+        rate: prev.inverseRate,
+        converted: prev.amount * prev.inverseRate,
+        inverseRate: prev.rate,
         withFees: Object.fromEntries(
-          Object.entries(result.withFees).map(([method, f]) => [method, {
+          Object.entries(prev.withFees).map(([method, f]) => [method, {
             ...f,
-            feeAmount: result.amount * f.fee,
-            received: (result.amount - result.amount * f.fee) * result.inverseRate,
-            youLose: result.amount * f.fee,
+            feeAmount: prev.amount * f.fee,
+            received: (prev.amount - prev.amount * f.fee) * prev.inverseRate,
+            youLose: prev.amount * f.fee,
           }]),
         ),
       };
-      setResult(flipped);
-    }
-    setTimeout(() => {
-      setFromCode(toCode);
-      setToCode(fromCode);
-      setSwapping(false);
-    }, 140);
+    });
+
+    // Animation only — safe to cancel/restart on rapid clicks
+    setSwapping(true);
+    clearTimeout(swapTimerRef.current);
+    swapTimerRef.current = setTimeout(() => setSwapping(false), 300);
   }
 
   function handleAmountInput(raw: string) {
