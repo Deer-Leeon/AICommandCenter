@@ -725,7 +725,6 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
       return (
         <div ref={containerRef} style={rootStyle}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 6, padding: 12 }}>
-            <span style={{ fontSize: 28 }}>🕐</span>
             <span style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>
               Resize to set up
             </span>
@@ -830,11 +829,7 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
                 )}
               </div>
             )}
-            {!fromLoc && (
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: 28 }}>🕐</span>
-              </div>
-            )}
+            {!fromLoc && <div style={{ flex: 1 }} />}
           </div>
 
           {/* Center column: swap + time picker */}
@@ -940,11 +935,7 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
                 )}
               </div>
             )}
-            {!toLoc && (
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span style={{ fontSize: 28 }}>🕑</span>
-              </div>
-            )}
+            {!toLoc && <div style={{ flex: 1 }} />}
           </div>
         </div>
 
