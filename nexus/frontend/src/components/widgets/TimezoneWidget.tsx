@@ -128,6 +128,9 @@ function splitTime(t: string): [string, string, string] {
 
 // ── SearchInput ───────────────────────────────────────────────────────────────
 
+// Module-level cache so results persist across re-renders and re-mounts
+const _tzSearchCache = new Map<string, TZResult[]>();
+
 interface SearchInputProps {
   placeholder?: string;
   selected: SelectedLocation | null;
@@ -162,11 +165,18 @@ function SearchInput({ placeholder, selected, onSelect, onClear, autoFocus, comp
 
   const search = useCallback(async (q: string) => {
     if (!q.trim()) { setResults([]); setAmbiguous(null); return; }
+    const key = q.trim().toLowerCase();
+    // Serve from cache immediately — no loading flicker
+    if (_tzSearchCache.has(key)) {
+      setResults(_tzSearchCache.get(key)!);
+      return;
+    }
     setLoading(true);
     try {
       const res = await apiFetch(`/api/timezone/search?q=${encodeURIComponent(q)}`);
       if (res.ok) {
         const data = await res.json() as { results: TZResult[] };
+        _tzSearchCache.set(key, data.results);
         setResults(data.results);
       }
     } catch { /* silent */ } finally { setLoading(false); }
@@ -177,7 +187,14 @@ function SearchInput({ placeholder, selected, onSelect, onClear, autoFocus, comp
     setQuery(v);
     setAmbiguous(null);
     clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => search(v), 300);
+    const key = v.trim().toLowerCase();
+    if (_tzSearchCache.has(key)) {
+      // Instantly show cached results with zero debounce
+      setResults(_tzSearchCache.get(key)!);
+    } else {
+      // Small debounce only for uncached queries (avoids firing on every keystroke)
+      timerRef.current = setTimeout(() => search(v), 120);
+    }
   }
 
   function handleSelect(r: TZResult) {
@@ -903,18 +920,19 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
                       <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{conversion.toDate}</div>
                     )}
                     {(mode === 'standard' || mode === 'expanded') && (
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{conversion.toOffset}</span>
-                      </div>
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                        {conversion.toOffset}
+                      </span>
                     )}
                   </>
                 ) : (
                   <>
                     <ClockDisplay timezone={toLoc.timezone} mode={mode} showSeconds={showSeconds} isResult />
-                    {(mode === 'standard' || mode === 'expanded') && conversion && (
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{conversion.toOffset}</span>
-                      </div>
+                    {/* Always show offset — use conversion result if available, else fall back to static value */}
+                    {(mode === 'standard' || mode === 'expanded') && (
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                        {conversion?.toOffset ?? toLoc.utcOffset}
+                      </span>
                     )}
                   </>
                 )}
@@ -997,6 +1015,7 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
 
       <style>{`
         @keyframes tz-spin { to { transform: rotate(360deg); } }
+        input[type="time"]::-webkit-calendar-picker-indicator { display: none; -webkit-appearance: none; }
         @keyframes tz-drop {
           from { opacity: 0; transform: translateY(-4px); }
           to   { opacity: 1; transform: translateY(0); }
