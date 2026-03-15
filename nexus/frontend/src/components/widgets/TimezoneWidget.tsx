@@ -6,6 +6,14 @@ import { useWidgetReady } from '../../hooks/useWidgetReady';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+interface TZCitySuggestion {
+  name: string;
+  timezone: string;
+  countryCode: string;
+  flag: string;
+  utcOffset: string;
+}
+
 interface TZResult {
   name: string;
   type: 'city' | 'country' | 'region';
@@ -13,6 +21,7 @@ interface TZResult {
   timezones: string[] | null;
   ambiguous: boolean;
   ambiguousMessage: string | null;
+  citySuggestions: TZCitySuggestion[] | null;
   countryCode: string;
   flag: string;
   utcOffset: string | null;
@@ -258,19 +267,20 @@ function SearchInput({ placeholder, selected, onSelect, onClear, autoFocus, comp
           {ambiguous ? (
             <div style={{ padding: '12px 14px' }}>
               <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10, lineHeight: 1.5 }}>
-                {ambiguous.flag} {ambiguous.ambiguousMessage?.replace(/Try:\s+.+$/, '').trim()}
+                {ambiguous.flag} {ambiguous.ambiguousMessage}
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {(ambiguous.ambiguousMessage?.match(/Try:\s+(.+)$/))?.[1]
-                  ?.split(',').map(c => c.trim()).filter(Boolean).map(city => (
+                {ambiguous.citySuggestions?.map(city => (
                   <button
-                    key={city}
+                    key={city.name}
                     onMouseDown={e => {
                       e.preventDefault();
-                      setQuery(city);
+                      // Select immediately — no second API call needed
+                      onSelect({ name: city.name, timezone: city.timezone, countryCode: city.countryCode, flag: city.flag, utcOffset: city.utcOffset });
+                      setQuery('');
+                      setResults([]);
                       setAmbiguous(null);
-                      search(city);
-                      inputRef.current?.focus();
+                      setFocused(false);
                     }}
                     style={{
                       background: 'rgba(124,106,255,0.12)',
@@ -281,7 +291,7 @@ function SearchInput({ placeholder, selected, onSelect, onClear, autoFocus, comp
                     }}
                     onMouseEnter={e => (e.currentTarget.style.background = 'rgba(124,106,255,0.22)')}
                     onMouseLeave={e => (e.currentTarget.style.background = 'rgba(124,106,255,0.12)')}
-                  >{city}</button>
+                  >{city.name}</button>
                 ))}
               </div>
             </div>

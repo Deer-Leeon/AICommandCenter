@@ -339,6 +339,8 @@ timezoneRouter.get('/search', requireAuth, (req: AuthRequest, res: Response) => 
   const cached = cache.search.get(cacheKey, 60_000);
   if (cached) { res.json(cached); return; }
 
+  interface CitySuggestion { name: string; timezone: string; countryCode: string; flag: string; utcOffset: string }
+
   const results: Array<{
     name: string;
     type: 'city' | 'country' | 'region';
@@ -346,6 +348,7 @@ timezoneRouter.get('/search', requireAuth, (req: AuthRequest, res: Response) => 
     timezones: string[] | null;
     ambiguous: boolean;
     ambiguousMessage: string | null;
+    citySuggestions: CitySuggestion[] | null;
     countryCode: string;
     flag: string;
     utcOffset: string | null;
@@ -378,18 +381,24 @@ timezoneRouter.get('/search', requireAuth, (req: AuthRequest, res: Response) => 
         const { time } = currentInTz(tz);
         results.push({
           name: country.name, type: 'country', timezone: tz, timezones: null,
-          ambiguous: false, ambiguousMessage: null, countryCode: country.id,
-          flag: flagEmoji(country.id), utcOffset: `UTC${offset}`, currentTime: time,
+          ambiguous: false, ambiguousMessage: null, citySuggestions: null,
+          countryCode: country.id, flag: flagEmoji(country.id),
+          utcOffset: `UTC${offset}`, currentTime: time,
         });
       } else if (uniqueTzs.length > 1) {
-        const citySuggestions = cities.filter(c => c.country === country.id).slice(0, 6).map(c => c.name);
-        const msg = citySuggestions.length > 0
-          ? `${country.name} spans ${uniqueTzs.length} timezones. Try: ${citySuggestions.join(', ')}`
+        const suggestionCities = cities.filter(c => c.country === country.id).slice(0, 6);
+        const structuredSuggestions: CitySuggestion[] = suggestionCities.map(c => ({
+          name: c.name, timezone: c.timezone, countryCode: c.country,
+          flag: flagEmoji(c.country), utcOffset: `UTC${getUtcOffset(c.timezone)}`,
+        }));
+        const msg = structuredSuggestions.length > 0
+          ? `${country.name} spans ${uniqueTzs.length} timezones`
           : `${country.name} spans ${uniqueTzs.length} timezones — please search for a specific city`;
         results.push({
           name: country.name, type: 'country', timezone: null, timezones: uniqueTzs,
-          ambiguous: true, ambiguousMessage: msg, countryCode: country.id,
-          flag: flagEmoji(country.id), utcOffset: null, currentTime: null,
+          ambiguous: true, ambiguousMessage: msg,
+          citySuggestions: structuredSuggestions.length > 0 ? structuredSuggestions : null,
+          countryCode: country.id, flag: flagEmoji(country.id), utcOffset: null, currentTime: null,
         });
       }
     }
@@ -419,6 +428,7 @@ timezoneRouter.get('/search', requireAuth, (req: AuthRequest, res: Response) => 
       timezones:        null,
       ambiguous:        false,
       ambiguousMessage: null,
+      citySuggestions:  null,
       countryCode:      city.country,
       flag:             flagEmoji(city.country),
       utcOffset:        `UTC${offset}`,
@@ -463,6 +473,7 @@ timezoneRouter.get('/search', requireAuth, (req: AuthRequest, res: Response) => 
           timezones:        null,
           ambiguous:        false,
           ambiguousMessage: null,
+          citySuggestions:  null,
           countryCode:      country.id,
           flag:             flagEmoji(country.id),
           utcOffset:        `UTC${offset}`,
@@ -470,12 +481,13 @@ timezoneRouter.get('/search', requireAuth, (req: AuthRequest, res: Response) => 
         });
       } else {
         // Multiple distinct timezones — find city suggestions for this country
-        const citySuggestions = cities
-          .filter(c => c.country === country.id)
-          .slice(0, 6)
-          .map(c => c.name);
-        const msg = citySuggestions.length > 0
-          ? `${country.name} spans ${uniqueTzs.length} timezones. Try: ${citySuggestions.join(', ')}`
+        const suggestionCities = cities.filter(c => c.country === country.id).slice(0, 6);
+        const structuredSuggestions: CitySuggestion[] = suggestionCities.map(c => ({
+          name: c.name, timezone: c.timezone, countryCode: c.country,
+          flag: flagEmoji(c.country), utcOffset: `UTC${getUtcOffset(c.timezone)}`,
+        }));
+        const msg = structuredSuggestions.length > 0
+          ? `${country.name} spans ${uniqueTzs.length} timezones`
           : `${country.name} spans ${uniqueTzs.length} timezones — please search for a specific city`;
         results.push({
           name:             country.name,
@@ -484,6 +496,7 @@ timezoneRouter.get('/search', requireAuth, (req: AuthRequest, res: Response) => 
           timezones:        uniqueTzs,
           ambiguous:        true,
           ambiguousMessage: msg,
+          citySuggestions:  structuredSuggestions.length > 0 ? structuredSuggestions : null,
           countryCode:      country.id,
           flag:             flagEmoji(country.id),
           utcOffset:        null,
