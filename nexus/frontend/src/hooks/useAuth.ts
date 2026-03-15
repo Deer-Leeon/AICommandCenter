@@ -31,7 +31,23 @@ export function useAuth() {
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    // Re-validate session when the user returns to the tab — browser timers are
+    // throttled when a tab is in the background, so autoRefreshToken may not
+    // have fired. getSession() triggers a silent refresh if the token has expired.
+    function handleVisibility() {
+      if (document.visibilityState === 'visible') {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          setSession(session);
+          setUser(session?.user ?? null);
+        });
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   const signInWithGoogle = async () => {
