@@ -785,11 +785,29 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
             />
             {fromLoc && (
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                <ClockDisplay timezone={fromLoc.timezone} mode={mode} showSeconds={showSeconds} />
-                {(mode === 'standard' || mode === 'expanded') && (
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{fromLoc.utcOffset}</span>
-                  </div>
+                {isManualTime && conversion ? (
+                  <>
+                    <div style={{
+                      fontFamily: "'Space Mono', monospace", fontWeight: 700,
+                      fontSize: mode === 'compact' ? 30 : mode === 'standard' ? 36 : 42,
+                      color: 'var(--text)', lineHeight: 1.1, textAlign: 'center',
+                    }}>
+                      {conversion.fromTime}
+                    </div>
+                    {mode !== 'compact' && (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{conversion.fromDate}</div>
+                    )}
+                    {(mode === 'standard' || mode === 'expanded') && (
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{conversion.fromOffset}</span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <ClockDisplay timezone={fromLoc.timezone} mode={mode} showSeconds={showSeconds} />
+                    {(mode === 'standard' || mode === 'expanded') && (
+                      <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{fromLoc.utcOffset}</span>
+                    )}
+                  </>
                 )}
               </div>
             )}
