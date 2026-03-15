@@ -412,77 +412,48 @@ function ClockDisplay({ timezone, isResult, mode, showSeconds }: ClockDisplayPro
 }
 
 // ── Time picker ───────────────────────────────────────────────────────────────
+// Keyboard-editable time input. The value represents the time in the FROM
+// timezone — "if it were HH:MM in [FROM], what would it be in [TO]?"
 
 interface TimePickerProps {
   time: string;
   date: string;
+  isManual: boolean;
   onChange: (time: string, date: string) => void;
   compact?: boolean;
 }
 
-function TimePicker({ time, date, onChange, compact }: TimePickerProps) {
-  const [h, m] = time.split(':').map(Number);
-
-  function adjustHour(delta: number) {
-    const nh = ((h + delta) + 24) % 24;
-    onChange(`${pad(nh)}:${pad(m)}`, date);
-  }
-  function adjustMin(delta: number) {
-    const nm = ((m + delta) + 60) % 60;
-    const carry = m + delta < 0 ? -1 : m + delta >= 60 ? 1 : 0;
-    const nh = ((h + carry) + 24) % 24;
-    onChange(`${pad(nh)}:${pad(nm)}`, date);
-  }
+function TimePicker({ time, date, isManual, onChange, compact }: TimePickerProps) {
   function adjustDate(delta: number) {
     const [y, mo, d] = date.split('-').map(Number);
     const nd = new Date(y, mo - 1, d + delta);
     onChange(time, `${nd.getFullYear()}-${pad(nd.getMonth() + 1)}-${pad(nd.getDate())}`);
   }
 
-  function handleHourWheel(e: React.WheelEvent) { e.preventDefault(); adjustHour(e.deltaY > 0 ? -1 : 1); }
-  function handleMinWheel(e: React.WheelEvent) { e.preventDefault(); adjustMin(e.deltaY > 0 ? -1 : 1); }
-
-  const isToday = date === todayStr();
-  const isNow   = isToday && time === nowTimeStr();
-
-  const numStyle: React.CSSProperties = {
-    fontFamily: "'Space Mono', monospace", fontWeight: 700,
-    fontSize: compact ? 20 : 26, color: 'var(--text)', lineHeight: 1,
-    cursor: 'ns-resize', userSelect: 'none', padding: '0 2px',
-    transition: 'color 0.1s',
-  };
-  const arrStyle: React.CSSProperties = {
-    background: 'none', border: 'none', cursor: 'pointer',
-    color: 'var(--text-muted)', fontSize: compact ? 9 : 11, padding: '1px 4px',
-    lineHeight: 1,
-  };
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: compact ? 4 : 6 }}>
-      {/* HH : MM */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 2 : 4 }}>
-        {/* Hours */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <button style={arrStyle} onClick={() => adjustHour(1)}>▲</button>
-          <span style={numStyle} onWheel={handleHourWheel}>{pad(h)}</span>
-          <button style={arrStyle} onClick={() => adjustHour(-1)}>▼</button>
-        </div>
-        <span style={{
-          fontFamily: "'Space Mono', monospace", fontWeight: 700,
-          fontSize: compact ? 20 : 26, color: 'var(--text-muted)',
-        }}>:</span>
-        {/* Minutes */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <button style={arrStyle} onClick={() => adjustMin(1)}>▲</button>
-          <span style={numStyle} onWheel={handleMinWheel}>{pad(m)}</span>
-          <button style={arrStyle} onClick={() => adjustMin(-1)}>▼</button>
-        </div>
-        {/* Now pill */}
-        {!isNow && (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: compact ? 3 : 5 }}>
+      {/* Time input row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 4 : 6 }}>
+        <input
+          type="time"
+          value={time}
+          onChange={e => { if (e.target.value) onChange(e.target.value, date); }}
+          style={{
+            fontFamily: "'Space Mono', monospace", fontWeight: 700,
+            fontSize: compact ? 16 : 20, color: 'var(--text)',
+            background: 'var(--surface3)', border: '1px solid var(--border)',
+            borderRadius: 8, padding: compact ? '3px 8px' : '5px 10px',
+            outline: 'none', cursor: 'text', colorScheme: 'dark',
+          }}
+          onFocus={e => (e.currentTarget.style.borderColor = 'rgba(124,106,255,0.5)')}
+          onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+        />
+        {/* Now pill — resets to live mode */}
+        {isManual && (
           <button
-            onClick={() => onChange(nowTimeStr(), todayStr())}
+            onClick={() => onChange('__now__', '__now__')}
             style={{
-              marginLeft: compact ? 4 : 8, padding: '3px 8px', borderRadius: 20,
+              padding: '3px 8px', borderRadius: 20,
               background: 'var(--accent-dim)', border: '1px solid rgba(124,106,255,0.3)',
               color: 'var(--accent)', fontSize: 10, fontWeight: 600, cursor: 'pointer',
               fontFamily: 'inherit',
@@ -492,25 +463,21 @@ function TimePicker({ time, date, onChange, compact }: TimePickerProps) {
       </div>
 
       {/* Date row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 4 : 8 }}>
-        <button
-          onClick={() => adjustDate(-1)}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: 'var(--text-muted)', fontSize: 14, padding: '2px 4px',
-          }}
-        >‹</button>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>
-          {formatDateLabel(date)}
-        </span>
-        <button
-          onClick={() => adjustDate(1)}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: 'var(--text-muted)', fontSize: 14, padding: '2px 4px',
-          }}
-        >›</button>
-      </div>
+      {isManual && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 4 : 6 }}>
+          <button
+            onClick={() => adjustDate(-1)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14, padding: '2px 4px' }}
+          >‹</button>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>
+            {formatDateLabel(date)}
+          </span>
+          <button
+            onClick={() => adjustDate(1)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14, padding: '2px 4px' }}
+          >›</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -752,15 +719,8 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                 <ClockDisplay timezone={fromLoc.timezone} mode={mode} showSeconds={showSeconds} />
                 {(mode === 'standard' || mode === 'expanded') && (
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                     <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{fromLoc.utcOffset}</span>
-                    {conversion?.fromDST && (
-                      <span style={{
-                        fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 8,
-                        background: 'rgba(245,158,11,0.15)', color: '#f59e0b',
-                        border: '1px solid rgba(245,158,11,0.3)',
-                      }}>DST</span>
-                    )}
                   </div>
                 )}
               </div>
@@ -807,11 +767,10 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
                 <TimePicker
                   time={inputTime}
                   date={inputDate}
+                  isManual={isManualTime}
                   onChange={(t, d) => {
-                    // Check if user pressed "Now" (matches current from-tz time)
-                    const fromNow = fromLoc ? getFromTzTime(fromLoc.timezone) : null;
-                    const isNowReset = fromNow && t === fromNow.time && d === fromNow.date;
-                    setIsManualTime(!isNowReset);
+                    if (t === '__now__') { setIsManualTime(false); return; }
+                    setIsManualTime(true);
                     setInputTime(t);
                     setInputDate(d);
                   }}
@@ -847,20 +806,8 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
                       <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{conversion.toDate}</div>
                     )}
                     {(mode === 'standard' || mode === 'expanded') && (
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                         <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{conversion.toOffset}</span>
-                        {conversion.toDST && (
-                          <span style={{
-                            fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 8,
-                            background: 'rgba(245,158,11,0.15)', color: '#f59e0b',
-                            border: '1px solid rgba(245,158,11,0.3)',
-                          }}>DST</span>
-                        )}
-                        {conversion.fromDST !== conversion.toDST && (
-                          <span style={{ fontSize: 9, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                            ⚠️ Offset includes DST
-                          </span>
-                        )}
                       </div>
                     )}
                   </>
@@ -868,15 +815,8 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
                   <>
                     <ClockDisplay timezone={toLoc.timezone} mode={mode} showSeconds={showSeconds} isResult />
                     {(mode === 'standard' || mode === 'expanded') && conversion && (
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                         <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{conversion.toOffset}</span>
-                        {conversion.toDST && (
-                          <span style={{
-                            fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 8,
-                            background: 'rgba(245,158,11,0.15)', color: '#f59e0b',
-                            border: '1px solid rgba(245,158,11,0.3)',
-                          }}>DST</span>
-                        )}
                       </div>
                     )}
                   </>
@@ -913,10 +853,10 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
             <TimePicker
               time={inputTime}
               date={inputDate}
+              isManual={isManualTime}
               onChange={(t, d) => {
-                const fromNow = fromLoc ? getFromTzTime(fromLoc.timezone) : null;
-                const isNowReset = fromNow && t === fromNow.time && d === fromNow.date;
-                setIsManualTime(!isNowReset);
+                if (t === '__now__') { setIsManualTime(false); return; }
+                setIsManualTime(true);
                 setInputTime(t);
                 setInputDate(d);
               }}
