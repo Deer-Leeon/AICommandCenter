@@ -44,8 +44,28 @@ interface ConnectionsState {
   incoming: Connection[];
 }
 
-// Module-level cache so re-mounting the panel never shows a loading state
-let _connectionsCache: ConnectionsState | null = null;
+// ── Persistence helpers ───────────────────────────────────────────────────────
+
+const LS_KEY = 'nexus_connections_cache';
+const LS_TTL = 5 * 60 * 1000; // 5 minutes
+
+function readLS(): ConnectionsState | null {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw) as { data: ConnectionsState; ts: number };
+    if (Date.now() - ts > LS_TTL) return null;
+    return data;
+  } catch { return null; }
+}
+
+function writeLS(data: ConnectionsState) {
+  try { localStorage.setItem(LS_KEY, JSON.stringify({ data, ts: Date.now() })); } catch { /* quota */ }
+}
+
+// Module-level memory cache — survives re-mounts within the same session.
+// Initialised from localStorage so first render is always instant.
+let _connectionsCache: ConnectionsState | null = readLS();
 let _connectionsFetching = false;
 
 export async function prefetchConnections() {
@@ -54,7 +74,9 @@ export async function prefetchConnections() {
   try {
     const res = await apiFetch('/api/connections');
     if (res.ok) {
-      _connectionsCache = await res.json() as ConnectionsState;
+      const data = await res.json() as ConnectionsState;
+      _connectionsCache = data;
+      writeLS(data);
     }
   } catch { /* silent */ } finally {
     _connectionsFetching = false;
@@ -77,6 +99,7 @@ export function useConnections(enabled = true) {
       if (!res.ok) throw new Error('Failed to load connections');
       const data = await res.json() as ConnectionsState;
       _connectionsCache = data;
+      writeLS(data);
       setState(data);
       setError(null);
     } catch (e) {

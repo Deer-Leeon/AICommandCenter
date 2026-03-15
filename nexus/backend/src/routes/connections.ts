@@ -12,6 +12,19 @@ import { broadcastToUser, broadcastToConnection } from '../lib/sseRegistry.js';
 
 export const connectionsRouter = Router();
 
+// ── Server-side per-user cache (30 s TTL) ────────────────────────────────────
+interface CacheEntry { data: unknown; ts: number }
+const _cache = new Map<string, CacheEntry>();
+const CACHE_TTL = 30_000;
+
+function cGet(userId: string) {
+  const e = _cache.get(userId);
+  if (!e || Date.now() - e.ts > CACHE_TTL) return null;
+  return e.data;
+}
+function cSet(userId: string, data: unknown) { _cache.set(userId, { data, ts: Date.now() }); }
+function cDel(userId: string) { _cache.delete(userId); }
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Normalise (a, b) so that a < b lexicographically. */
@@ -110,7 +123,7 @@ connectionsRouter.post('/invite', requireAuth, async (req: AuthRequest, res: Res
     return;
   }
 
-  // Notify the invitee via SSE if they are online
+  cDel(senderId); cDel(targetProfile.user_id);
   const senderProfile = await fetchProfile(senderId);
   broadcastToUser(targetProfile.user_id, {
     type:       'connection:invite_received',
@@ -162,6 +175,7 @@ connectionsRouter.post('/:connectionId/accept', requireAuth, async (req: AuthReq
 
   if (updateErr) { res.status(500).json({ error: updateErr.message }); return; }
 
+  cDel(userId); cDel(conn.invited_by);
   const acceptorProfile = await fetchProfile(userId);
   // Notify the inviter that their invite was accepted
   broadcastToUser(conn.invited_by, {
@@ -210,6 +224,7 @@ connectionsRouter.post('/:connectionId/decline', requireAuth, async (req: AuthRe
     .update({ status: 'declined' })
     .eq('connection_id', connectionId);
 
+  cDel(userId); cDel(conn.invited_by);
   broadcastToUser(conn.invited_by, {
     type:         'connection:invite_declined',
     connectionId,
@@ -242,7 +257,7 @@ connectionsRouter.delete('/:connectionId', requireAuth, async (req: AuthRequest,
 
   // Cascade is handled by the DB (shared_widget_registry ON DELETE CASCADE)
   const otherId = conn.user_id_a === userId ? conn.user_id_b : conn.user_id_a;
-  // Notify the other user
+  cDel(userId); cDel(otherId);
   broadcastToUser(otherId, {
     type:         'connection:dissolved',
     connectionId,
@@ -284,6 +299,7 @@ connectionsRouter.delete('/:connectionId/cancel', requireAuth, async (req: AuthR
     .eq('connection_id', connectionId);
 
   const otherId = conn.user_id_a === userId ? conn.user_id_b : conn.user_id_a;
+  cDel(userId); cDel(otherId);
   broadcastToUser(otherId, {
     type:         'connection:invite_cancelled',
     connectionId,
@@ -295,6 +311,9 @@ connectionsRouter.delete('/:connectionId/cancel', requireAuth, async (req: AuthR
 // ── GET /api/connections ──────────────────────────────────────────────────────
 connectionsRouter.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
   const userId = req.user!.id;
+
+  const cached = cGet(userId);
+  if (cached) { res.json(cached); return; }
 
   const { data: connections, error } = await supabase
     .from('connections')
@@ -346,11 +365,13 @@ connectionsRouter.get('/', requireAuth, async (req: AuthRequest, res: Response) 
     };
   };
 
-  res.json({
+  const result = {
     active:   active.map(enrich),
     outgoing: outgoing.map(enrich),
     incoming: incoming.map(enrich),
-  });
+  };
+  cSet(userId, result);
+  res.json(result);
 });
 
 // ── POST /api/connections/presence ───────────────────────────────────────────
