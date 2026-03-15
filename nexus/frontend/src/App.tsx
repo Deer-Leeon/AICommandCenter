@@ -27,6 +27,8 @@ import { WidgetPickerModal }   from './components/WidgetPickerModal';
 import { devBootCheck } from './lib/devUtils';
 import { nexusSSE } from './lib/nexusSSE';
 import { WIDGET_CONFIGS, type WidgetType } from './types';
+import { prefetchConnections } from './hooks/useConnections';
+import { prefetchProfile } from './hooks/useProfile';
 
 // How long to wait before force-revealing regardless of widget readiness (ms)
 const REVEAL_TIMEOUT = 1_200;
@@ -51,6 +53,14 @@ export default function App() {
     if (!user) return;
     nexusSSE.start();
     return () => nexusSSE.stop();
+  }, [user]);
+
+  // ── Pre-fetch settings data in background so panels open instantly ────────
+  useEffect(() => {
+    if (!user) return;
+    // Fire-and-forget — populates module-level caches used by Settings panels
+    prefetchProfile();
+    prefetchConnections();
   }, [user]);
   const revealTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

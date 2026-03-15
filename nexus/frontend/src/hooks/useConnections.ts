@@ -46,6 +46,20 @@ interface ConnectionsState {
 
 // Module-level cache so re-mounting the panel never shows a loading state
 let _connectionsCache: ConnectionsState | null = null;
+let _connectionsFetching = false;
+
+export async function prefetchConnections() {
+  if (_connectionsCache || _connectionsFetching) return;
+  _connectionsFetching = true;
+  try {
+    const res = await apiFetch('/api/connections');
+    if (res.ok) {
+      _connectionsCache = await res.json() as ConnectionsState;
+    }
+  } catch { /* silent */ } finally {
+    _connectionsFetching = false;
+  }
+}
 
 export function useConnections(enabled = true) {
   const [state,   setState]   = useState<ConnectionsState>(

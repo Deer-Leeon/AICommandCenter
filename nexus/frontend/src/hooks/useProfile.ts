@@ -30,6 +30,10 @@ export function invalidateProfileCache() {
   _cachedProfile = null;
 }
 
+export function prefetchProfile() {
+  if (!_cachedProfile && !_fetchPromise) fetchProfile();
+}
+
 export function useProfile(enabled: boolean) {
   const [profile, setProfile] = useState<Profile | null>(_cachedProfile);
   const [loading, setLoading] = useState(_cachedProfile === null);
