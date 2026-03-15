@@ -30,7 +30,8 @@ const SpotifyWidget     = lazy(() => import('./widgets/SpotifyWidget').then(m =>
 const F1Widget          = lazy(() => import('./widgets/F1Widget').then(m => ({ default: m.F1Widget })));
 const FootballWidget    = lazy(() => import('./widgets/FootballWidget').then(m => ({ default: m.FootballWidget })));
 const TimezoneWidget    = lazy(() => import('./widgets/TimezoneWidget').then(m => ({ default: m.TimezoneWidget })));
-const CurrencyWidget    = lazy(() => import('./widgets/CurrencyWidget').then(m => ({ default: m.CurrencyWidget })));
+const CurrencyWidget      = lazy(() => import('./widgets/CurrencyWidget').then(m => ({ default: m.CurrencyWidget })));
+const SharedPhotoWidget   = lazy(() => import('./widgets/SharedPhotoWidget').then(m => ({ default: m.SharedPhotoWidget })));
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface WidgetRect { top: number; left: number; width: number; height: number; }
@@ -367,6 +368,8 @@ function PlacedWidget({
               ? <SharedTodoWidget connectionId={connectionId} slotKey={cellKey} onClose={onClose} />
               : widgetType === 'shared_chess'
               ? <SharedChessWidget connectionId={connectionId ?? ''} slotKey={cellKey} onClose={onClose} />
+              : widgetType === 'shared_photo'
+              ? <SharedPhotoWidget connectionId={connectionId ?? ''} slotKey={cellKey} onClose={onClose} />
               : WidgetComponent
               ? <WidgetComponent onClose={onClose} />
               : null

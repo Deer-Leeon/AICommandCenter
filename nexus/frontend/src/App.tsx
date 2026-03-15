@@ -21,8 +21,9 @@ import { StatusBar } from './components/StatusBar';
 import { RevealOverlay } from './components/RevealOverlay';
 import { DevCacheOverlay } from './components/DevCacheOverlay';
 import { InviteToast } from './components/InviteToast';
-import { TodoSetupModal }      from './components/TodoSetupModal';
-import { ChessSetupModal }     from './components/ChessSetupModal';
+import { TodoSetupModal }       from './components/TodoSetupModal';
+import { ChessSetupModal }      from './components/ChessSetupModal';
+import { SharedPhotoSetupModal } from './components/SharedPhotoSetupModal';
 import { WidgetPickerModal }   from './components/WidgetPickerModal';
 import { devBootCheck } from './lib/devUtils';
 import { nexusSSE } from './lib/nexusSSE';
@@ -207,7 +208,7 @@ export default function App() {
                 targetCell={pickerCell}
                 onPlace={(widgetId, row, col) => {
                   const slotKey = `${row},${col}`;
-                  if (widgetId === 'todo' || widgetId === 'shared_chess') {
+                  if (widgetId === 'todo' || widgetId === 'shared_chess' || widgetId === 'shared_photo') {
                     setPendingDrop({ widgetId, row, col, slotKey });
                   } else {
                     placeWidget(widgetId, row, col);
@@ -231,6 +232,17 @@ export default function App() {
             )}
             {pendingDrop?.widgetId === 'shared_chess' && (
               <ChessSetupModal
+                onConfirm={(connectionId) => {
+                  placeWidget(pendingDrop.widgetId, pendingDrop.row, pendingDrop.col);
+                  setWidgetConnection(pendingDrop.slotKey, connectionId);
+                  setPendingDrop(null);
+                }}
+                onCancel={() => setPendingDrop(null)}
+                onOpenConnections={() => { setSettingsInitialTab('connections'); setShowSettings(true); }}
+              />
+            )}
+            {pendingDrop?.widgetId === 'shared_photo' && (
+              <SharedPhotoSetupModal
                 onConfirm={(connectionId) => {
                   placeWidget(pendingDrop.widgetId, pendingDrop.row, pendingDrop.col);
                   setWidgetConnection(pendingDrop.slotKey, connectionId);

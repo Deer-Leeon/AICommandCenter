@@ -36,3 +36,31 @@ export async function apiFetch(path: string, options: RequestInit = {}): Promise
 
   return res;
 }
+
+/**
+ * apiFetchMultipart — like apiFetch but for FormData (multipart/form-data).
+ * Does NOT set Content-Type so the browser can inject the correct boundary.
+ */
+export async function apiFetchMultipart(
+  path: string,
+  body: FormData,
+  method = 'POST',
+): Promise<Response> {
+  const session = await getValidSession();
+
+  const makeRequest = (token: string | undefined) =>
+    fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body,
+    });
+
+  const res = await makeRequest(session?.access_token);
+
+  if (res.status === 401) {
+    const { data } = await supabase.auth.refreshSession();
+    if (data.session) return makeRequest(data.session.access_token);
+  }
+
+  return res;
+}

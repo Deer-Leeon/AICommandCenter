@@ -37,6 +37,7 @@ import { f1Router }           from './routes/f1.js';
 import { footballRouter }     from './routes/football.js';
 import { timezoneRouter }     from './routes/timezone.js';
 import { currencyRouter }     from './routes/currency.js';
+import { sharedPhotoRouter }  from './routes/sharedPhoto.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -101,6 +102,7 @@ app.use('/api/f1',           f1Router);
 app.use('/api/football',     footballRouter);
 app.use('/api/timezone',     timezoneRouter);
 app.use('/api/currency',     currencyRouter);
+app.use('/api/shared-photo', sharedPhotoRouter);
 
 app.get('/', (_req, res) => {
   res.json({ name: 'NEXUS API', version: '1.0.0', status: 'running' });
