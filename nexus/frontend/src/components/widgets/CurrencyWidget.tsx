@@ -596,6 +596,26 @@ export function CurrencyWidget({ onClose: _onClose }: { onClose: () => void }) {
 
   function handleSwap() {
     setSwapping(true);
+    // Instantly flip result using already-known inverse rate — no API wait
+    if (result) {
+      const flipped: ConvertResult = {
+        ...result,
+        from: result.to,
+        to: result.from,
+        rate: result.inverseRate,
+        converted: result.amount * result.inverseRate,
+        inverseRate: result.rate,
+        withFees: Object.fromEntries(
+          Object.entries(result.withFees).map(([method, f]) => [method, {
+            ...f,
+            feeAmount: result.amount * f.fee,
+            received: (result.amount - result.amount * f.fee) * result.inverseRate,
+            youLose: result.amount * f.fee,
+          }]),
+        ),
+      };
+      setResult(flipped);
+    }
     setTimeout(() => {
       setFromCode(toCode);
       setToCode(fromCode);
