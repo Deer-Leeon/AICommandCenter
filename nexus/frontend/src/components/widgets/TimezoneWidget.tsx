@@ -931,7 +931,7 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
         {/* ── Two panels ── */}
         <div style={{
           display: 'flex',
-          flexDirection: mode === 'slim' ? 'column-reverse' : 'row',
+          flexDirection: mode === 'slim' ? 'column' : 'row',
           gap: compact ? 6 : 10, flex: 1, minHeight: 0,
         }}>
 
