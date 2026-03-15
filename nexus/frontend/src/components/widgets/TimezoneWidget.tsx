@@ -467,7 +467,8 @@ function TimePicker({ time, date, isManual, onChange, compact, inline }: TimePic
         background: 'var(--surface3)', border: '1px solid var(--border)',
         borderRadius: 8, padding: inline ? '3px 5px' : compact ? '3px 6px' : '4px 8px',
         outline: 'none', cursor: 'text',
-        width: inline ? 'auto' : '100%', boxSizing: 'border-box',
+        flex: inline ? 1 : undefined,
+        width: inline ? undefined : '100%', boxSizing: 'border-box',
         // @ts-expect-error vendor prefix
         WebkitAppearance: 'none', appearance: 'none',
       }}
