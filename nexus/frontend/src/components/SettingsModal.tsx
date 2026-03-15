@@ -308,8 +308,15 @@ function PermissionsPanel() {
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  const STATUSES_CACHE_KEY = 'nexus_perm_statuses';
+
   const checkStatuses = useCallback(async () => {
-    setChecking(true);
+    // Show cached statuses immediately — no spinner if we have them
+    try {
+      const cached = sessionStorage.getItem(STATUSES_CACHE_KEY);
+      if (cached) { setStatuses(JSON.parse(cached) as Record<string, boolean>); setChecking(false); }
+    } catch { /* ignore */ }
+
     try {
       const endpoints = [
         ['google-calendar', '/api/auth/google-calendar/status'],
@@ -331,6 +338,7 @@ function PermissionsPanel() {
         }
       }
       setStatuses(next);
+      sessionStorage.setItem(STATUSES_CACHE_KEY, JSON.stringify(next));
     } catch {
       // silently ignore
     } finally {
@@ -1399,14 +1407,19 @@ export function SettingsModal({ onClose, initialTab }: SettingsModalProps) {
             ))}
           </div>
 
-          {/* Right content */}
-          <div className="flex-1 overflow-y-auto nexus-scroll p-5">
-            {activeTab === 'account'     && <AccountPanel />}
-            {activeTab === 'permissions' && <PermissionsPanel />}
-            {activeTab === 'connections' && <ConnectionsPanel />}
-            {activeTab === 'animation'   && <AnimationPanel />}
-            {activeTab === 'searchbar'   && <SearchBarPanel />}
-            {activeTab === 'widgets'     && <WidgetsPanel />}
+          {/* Right content — all panels mount immediately so API calls fire
+              in parallel; CSS visibility hides inactive panels instantly */}
+          <div className="flex-1 overflow-y-auto nexus-scroll p-5" style={{ position: 'relative' }}>
+            {(['account', 'permissions', 'connections', 'animation', 'searchbar', 'widgets'] as const).map((tab) => (
+              <div key={tab} style={{ display: activeTab === tab ? 'block' : 'none' }}>
+                {tab === 'account'     && <AccountPanel />}
+                {tab === 'permissions' && <PermissionsPanel />}
+                {tab === 'connections' && <ConnectionsPanel />}
+                {tab === 'animation'   && <AnimationPanel />}
+                {tab === 'searchbar'   && <SearchBarPanel />}
+                {tab === 'widgets'     && <WidgetsPanel />}
+              </div>
+            ))}
           </div>
         </div>
       </div>
