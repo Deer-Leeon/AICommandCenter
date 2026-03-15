@@ -322,9 +322,12 @@ function flagEmoji(cc: string): string {
 }
 
 // ── Aliases for common shortcuts ─────────────────────────────────────────────
+// Maps typed shortcuts to ISO 3166-1 alpha-2 country codes.
 const COUNTRY_ALIASES: Record<string, string> = {
-  uk: 'GB', 'united kingdom': 'GB', england: 'GB', britain: 'GB',
-  usa: 'US', uae: 'AE', 'united states': 'US',
+  uk: 'GB', 'united kingdom': 'GB', england: 'GB', britain: 'GB', 'great britain': 'GB',
+  usa: 'US', us: 'US', 'united states': 'US', 'united states of america': 'US', america: 'US',
+  uae: 'AE', 'united arab emirates': 'AE',
+  eu: 'EU',
 };
 
 // ── GET /api/timezone/search?q= ───────────────────────────────────────────────
@@ -350,15 +353,59 @@ timezoneRouter.get('/search', requireAuth, (req: AuthRequest, res: Response) => 
   }> = [];
   const seen = new Set<string>();
 
-  // 1. Check alias shortcuts first (uk → GB, etc.)
-  const aliasCode = COUNTRY_ALIASES[q];
-  const expandedQ = aliasCode ? aliasCode.toLowerCase() : q;
+  // 1. Check alias shortcuts (usa → US, uk → GB, etc.).
+  //    When an alias resolves to a country code, skip city-name matching entirely
+  //    and jump straight to a direct country lookup — otherwise "USA"→"US" would
+  //    match city substrings like "hOUSton", "brUSSels", "vilniUS", etc.
+  const aliasCode = COUNTRY_ALIASES[q]; // e.g. 'US' or undefined
 
-  // 2. City search
+  if (aliasCode) {
+    // Direct country lookup — no city substring search
+    const allCountries = ct.getAllCountries() as Record<string, CTCountry>;
+    const country = allCountries[aliasCode.toUpperCase()];
+    if (country) {
+      seen.add(`country:${country.id}`);
+      const tzs = country.timezones ?? [];
+      const seenOffsets = new Set<string>();
+      const uniqueTzs = tzs.filter(tz => {
+        const off = getUtcOffset(tz);
+        if (seenOffsets.has(off)) return false;
+        seenOffsets.add(off); return true;
+      });
+      if (uniqueTzs.length <= 1 && uniqueTzs.length > 0) {
+        const tz = uniqueTzs[0];
+        const offset = getUtcOffset(tz);
+        const { time } = currentInTz(tz);
+        results.push({
+          name: country.name, type: 'country', timezone: tz, timezones: null,
+          ambiguous: false, ambiguousMessage: null, countryCode: country.id,
+          flag: flagEmoji(country.id), utcOffset: `UTC${offset}`, currentTime: time,
+        });
+      } else if (uniqueTzs.length > 1) {
+        const citySuggestions = cities.filter(c => c.country === country.id).slice(0, 6).map(c => c.name);
+        const msg = citySuggestions.length > 0
+          ? `${country.name} spans ${uniqueTzs.length} timezones. Try: ${citySuggestions.join(', ')}`
+          : `${country.name} spans ${uniqueTzs.length} timezones — please search for a specific city`;
+        results.push({
+          name: country.name, type: 'country', timezone: null, timezones: uniqueTzs,
+          ambiguous: true, ambiguousMessage: msg, countryCode: country.id,
+          flag: flagEmoji(country.id), utcOffset: null, currentTime: null,
+        });
+      }
+    }
+    const out = { results };
+    cache.search.set(cacheKey, out);
+    res.json(out);
+    return;
+  }
+
+  // 2. City search — use the original query, no alias expansion
   for (const city of cities) {
+    const nameLower = city.name.toLowerCase();
     const match =
-      city.name.toLowerCase().includes(expandedQ) ||
-      city.aliases.some(a => a.toLowerCase().includes(expandedQ));
+      nameLower.startsWith(q) ||
+      nameLower.includes(` ${q}`) ||       // word boundary for multi-word names
+      city.aliases.some(a => a.toLowerCase().startsWith(q) || a.toLowerCase() === q);
     if (!match) continue;
     const key = `city:${city.name}`;
     if (seen.has(key)) continue;
@@ -385,8 +432,8 @@ timezoneRouter.get('/search', requireAuth, (req: AuthRequest, res: Response) => 
     const allCountries = ct.getAllCountries() as Record<string, CTCountry>;
     for (const country of Object.values(allCountries)) {
       if (results.length >= 6) break;
-      const nameMatch = country.name.toLowerCase().includes(expandedQ) ||
-        (aliasCode && country.id === aliasCode.toUpperCase());
+      const nameMatch = country.name.toLowerCase().startsWith(q) ||
+        country.name.toLowerCase().includes(` ${q}`);
       if (!nameMatch) continue;
       const key = `country:${country.id}`;
       if (seen.has(key)) continue;
