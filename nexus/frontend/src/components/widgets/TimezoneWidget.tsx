@@ -994,37 +994,20 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
             </div>
           )}
 
-          {/* Center column: swap + direction arrow + time picker */}
+          {/* Center column: direction arrow → star → time picker → swap */}
           {mode !== 'slim' && (
             <div style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center',
               justifyContent: 'center', gap: compact ? 8 : 10, flexShrink: 0,
               width: compact ? 56 : 110,
             }}>
-              {/* Direction indicator */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                <svg width="28" height="14" viewBox="0 0 28 14" fill="none" style={{ display: 'block' }}>
-                  <line x1="2" y1="7" x2="22" y2="7" stroke="rgba(124,106,255,0.45)" strokeWidth="1.5" strokeLinecap="round"/>
-                  <polyline points="17,3 23,7 17,11" fill="none" stroke="var(--accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </div>
+              {/* Direction arrow → */}
+              <svg width="28" height="14" viewBox="0 0 28 14" fill="none" style={{ display: 'block' }}>
+                <line x1="2" y1="7" x2="21" y2="7" stroke="rgba(124,106,255,0.45)" strokeWidth="1.5" strokeLinecap="round"/>
+                <polyline points="16,3 23,7 16,11" fill="none" stroke="var(--accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
 
-              {/* Swap button */}
-              <button
-                onClick={handleSwap}
-                title="Swap locations"
-                style={{
-                  background: 'var(--surface3)', border: '1px solid var(--border)',
-                  borderRadius: '50%', width: compact ? 28 : 34, height: compact ? 28 : 34,
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: compact ? 14 : 16, color: 'var(--text-muted)', flexShrink: 0,
-                  transition: 'background 0.15s, color 0.15s, transform 0.15s',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'var(--accent-dim)'; e.currentTarget.style.color = 'var(--accent)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface3)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
-              >⇄</button>
-
-              {/* Favorite star — save/remove current pair */}
+              {/* Favorite star */}
               {fromLoc && toLoc && (
                 <button
                   onClick={toggleFavorite}
@@ -1058,6 +1041,21 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
                   compact={mode === 'standard'}
                 />
               )}
+
+              {/* Swap button — below time picker so it's separated from the direction arrow */}
+              <button
+                onClick={handleSwap}
+                title="Swap locations"
+                style={{
+                  background: 'var(--surface3)', border: '1px solid var(--border)',
+                  borderRadius: '50%', width: compact ? 28 : 34, height: compact ? 28 : 34,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: compact ? 14 : 16, color: 'var(--text-muted)', flexShrink: 0,
+                  transition: 'background 0.15s, color 0.15s, transform 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--accent-dim)'; e.currentTarget.style.color = 'var(--accent)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface3)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+              >⇄</button>
             </div>
           )}
 
