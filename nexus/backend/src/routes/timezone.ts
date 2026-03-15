@@ -321,6 +321,13 @@ function flagEmoji(cc: string): string {
   );
 }
 
+// Countries that officially use one timezone but IANA lists extras for
+// historical / de-facto regional reasons. Force these to the primary IANA name.
+const COUNTRY_TZ_OVERRIDES: Record<string, string> = {
+  CN: 'Asia/Shanghai',   // China officially UTC+8; IANA also has Asia/Urumqi (Xinjiang)
+  RU: '',                // Russia has many real timezones — no override
+};
+
 // ── Aliases for common shortcuts ─────────────────────────────────────────────
 // Maps typed shortcuts to ISO 3166-1 alpha-2 country codes.
 const COUNTRY_ALIASES: Record<string, string> = {
@@ -368,7 +375,8 @@ timezoneRouter.get('/search', requireAuth, (req: AuthRequest, res: Response) => 
     const country = allCountries[aliasCode.toUpperCase()];
     if (country) {
       seen.add(`country:${country.id}`);
-      const tzs = country.timezones ?? [];
+      const override = COUNTRY_TZ_OVERRIDES[country.id];
+      const tzs = override ? [override] : (country.timezones ?? []);
       const seenOffsets = new Set<string>();
       const uniqueTzs = tzs.filter(tz => {
         const off = getUtcOffset(tz);
@@ -451,6 +459,21 @@ timezoneRouter.get('/search', requireAuth, (req: AuthRequest, res: Response) => 
 
       const tzs = country.timezones ?? [];
       if (tzs.length === 0) continue;
+
+      // Apply country-level timezone override (e.g. China → Asia/Shanghai only)
+      const override = COUNTRY_TZ_OVERRIDES[country.id];
+      if (override) {
+        const tz = override;
+        const offset = getUtcOffset(tz);
+        const { time } = currentInTz(tz);
+        results.push({
+          name: country.name, type: 'country', timezone: tz, timezones: null,
+          ambiguous: false, ambiguousMessage: null, citySuggestions: null,
+          countryCode: country.id, flag: flagEmoji(country.id),
+          utcOffset: `UTC${offset}`, currentTime: time,
+        });
+        continue;
+      }
 
       // Deduplicate by current UTC offset — e.g. Germany has Europe/Berlin + Europe/Busingen
       // but both share the same offset (CET/CEST), so they are effectively one timezone.

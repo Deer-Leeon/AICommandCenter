@@ -556,9 +556,23 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
   const [recentPairs, setRecentPairs] = useState(persisted.recentPairs);
   const [swapping, setSwapping] = useState(false);
 
+  const [isManualTime, setIsManualTime] = useState(false);
   const [inputTime, setInputTime] = useState(nowTimeStr);
   const [inputDate, setInputDate] = useState(todayStr);
   const [conversion, setConversion] = useState<ConvertResult | null>(null);
+
+  // Keep inputTime/inputDate in sync with the FROM timezone's current time
+  // unless the user has manually overridden the picker.
+  function getFromTzTime(tz: string): { time: string; date: string } {
+    const now = new Date();
+    const t = new Intl.DateTimeFormat('en-GB', {
+      timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false,
+    }).format(now);
+    const d = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(now);
+    return { time: t, date: d };
+  }
 
   const [hasLoaded, setHasLoaded] = useState(() => persisted.from !== null || persisted.to !== null);
   useWidgetReady('timezone', hasLoaded);
@@ -612,8 +626,26 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
     }, 150);
   }
 
+  // Sync time picker to FROM timezone whenever it changes (or on a 30s tick)
+  useEffect(() => {
+    if (!fromLoc || isManualTime) return;
+    const sync = () => {
+      const { time, date } = getFromTzTime(fromLoc.timezone);
+      setInputTime(time);
+      setInputDate(date);
+    };
+    sync();
+    const id = setInterval(sync, 30_000);
+    return () => clearInterval(id);
+  }, [fromLoc, isManualTime]);
+
   function handleFromSelect(loc: SelectedLocation) {
     setFromLoc(loc);
+    if (!isManualTime) {
+      const { time, date } = getFromTzTime(loc.timezone);
+      setInputTime(time);
+      setInputDate(date);
+    }
     if (toLoc) addRecentPair(loc, toLoc);
   }
   function handleToSelect(loc: SelectedLocation) {
@@ -771,7 +803,14 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
                 <TimePicker
                   time={inputTime}
                   date={inputDate}
-                  onChange={(t, d) => { setInputTime(t); setInputDate(d); }}
+                  onChange={(t, d) => {
+                    // Check if user pressed "Now" (matches current from-tz time)
+                    const fromNow = fromLoc ? getFromTzTime(fromLoc.timezone) : null;
+                    const isNowReset = fromNow && t === fromNow.time && d === fromNow.date;
+                    setIsManualTime(!isNowReset);
+                    setInputTime(t);
+                    setInputDate(d);
+                  }}
                   compact={mode === 'standard'}
                 />
               )}
@@ -854,7 +893,13 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
             <TimePicker
               time={inputTime}
               date={inputDate}
-              onChange={(t, d) => { setInputTime(t); setInputDate(d); }}
+              onChange={(t, d) => {
+                const fromNow = fromLoc ? getFromTzTime(fromLoc.timezone) : null;
+                const isNowReset = fromNow && t === fromNow.time && d === fromNow.date;
+                setIsManualTime(!isNowReset);
+                setInputTime(t);
+                setInputDate(d);
+              }}
               compact
             />
           </div>
