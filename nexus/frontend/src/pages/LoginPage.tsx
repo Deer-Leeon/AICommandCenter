@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 
@@ -10,6 +10,15 @@ const inputStyle = {
 
 export default function LoginPage() {
   const { signInWithGoogle } = useAuth();
+
+  // Immediately kill the pre-React type-ahead buffer so that any keystrokes
+  // captured before the login page mounted (or typed into the login form) are
+  // never replayed into the search bar after authentication.
+  useEffect(() => {
+    const w = window as unknown as { __nexusTypeBufferActive?: boolean; __nexusTypeBuffer?: string };
+    w.__nexusTypeBufferActive = false;
+    w.__nexusTypeBuffer = '';
+  }, []);
 
   const [mode, setMode]           = useState<'login' | 'signup'>('login');
   const [firstName, setFirstName] = useState('');

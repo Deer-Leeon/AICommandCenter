@@ -84,6 +84,10 @@
     'keydown',
     function (e) {
       if (!window.__nexusTypeBufferActive) return;
+      // Never capture keystrokes typed into a focused form field
+      var tag = document.activeElement && document.activeElement.tagName.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      if (document.activeElement && document.activeElement.isContentEditable) return;
       if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
         window.__nexusTypeBuffer += e.key;
       } else if (e.key === 'Backspace' && window.__nexusTypeBuffer.length > 0) {
