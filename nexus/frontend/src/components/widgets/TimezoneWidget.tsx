@@ -976,13 +976,39 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
             {!fromLoc && <div style={{ flex: 1 }} />}
           </div>
 
-          {/* Center column: swap + time picker */}
+          {/* Slim mode: vertical direction arrow between stacked panels */}
+          {mode === 'slim' && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, padding: '1px 0' }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '3px 14px', borderRadius: 20,
+                background: 'rgba(124,106,255,0.08)',
+                border: '1px solid rgba(124,106,255,0.18)',
+              }}>
+                {/* Line + arrowhead as SVG */}
+                <svg width="14" height="22" viewBox="0 0 14 22" fill="none" style={{ display: 'block' }}>
+                  <line x1="7" y1="20" x2="7" y2="5" stroke="rgba(124,106,255,0.55)" strokeWidth="1.5" strokeLinecap="round"/>
+                  <polyline points="3,9 7,3 11,9" fill="none" stroke="var(--accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+            </div>
+          )}
+
+          {/* Center column: swap + direction arrow + time picker */}
           {mode !== 'slim' && (
             <div style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center',
               justifyContent: 'center', gap: compact ? 8 : 10, flexShrink: 0,
               width: compact ? 56 : 110,
             }}>
+              {/* Direction indicator */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                <svg width="28" height="14" viewBox="0 0 28 14" fill="none" style={{ display: 'block' }}>
+                  <line x1="2" y1="7" x2="22" y2="7" stroke="rgba(124,106,255,0.45)" strokeWidth="1.5" strokeLinecap="round"/>
+                  <polyline points="17,3 23,7 17,11" fill="none" stroke="var(--accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+
               {/* Swap button */}
               <button
                 onClick={handleSwap}
