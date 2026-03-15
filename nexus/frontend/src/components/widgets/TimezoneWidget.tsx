@@ -431,50 +431,48 @@ function TimePicker({ time, date, isManual, onChange, compact }: TimePickerProps
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: compact ? 3 : 5 }}>
-      {/* Time input row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 4 : 6 }}>
-        <input
-          type="time"
-          value={time}
-          onChange={e => { if (e.target.value) onChange(e.target.value, date); }}
-          style={{
-            fontFamily: "'Space Mono', monospace", fontWeight: 700,
-            fontSize: compact ? 16 : 20, color: 'var(--text)',
-            background: 'var(--surface3)', border: '1px solid var(--border)',
-            borderRadius: 8, padding: compact ? '3px 8px' : '5px 10px',
-            outline: 'none', cursor: 'text', colorScheme: 'dark',
-          }}
-          onFocus={e => (e.currentTarget.style.borderColor = 'rgba(124,106,255,0.5)')}
-          onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-        />
-        {/* Now pill — resets to live mode */}
-        {isManual && (
-          <button
-            onClick={() => onChange('__now__', '__now__')}
-            style={{
-              padding: '3px 8px', borderRadius: 20,
-              background: 'var(--accent-dim)', border: '1px solid rgba(124,106,255,0.3)',
-              color: 'var(--accent)', fontSize: 10, fontWeight: 600, cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >Now</button>
-        )}
-      </div>
-
-      {/* Date row */}
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: compact ? 3 : 4 }}>
+      {/* Time input */}
+      <input
+        type="time"
+        value={time}
+        onChange={e => { if (e.target.value) onChange(e.target.value, date); }}
+        style={{
+          fontFamily: "'Space Mono', monospace", fontWeight: 700,
+          fontSize: compact ? 14 : 17, color: 'var(--text)',
+          background: 'var(--surface3)', border: '1px solid var(--border)',
+          borderRadius: 8, padding: compact ? '3px 6px' : '4px 8px',
+          outline: 'none', cursor: 'text', colorScheme: 'dark',
+          width: '100%', boxSizing: 'border-box',
+        }}
+        onFocus={e => (e.currentTarget.style.borderColor = 'rgba(124,106,255,0.5)')}
+        onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+      />
+      {/* Now button on its own line — no overflow */}
       {isManual && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 4 : 6 }}>
+        <button
+          onClick={() => onChange('__now__', '__now__')}
+          style={{
+            padding: '2px 10px', borderRadius: 20,
+            background: 'var(--accent-dim)', border: '1px solid rgba(124,106,255,0.3)',
+            color: 'var(--accent)', fontSize: 10, fontWeight: 600, cursor: 'pointer',
+            fontFamily: 'inherit', whiteSpace: 'nowrap',
+          }}
+        >Now</button>
+      )}
+      {/* Date row — only in manual mode */}
+      {isManual && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 2 : 4 }}>
           <button
             onClick={() => adjustDate(-1)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14, padding: '2px 4px' }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14, padding: '2px 3px' }}
           >‹</button>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>
+          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500, whiteSpace: 'nowrap' }}>
             {formatDateLabel(date)}
           </span>
           <button
             onClick={() => adjustDate(1)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14, padding: '2px 4px' }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14, padding: '2px 3px' }}
           >›</button>
         </div>
       )}
@@ -586,6 +584,7 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
 
   function handleSwap() {
     setSwapping(true);
+    setIsManualTime(false); // always return to live mode on swap for consistency
     setTimeout(() => {
       setFromLoc(toLoc);
       setToLoc(fromLoc);
@@ -736,8 +735,8 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
           {mode !== 'slim' && (
             <div style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center',
-              justifyContent: 'center', gap: compact ? 8 : 12, flexShrink: 0,
-              minWidth: compact ? 50 : 80,
+              justifyContent: 'center', gap: compact ? 8 : 10, flexShrink: 0,
+              width: compact ? 56 : 110,
             }}>
               {/* Swap button */}
               <button
@@ -754,12 +753,16 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
                 onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface3)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
               >⇄</button>
 
-              {/* Offset pill — show always once loaded; in live mode dayDiff is 0 */}
+              {/* UTC offset difference — clean single line, no day/hour badges */}
               {conversion && (
-                <OffsetPill
-                  diff={conversion.offsetDifference}
-                  dayDiff={isManualTime ? conversion.dayDiff : 0}
-                />
+                <span style={{
+                  fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 12,
+                  background: 'var(--accent-dim)', color: 'var(--accent)',
+                  border: '1px solid rgba(124,106,255,0.3)',
+                  fontFamily: "'Space Mono', monospace", whiteSpace: 'nowrap',
+                }}>
+                  {conversion.offsetDifference === '0 hours' ? '= same' : conversion.offsetDifference}
+                </span>
               )}
 
               {/* Time picker */}
@@ -843,7 +846,16 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
                 fontSize: 13, color: 'var(--text-muted)', transform: 'rotate(90deg)',
               }}
             >⇄</button>
-            {conversion && <OffsetPill diff={conversion.offsetDifference} dayDiff={isManualTime ? conversion.dayDiff : 0} />}
+            {conversion && (
+              <span style={{
+                fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
+                background: 'var(--accent-dim)', color: 'var(--accent)',
+                border: '1px solid rgba(124,106,255,0.3)',
+                fontFamily: "'Space Mono', monospace", whiteSpace: 'nowrap',
+              }}>
+                {conversion.offsetDifference === '0 hours' ? '= same' : conversion.offsetDifference}
+              </span>
+            )}
           </div>
         )}
 
