@@ -717,7 +717,7 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
   const mode = getLayoutMode(size.w, size.h);
   const compact = mode === 'micro' || mode === 'slim' || mode === 'compact';
   const showSeconds = mode === 'expanded' || mode === 'standard';
-  const showFavorites = (mode === 'expanded' || mode === 'standard' || mode === 'compact') && favorites.length > 0;
+  const showFavorites = (mode === 'expanded' || mode === 'standard') && favorites.length > 0;
 
   // ── Micro mode ─────────────────────────────────────────────────────────────
   if (mode === 'micro') {
@@ -940,27 +940,54 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
         </div>
 
         {/* Slim mode: swap + offset pill row */}
-        {mode === 'slim' && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+        {/* ── Bottom controls: swap / time picker / star ── */}
+        {(mode === 'slim' || mode === 'compact') && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {/* Swap */}
             <button
               onClick={handleSwap}
+              title="Swap locations"
               style={{
+                flexShrink: 0,
                 background: 'var(--surface3)', border: '1px solid var(--border)',
-                borderRadius: '50%', width: 26, height: 26, cursor: 'pointer',
+                borderRadius: '50%', width: 28, height: 28, cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 13, color: 'var(--text-muted)', transform: 'rotate(90deg)',
+                fontSize: 14, color: 'var(--text-muted)',
+                transform: mode === 'slim' ? 'rotate(90deg)' : 'none',
+                transition: 'background 0.15s, color 0.15s',
               }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--accent-dim)'; e.currentTarget.style.color = 'var(--accent)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface3)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
             >⇄</button>
+
+            {/* Time input — takes remaining space */}
+            <div style={{ flex: 1 }}>
+              <TimePicker
+                time={inputTime}
+                date={inputDate}
+                isManual={isManualTime}
+                onChange={(t, d) => {
+                  if (t === '__now__') { setIsManualTime(false); return; }
+                  setIsManualTime(true);
+                  setInputTime(t);
+                  setInputDate(d);
+                }}
+                compact
+              />
+            </div>
+
+            {/* Star */}
             {fromLoc && toLoc && (
               <button
                 onClick={toggleFavorite}
                 title={isFavorited() ? 'Remove from favorites' : 'Save as favorite'}
                 style={{
+                  flexShrink: 0,
                   background: isFavorited() ? 'rgba(245,158,11,0.15)' : 'var(--surface3)',
                   border: `1px solid ${isFavorited() ? 'rgba(245,158,11,0.4)' : 'var(--border)'}`,
-                  borderRadius: '50%', width: 26, height: 26,
+                  borderRadius: '50%', width: 28, height: 28,
                   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 12, transition: 'all 0.15s',
+                  fontSize: 13, transition: 'all 0.15s',
                 }}
               >
                 {isFavorited() ? '★' : '☆'}
@@ -969,27 +996,12 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {/* Compact mode: time picker row */}
-        {mode === 'compact' && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <TimePicker
-              time={inputTime}
-              date={inputDate}
-              isManual={isManualTime}
-              onChange={(t, d) => {
-                if (t === '__now__') { setIsManualTime(false); return; }
-                setIsManualTime(true);
-                setInputTime(t);
-                setInputDate(d);
-              }}
-              compact
-            />
-          </div>
-        )}
-
-        {/* Favorites bar */}
-        {showFavorites && (
-          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', paddingTop: 2 }}>
+        {/* Favorites bar — all non-micro modes */}
+        {favorites.length > 0 && mode !== 'micro' && (
+          <div style={{
+            display: 'flex', gap: 5, overflowX: 'auto', paddingBottom: 1,
+            scrollbarWidth: 'none',
+          }}>
             {favorites.map((fav, i) => (
               <FavChip
                 key={i}
