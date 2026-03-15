@@ -465,8 +465,10 @@ function TimePicker({ time, date, isManual, onChange, compact }: TimePickerProps
           fontSize: compact ? 14 : 17, color: 'var(--text)',
           background: 'var(--surface3)', border: '1px solid var(--border)',
           borderRadius: 8, padding: compact ? '3px 6px' : '4px 8px',
-          outline: 'none', cursor: 'text', colorScheme: 'dark',
+          outline: 'none', cursor: 'text',
           width: '100%', boxSizing: 'border-box',
+          // @ts-expect-error vendor prefix
+          WebkitAppearance: 'none', appearance: 'none',
         }}
         onFocus={e => (e.currentTarget.style.borderColor = 'rgba(124,106,255,0.5)')}
         onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
@@ -1015,7 +1017,8 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
 
       <style>{`
         @keyframes tz-spin { to { transform: rotate(360deg); } }
-        input[type="time"]::-webkit-calendar-picker-indicator { display: none; -webkit-appearance: none; }
+        input[type="time"]::-webkit-calendar-picker-indicator { display: none !important; opacity: 0 !important; width: 0 !important; padding: 0 !important; }
+        input[type="time"] { -webkit-appearance: none; appearance: none; }
         @keyframes tz-drop {
           from { opacity: 0; transform: translateY(-4px); }
           to   { opacity: 1; transform: translateY(0); }
