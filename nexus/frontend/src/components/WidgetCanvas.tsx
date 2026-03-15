@@ -29,6 +29,7 @@ const LofiWidget        = lazy(() => import('./widgets/LofiWidget').then(m => ({
 const SpotifyWidget     = lazy(() => import('./widgets/SpotifyWidget').then(m => ({ default: m.SpotifyWidget })));
 const F1Widget          = lazy(() => import('./widgets/F1Widget').then(m => ({ default: m.F1Widget })));
 const FootballWidget    = lazy(() => import('./widgets/FootballWidget').then(m => ({ default: m.FootballWidget })));
+const TimezoneWidget    = lazy(() => import('./widgets/TimezoneWidget').then(m => ({ default: m.TimezoneWidget })));
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface WidgetRect { top: number; left: number; width: number; height: number; }
@@ -172,6 +173,7 @@ const WIDGET_COMPONENTS: Partial<Record<WidgetType, React.ComponentType<{ onClos
   spotify:  SpotifyWidget,
   f1:       F1Widget,
   football: FootballWidget,
+  timezone: TimezoneWidget,
 };
 
 // Delays matched to 0.6s ease-out smooth reveal (no keyframe staging):
