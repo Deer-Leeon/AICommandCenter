@@ -1,6 +1,7 @@
 import {
   useState, useEffect, useRef, useCallback, useMemo,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { apiFetch } from '../../lib/api';
 import { useWidgetReady } from '../../hooks/useWidgetReady';
 
@@ -586,6 +587,130 @@ function FavChip({
   );
 }
 
+// ── FavDropdown ───────────────────────────────────────────────────────────────
+
+function FavDropdown({
+  favorites, activeKey, onSelect, onRemove, onClose, anchorRef,
+}: {
+  favorites: FavPair[];
+  activeKey: string;
+  onSelect: (fav: FavPair) => void;
+  onRemove: (fav: FavPair) => void;
+  onClose: () => void;
+  anchorRef: React.RefObject<HTMLButtonElement | null>;
+}) {
+  const dropRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  useEffect(() => {
+    const btn = anchorRef.current;
+    if (!btn) return;
+    const r = btn.getBoundingClientRect();
+    // Prefer opening upward (widget is near bottom of screen)
+    const dropH = Math.min(favorites.length * 46 + 16, 300);
+    const spaceBelow = window.innerHeight - r.bottom - 8;
+    const top = spaceBelow >= dropH ? r.bottom + 6 : r.top - dropH - 6;
+    setPos({ top, left: r.left, width: Math.max(r.width, 220) });
+  }, [anchorRef, favorites.length]);
+
+  // Close on click outside
+  useEffect(() => {
+    function handle(e: MouseEvent) {
+      if (dropRef.current && !dropRef.current.contains(e.target as Node) &&
+          anchorRef.current && !anchorRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    }
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, [anchorRef, onClose]);
+
+  if (!pos) return null;
+
+  return createPortal(
+    <div
+      ref={dropRef}
+      style={{
+        position: 'fixed', top: pos.top, left: pos.left, width: pos.width,
+        background: 'var(--surface2)', border: '1px solid var(--border)',
+        borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+        zIndex: 9999, overflow: 'hidden',
+        animation: 'tz-drop 0.15s ease-out both',
+      }}
+    >
+      <div style={{ padding: '8px 10px 4px', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-faint)', textTransform: 'uppercase' }}>
+        Favorites
+      </div>
+      <div style={{ maxHeight: 280, overflowY: 'auto', scrollbarWidth: 'none', padding: '0 6px 6px' }}>
+        {favorites.map((fav, i) => {
+          const k = `${fav.from.timezone}:${fav.to.timezone}`;
+          const isActive = k === activeKey;
+          return (
+            <FavDropRow
+              key={i}
+              fav={fav}
+              isActive={isActive}
+              onSelect={() => { onSelect(fav); onClose(); }}
+              onRemove={() => onRemove(fav)}
+            />
+          );
+        })}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function FavDropRow({
+  fav, isActive, onSelect, onRemove,
+}: {
+  fav: FavPair; isActive: boolean;
+  onSelect: () => void; onRemove: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      style={{
+        display: 'flex', alignItems: 'center', borderRadius: 8,
+        background: isActive ? 'rgba(124,106,255,0.12)' : hovered ? 'var(--surface3)' : 'transparent',
+        transition: 'background 0.1s', cursor: 'pointer', marginBottom: 2,
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <button
+        onClick={onSelect}
+        style={{
+          flex: 1, background: 'none', border: 'none', cursor: 'pointer',
+          padding: '9px 10px', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6,
+        }}
+      >
+        <span style={{ fontSize: 15, lineHeight: 1 }}>{fav.from.flag}</span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: isActive ? 'var(--accent)' : 'var(--text)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {fav.from.name}
+        </span>
+        <span style={{ fontSize: 11, color: 'var(--text-faint)', margin: '0 2px' }}>⇄</span>
+        <span style={{ fontSize: 15, lineHeight: 1 }}>{fav.to.flag}</span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: isActive ? 'var(--accent)' : 'var(--text)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {fav.to.name}
+        </span>
+      </button>
+      {hovered && (
+        <button
+          onClick={e => { e.stopPropagation(); onRemove(); }}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            padding: '9px 10px', fontSize: 11, color: 'var(--text-faint)',
+            transition: 'color 0.1s', flexShrink: 0,
+          }}
+          onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
+          onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-faint)')}
+        >✕</button>
+      )}
+    </div>
+  );
+}
+
 // ── Main widget ───────────────────────────────────────────────────────────────
 
 export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
@@ -597,6 +722,8 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
   const [toLoc,   setToLoc]   = useState<SelectedLocation | null>(persisted.to);
   const [favorites, setFavorites] = useState<FavPair[]>(persisted.favorites);
   const [swapping, setSwapping] = useState(false);
+  const [showFavDropdown, setShowFavDropdown] = useState(false);
+  const favBtnRef = useRef<HTMLButtonElement>(null);
 
   const [isManualTime, setIsManualTime] = useState(false);
   const [inputTime, setInputTime] = useState(nowTimeStr);
@@ -717,7 +844,6 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
   const mode = getLayoutMode(size.w, size.h);
   const compact = mode === 'micro' || mode === 'slim' || mode === 'compact';
   const showSeconds = mode === 'expanded' || mode === 'standard';
-  const showFavorites = (mode === 'expanded' || mode === 'standard') && favorites.length > 0;
 
   // ── Micro mode ─────────────────────────────────────────────────────────────
   if (mode === 'micro') {
@@ -996,27 +1122,47 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {/* Favorites bar — all non-micro modes */}
+        {/* Favorites dropdown trigger — all non-micro modes */}
         {favorites.length > 0 && mode !== 'micro' && (
-          <div style={{
-            display: 'flex', gap: 5, overflowX: 'auto', paddingBottom: 1,
-            scrollbarWidth: 'none',
-          }}>
-            {favorites.map((fav, i) => (
-              <FavChip
-                key={i}
-                fav={fav}
-                isActive={
-                  fromLoc?.timezone === fav.from.timezone &&
-                  toLoc?.timezone === fav.to.timezone
-                }
-                onSelect={() => { setFromLoc(fav.from); setToLoc(fav.to); setIsManualTime(false); }}
-                onRemove={() => removeFavorite(fav)}
-              />
-            ))}
-          </div>
+          <button
+            ref={favBtnRef}
+            onClick={() => setShowFavDropdown(v => !v)}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+              width: '100%', padding: '5px 10px', borderRadius: 8,
+              background: showFavDropdown ? 'var(--accent-dim)' : 'var(--surface2)',
+              border: `1px solid ${showFavDropdown ? 'rgba(124,106,255,0.4)' : 'var(--border)'}`,
+              cursor: 'pointer', transition: 'all 0.15s',
+              color: showFavDropdown ? 'var(--accent)' : 'var(--text-muted)',
+              fontSize: 11, fontFamily: 'inherit',
+            }}
+            onMouseEnter={e => { if (!showFavDropdown) { e.currentTarget.style.background = 'var(--surface3)'; e.currentTarget.style.color = 'var(--text)'; } }}
+            onMouseLeave={e => { if (!showFavDropdown) { e.currentTarget.style.background = 'var(--surface2)'; e.currentTarget.style.color = 'var(--text-muted)'; } }}
+          >
+            <span style={{ fontSize: 12 }}>★</span>
+            <span style={{ fontWeight: 600 }}>Favorites</span>
+            <span style={{
+              background: showFavDropdown ? 'rgba(124,106,255,0.3)' : 'var(--surface3)',
+              borderRadius: 20, padding: '0px 6px', fontSize: 10, fontWeight: 700,
+              color: showFavDropdown ? 'var(--accent)' : 'var(--text-faint)',
+            }}>{favorites.length}</span>
+            <span style={{ fontSize: 9, marginLeft: 1, opacity: 0.6 }}>{showFavDropdown ? '▲' : '▼'}</span>
+          </button>
         )}
+
       </div>
+
+      {/* Favorites dropdown portal */}
+      {showFavDropdown && favBtnRef.current && (
+        <FavDropdown
+          favorites={favorites}
+          activeKey={fromLoc && toLoc ? `${fromLoc.timezone}:${toLoc.timezone}` : ''}
+          anchorRef={favBtnRef}
+          onSelect={fav => { setFromLoc(fav.from); setToLoc(fav.to); setIsManualTime(false); }}
+          onRemove={removeFavorite}
+          onClose={() => setShowFavDropdown(false)}
+        />
+      )}
 
       <style>{`
         @keyframes tz-spin { to { transform: rotate(360deg); } }
