@@ -123,17 +123,27 @@ interface SearchInputProps {
 }
 
 function SearchInput({ placeholder, selected, onSelect, onClear, autoFocus, compact }: SearchInputProps) {
-  const [query, setQuery]       = useState('');
-  const [results, setResults]   = useState<TZResult[]>([]);
-  const [focused, setFocused]   = useState(false);
-  const [loading, setLoading]   = useState(false);
+  const [query, setQuery]         = useState('');
+  const [results, setResults]     = useState<TZResult[]>([]);
+  const [focused, setFocused]     = useState(false);
+  const [loading, setLoading]     = useState(false);
   const [ambiguous, setAmbiguous] = useState<TZResult | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const [dropPos, setDropPos]     = useState<{ top: number; left: number; width: number } | null>(null);
+  const inputRef    = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const timerRef    = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     if (autoFocus) setTimeout(() => inputRef.current?.focus(), 50);
   }, [autoFocus]);
+
+  // Measure anchor whenever dropdown should be visible
+  useEffect(() => {
+    if (focused && containerRef.current) {
+      const r = containerRef.current.getBoundingClientRect();
+      setDropPos({ top: r.bottom + 4, left: r.left, width: r.width });
+    }
+  }, [focused, results, ambiguous]);
 
   const search = useCallback(async (q: string) => {
     if (!q.trim()) { setResults([]); setAmbiguous(null); return; }
@@ -166,10 +176,10 @@ function SearchInput({ placeholder, selected, onSelect, onClear, autoFocus, comp
   }
 
   function handleBlur() {
-    setTimeout(() => { setFocused(false); setAmbiguous(null); }, 150);
+    setTimeout(() => { setFocused(false); setAmbiguous(null); }, 180);
   }
 
-  const showDropdown = focused && (results.length > 0 || loading || ambiguous !== null);
+  const showDropdown = focused && dropPos && (results.length > 0 || loading || ambiguous !== null);
   const fs = compact ? 12 : 13;
 
   if (selected) {
@@ -193,7 +203,7 @@ function SearchInput({ placeholder, selected, onSelect, onClear, autoFocus, comp
   }
 
   return (
-    <div style={{ position: 'relative', minWidth: 0 }}>
+    <div ref={containerRef} style={{ minWidth: 0 }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 6,
         background: 'var(--surface3)', borderRadius: 8,
@@ -227,13 +237,18 @@ function SearchInput({ placeholder, selected, onSelect, onClear, autoFocus, comp
         )}
       </div>
 
-      {showDropdown && (
+      {/* Dropdown rendered at fixed position to escape overflow:hidden */}
+      {showDropdown && dropPos && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
+          position: 'fixed',
+          top: dropPos.top,
+          left: dropPos.left,
+          width: dropPos.width,
           background: 'var(--surface2)', border: '1px solid var(--border)',
-          borderRadius: 10, overflow: 'hidden', zIndex: 50,
+          borderRadius: 10, overflow: 'hidden', zIndex: 9999,
           boxShadow: 'var(--shadow-popup)',
           animation: 'tz-drop 0.18s ease-out both',
+          maxHeight: 280, overflowY: 'auto',
         }}>
           {ambiguous ? (
             <div style={{ padding: '10px 12px' }}>
