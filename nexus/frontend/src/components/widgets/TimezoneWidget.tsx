@@ -445,47 +445,64 @@ interface TimePickerProps {
   isManual: boolean;
   onChange: (time: string, date: string) => void;
   compact?: boolean;
+  /** inline = single-row mode for slim/compact bottom bar; no date nav */
+  inline?: boolean;
 }
 
-function TimePicker({ time, date, isManual, onChange, compact }: TimePickerProps) {
+function TimePicker({ time, date, isManual, onChange, compact, inline }: TimePickerProps) {
   function adjustDate(delta: number) {
     const [y, mo, d] = date.split('-').map(Number);
     const nd = new Date(y, mo - 1, d + delta);
     onChange(time, `${nd.getFullYear()}-${pad(nd.getMonth() + 1)}-${pad(nd.getDate())}`);
   }
 
+  const timeInput = (
+    <input
+      type="time"
+      value={time}
+      onChange={e => { if (e.target.value) onChange(e.target.value, date); }}
+      style={{
+        fontFamily: "'Space Mono', monospace", fontWeight: 700,
+        fontSize: inline ? 12 : compact ? 14 : 17, color: 'var(--text)',
+        background: 'var(--surface3)', border: '1px solid var(--border)',
+        borderRadius: 8, padding: inline ? '3px 5px' : compact ? '3px 6px' : '4px 8px',
+        outline: 'none', cursor: 'text',
+        width: inline ? 'auto' : '100%', boxSizing: 'border-box',
+        // @ts-expect-error vendor prefix
+        WebkitAppearance: 'none', appearance: 'none',
+      }}
+      onFocus={e => (e.currentTarget.style.borderColor = 'rgba(124,106,255,0.5)')}
+      onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+    />
+  );
+
+  const nowBtn = isManual ? (
+    <button
+      onClick={() => onChange('__now__', '__now__')}
+      style={{
+        padding: inline ? '2px 7px' : '2px 10px', borderRadius: 20, flexShrink: 0,
+        background: 'var(--accent-dim)', border: '1px solid rgba(124,106,255,0.3)',
+        color: 'var(--accent)', fontSize: inline ? 10 : 10, fontWeight: 600,
+        cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+      }}
+    >Now</button>
+  ) : null;
+
+  /* ── Inline (single-row, no date nav) ── */
+  if (inline) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, width: '100%' }}>
+        {timeInput}
+        {nowBtn}
+      </div>
+    );
+  }
+
+  /* ── Full (stacked) ── */
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: compact ? 3 : 4 }}>
-      {/* Time input */}
-      <input
-        type="time"
-        value={time}
-        onChange={e => { if (e.target.value) onChange(e.target.value, date); }}
-        style={{
-          fontFamily: "'Space Mono', monospace", fontWeight: 700,
-          fontSize: compact ? 14 : 17, color: 'var(--text)',
-          background: 'var(--surface3)', border: '1px solid var(--border)',
-          borderRadius: 8, padding: compact ? '3px 6px' : '4px 8px',
-          outline: 'none', cursor: 'text',
-          width: '100%', boxSizing: 'border-box',
-          // @ts-expect-error vendor prefix
-          WebkitAppearance: 'none', appearance: 'none',
-        }}
-        onFocus={e => (e.currentTarget.style.borderColor = 'rgba(124,106,255,0.5)')}
-        onBlur={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-      />
-      {/* Now button on its own line — no overflow */}
-      {isManual && (
-        <button
-          onClick={() => onChange('__now__', '__now__')}
-          style={{
-            padding: '2px 10px', borderRadius: 20,
-            background: 'var(--accent-dim)', border: '1px solid rgba(124,106,255,0.3)',
-            color: 'var(--accent)', fontSize: 10, fontWeight: 600, cursor: 'pointer',
-            fontFamily: 'inherit', whiteSpace: 'nowrap',
-          }}
-        >Now</button>
-      )}
+      {timeInput}
+      {nowBtn}
       {/* Date row — only in manual mode */}
       {isManual && (
         <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 2 : 4 }}>
@@ -1086,8 +1103,8 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
               onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface3)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
             >⇄</button>
 
-            {/* Time input — takes remaining space */}
-            <div style={{ flex: 1 }}>
+            {/* Time input — takes remaining space, inline so Now never wraps */}
+            <div style={{ flex: 1, minWidth: 0 }}>
               <TimePicker
                 time={inputTime}
                 date={inputDate}
@@ -1099,6 +1116,7 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
                   setInputDate(d);
                 }}
                 compact
+                inline
               />
             </div>
 
