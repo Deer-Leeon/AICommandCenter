@@ -8,34 +8,48 @@ export interface Profile {
   createdAt: string;
 }
 
+// Module-level cache — survives re-mounts within the same session
+let _cachedProfile: Profile | null = null;
+let _fetchPromise: Promise<Profile | null> | null = null;
+
+async function fetchProfile(): Promise<Profile | null> {
+  if (_fetchPromise) return _fetchPromise;
+  _fetchPromise = apiFetch('/api/profiles/me')
+    .then(async (res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const d = await res.json() as Profile;
+      _cachedProfile = d;
+      return d;
+    })
+    .catch(() => null)
+    .finally(() => { _fetchPromise = null; });
+  return _fetchPromise;
+}
+
+export function invalidateProfileCache() {
+  _cachedProfile = null;
+}
+
 export function useProfile(enabled: boolean) {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<Profile | null>(_cachedProfile);
+  const [loading, setLoading] = useState(_cachedProfile === null);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (force = false) => {
     if (!enabled) return;
+    if (!force && _cachedProfile) { setProfile(_cachedProfile); setLoading(false); return; }
+    if (force) { _cachedProfile = null; _fetchPromise = null; }
     setLoading(true);
     setError(null);
-    try {
-      const res = await apiFetch('/api/profiles/me');
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(d.error ?? `HTTP ${res.status}`);
-      }
-      const d = await res.json() as Profile;
-      setProfile(d);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load profile');
-      setProfile(null);
-    } finally {
-      setLoading(false);
-    }
+    const d = await fetchProfile();
+    if (d) { setProfile(d); setError(null); }
+    else setError('Failed to load profile');
+    setLoading(false);
   }, [enabled]);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (enabled) refresh();
+  }, [enabled, refresh]);
 
-  return { profile, loading, error, refresh };
+  return { profile, loading, error, refresh: () => refresh(true) };
 }

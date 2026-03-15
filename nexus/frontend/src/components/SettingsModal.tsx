@@ -4,7 +4,8 @@ import { useStore } from '../store/useStore';
 import { useRevealStore } from '../store/useRevealStore';
 import { useOmnibarStore } from '../store/useOmnibarStore';
 import { useAuth } from '../hooks/useAuth';
-import { useProfile } from '../hooks/useProfile';
+import { useProfile, invalidateProfileCache } from '../hooks/useProfile';
+import { useProfileContext } from '../contexts/ProfileContext';
 import { ConnectionsPanel } from './ConnectionsPanel';
 import { supabase } from '../lib/supabase';
 
@@ -33,7 +34,12 @@ const USERNAME_REGEX = /^[a-z0-9_]{3,20}$/;
 
 function AccountPanel() {
   const { user } = useAuth();
-  const { profile, loading, refresh } = useProfile(true);
+  // Use the already-loaded ProfileContext as the instant initial value;
+  // useProfile deduplicates the fetch so there's no double request.
+  const contextProfile = useProfileContext();
+  const { profile: fetchedProfile, loading, refresh } = useProfile(true);
+  const profile = fetchedProfile ?? contextProfile;
+  const _ = { invalidateProfileCache }; void _; // keep import used
   const [editingUsername, setEditingUsername] = useState(false);
   const [usernameValue, setUsernameValue] = useState('');
   const [usernameCheck, setUsernameCheck] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle');

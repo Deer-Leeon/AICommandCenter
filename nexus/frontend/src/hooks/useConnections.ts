@@ -44,9 +44,14 @@ interface ConnectionsState {
   incoming: Connection[];
 }
 
+// Module-level cache so re-mounting the panel never shows a loading state
+let _connectionsCache: ConnectionsState | null = null;
+
 export function useConnections(enabled = true) {
-  const [state,   setState]   = useState<ConnectionsState>({ active: [], outgoing: [], incoming: [] });
-  const [loading, setLoading] = useState(true);
+  const [state,   setState]   = useState<ConnectionsState>(
+    _connectionsCache ?? { active: [], outgoing: [], incoming: [] }
+  );
+  const [loading, setLoading] = useState(_connectionsCache === null);
   const [error,   setError]   = useState<string | null>(null);
   const fetchingRef = useRef(false);
 
@@ -57,6 +62,7 @@ export function useConnections(enabled = true) {
       const res  = await apiFetch('/api/connections');
       if (!res.ok) throw new Error('Failed to load connections');
       const data = await res.json() as ConnectionsState;
+      _connectionsCache = data;
       setState(data);
       setError(null);
     } catch (e) {
