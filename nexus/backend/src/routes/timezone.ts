@@ -1,5 +1,5 @@
 import { Router, type Response } from 'express';
-import ct from 'countries-and-timezones';
+import * as ct from 'countries-and-timezones';
 import { requireAuth, type AuthRequest } from '../middleware/auth.js';
 import { createRequire } from 'module';
 
@@ -8,6 +8,12 @@ const cities: Array<{ name: string; aliases: string[]; timezone: string; country
   require('../data/cities.json');
 
 export const timezoneRouter = Router();
+
+interface CTCountry {
+  id: string;
+  name: string;
+  timezones: string[];
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -152,7 +158,7 @@ timezoneRouter.get('/search', requireAuth, (req: AuthRequest, res: Response) => 
 
   // 3. Country search (fill remaining slots up to 6)
   if (results.length < 6) {
-    const allCountries = ct.getAllCountries();
+    const allCountries = ct.getAllCountries() as Record<string, CTCountry>;
     for (const country of Object.values(allCountries)) {
       if (results.length >= 6) break;
       const nameMatch = country.name.toLowerCase().includes(expandedQ) ||
