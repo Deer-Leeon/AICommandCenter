@@ -394,8 +394,19 @@ timezoneRouter.get('/search', requireAuth, (req: AuthRequest, res: Response) => 
 
       const tzs = country.timezones ?? [];
       if (tzs.length === 0) continue;
-      if (tzs.length === 1) {
-        const tz = tzs[0];
+
+      // Deduplicate by current UTC offset — e.g. Germany has Europe/Berlin + Europe/Busingen
+      // but both share the same offset (CET/CEST), so they are effectively one timezone.
+      const seenOffsets = new Set<string>();
+      const uniqueTzs = tzs.filter(tz => {
+        const off = getUtcOffset(tz);
+        if (seenOffsets.has(off)) return false;
+        seenOffsets.add(off);
+        return true;
+      });
+
+      if (uniqueTzs.length <= 1) {
+        const tz = uniqueTzs[0] ?? tzs[0];
         const offset = getUtcOffset(tz);
         const { time } = currentInTz(tz);
         results.push({
@@ -411,19 +422,19 @@ timezoneRouter.get('/search', requireAuth, (req: AuthRequest, res: Response) => 
           currentTime:      time,
         });
       } else {
-        // Multiple timezones — find city suggestions for this country
+        // Multiple distinct timezones — find city suggestions for this country
         const citySuggestions = cities
           .filter(c => c.country === country.id)
           .slice(0, 6)
           .map(c => c.name);
         const msg = citySuggestions.length > 0
-          ? `${country.name} spans ${tzs.length} timezones. Try: ${citySuggestions.join(', ')}`
-          : `${country.name} spans ${tzs.length} timezones — please search for a specific city`;
+          ? `${country.name} spans ${uniqueTzs.length} timezones. Try: ${citySuggestions.join(', ')}`
+          : `${country.name} spans ${uniqueTzs.length} timezones — please search for a specific city`;
         results.push({
           name:             country.name,
           type:             'country',
           timezone:         null,
-          timezones:        tzs,
+          timezones:        uniqueTzs,
           ambiguous:        true,
           ambiguousMessage: msg,
           countryCode:      country.id,

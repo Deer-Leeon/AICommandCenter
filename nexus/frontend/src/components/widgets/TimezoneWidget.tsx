@@ -176,7 +176,7 @@ function SearchInput({ placeholder, selected, onSelect, onClear, autoFocus, comp
   }
 
   function handleBlur() {
-    setTimeout(() => { setFocused(false); setAmbiguous(null); }, 180);
+    setTimeout(() => { setFocused(false); setAmbiguous(null); }, 220);
   }
 
   const showDropdown = focused && dropPos && (results.length > 0 || loading || ambiguous !== null);
@@ -237,39 +237,50 @@ function SearchInput({ placeholder, selected, onSelect, onClear, autoFocus, comp
         )}
       </div>
 
-      {/* Dropdown rendered at fixed position to escape overflow:hidden */}
+      {/* Dropdown rendered at fixed position to escape overflow:hidden.
+          onMouseDown preventDefault on the container prevents the input from losing
+          focus when the user clicks anywhere inside the dropdown. */}
       {showDropdown && dropPos && (
-        <div style={{
-          position: 'fixed',
-          top: dropPos.top,
-          left: dropPos.left,
-          width: dropPos.width,
-          background: 'var(--surface2)', border: '1px solid var(--border)',
-          borderRadius: 10, overflow: 'hidden', zIndex: 9999,
-          boxShadow: 'var(--shadow-popup)',
-          animation: 'tz-drop 0.18s ease-out both',
-          maxHeight: 280, overflowY: 'auto',
-        }}>
+        <div
+          onMouseDown={e => e.preventDefault()}
+          style={{
+            position: 'fixed',
+            top: dropPos.top,
+            left: dropPos.left,
+            width: dropPos.width,
+            background: 'var(--surface2)', border: '1px solid var(--border)',
+            borderRadius: 10, overflow: 'hidden', zIndex: 9999,
+            boxShadow: 'var(--shadow-popup)',
+            animation: 'tz-drop 0.18s ease-out both',
+            maxHeight: 280, overflowY: 'auto',
+          }}
+        >
           {ambiguous ? (
-            <div style={{ padding: '10px 12px' }}>
-              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-                {ambiguous.ambiguousMessage}
+            <div style={{ padding: '12px 14px' }}>
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10, lineHeight: 1.5 }}>
+                {ambiguous.flag} {ambiguous.ambiguousMessage?.replace(/Try:\s+.+$/, '').trim()}
               </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {(ambiguous.ambiguousMessage?.match(/Try:\s+(.+)$/))?.[1]
-                  ?.split(',').map(c => c.trim()).map(city => (
+                  ?.split(',').map(c => c.trim()).filter(Boolean).map(city => (
                   <button
                     key={city}
-                    onMouseDown={() => {
+                    onMouseDown={e => {
+                      e.preventDefault();
                       setQuery(city);
                       setAmbiguous(null);
                       search(city);
+                      inputRef.current?.focus();
                     }}
                     style={{
-                      background: 'var(--surface3)', border: '1px solid var(--border)',
-                      borderRadius: 6, padding: '3px 8px', fontSize: 11,
+                      background: 'rgba(124,106,255,0.12)',
+                      border: '1px solid rgba(124,106,255,0.3)',
+                      borderRadius: 20, padding: '4px 12px', fontSize: 12,
                       color: 'var(--accent)', cursor: 'pointer', fontFamily: 'inherit',
+                      fontWeight: 500, transition: 'background 0.15s',
                     }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(124,106,255,0.22)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'rgba(124,106,255,0.12)')}
                   >{city}</button>
                 ))}
               </div>
@@ -282,7 +293,7 @@ function SearchInput({ placeholder, selected, onSelect, onClear, autoFocus, comp
             results.map((r, i) => (
               <div
                 key={i}
-                onMouseDown={() => handleSelect(r)}
+                onMouseDown={e => { e.preventDefault(); handleSelect(r); }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: '8px 12px', cursor: 'pointer',
@@ -295,12 +306,11 @@ function SearchInput({ placeholder, selected, onSelect, onClear, autoFocus, comp
                 <span style={{ fontSize: 16, flexShrink: 0 }}>{r.flag}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
-                    {r.ambiguous && <span style={{ marginRight: 4 }}>⚠️</span>}
                     {r.name}
                   </div>
                   {r.ambiguous ? (
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                      multiple timezones
+                    <div style={{ fontSize: 11, color: 'var(--text-faint)', fontStyle: 'italic' }}>
+                      select a city →
                     </div>
                   ) : (
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
