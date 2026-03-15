@@ -64,18 +64,24 @@ type LayoutMode = 'micro' | 'slim' | 'compact' | 'standard' | 'expanded';
 
 const LS_KEY = 'nexus_tz_widget';
 
+interface FavPair { from: SelectedLocation; to: SelectedLocation }
+
 interface Persisted {
   from: SelectedLocation | null;
   to: SelectedLocation | null;
-  recentPairs: Array<{ from: SelectedLocation; to: SelectedLocation }>;
+  favorites: FavPair[];
+  recentPairs?: FavPair[]; // legacy — ignored going forward
 }
 
 function readPersisted(): Persisted {
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return { from: null, to: null, recentPairs: [] };
-    return JSON.parse(raw) as Persisted;
-  } catch { return { from: null, to: null, recentPairs: [] }; }
+    if (!raw) return { from: null, to: null, favorites: [] };
+    const parsed = JSON.parse(raw) as Persisted;
+    // migrate legacy recentPairs → favorites on first load
+    if (!parsed.favorites && parsed.recentPairs) parsed.favorites = parsed.recentPairs;
+    return { ...parsed, favorites: parsed.favorites ?? [] };
+  } catch { return { from: null, to: null, favorites: [] }; }
 }
 
 function writePersisted(p: Persisted) {
@@ -509,6 +515,58 @@ function OffsetPill({ diff, dayDiff }: { diff: string; dayDiff: number }) {
   );
 }
 
+// ── FavChip ───────────────────────────────────────────────────────────────────
+
+function FavChip({
+  fav, isActive, onSelect, onRemove,
+}: {
+  fav: FavPair;
+  isActive: boolean;
+  onSelect: () => void;
+  onRemove: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <div
+      style={{
+        display: 'flex', alignItems: 'center',
+        background: isActive ? 'rgba(124,106,255,0.15)' : 'var(--surface2)',
+        border: `1px solid ${isActive ? 'rgba(124,106,255,0.4)' : 'var(--border)'}`,
+        borderRadius: 8, overflow: 'hidden', transition: 'all 0.1s',
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <button
+        onClick={onSelect}
+        style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          padding: '3px 8px', fontSize: 11,
+          color: isActive ? 'var(--accent)' : 'var(--text-muted)',
+          fontFamily: 'inherit', whiteSpace: 'nowrap',
+        }}
+      >
+        {fav.from.flag} {fav.from.name} ⇄ {fav.to.flag} {fav.to.name}
+      </button>
+      {/* Remove button — slides in on hover */}
+      <button
+        onClick={e => { e.stopPropagation(); onRemove(); }}
+        title="Remove favorite"
+        style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          padding: hovered ? '3px 6px 3px 0' : '3px 0',
+          fontSize: 10, color: 'var(--text-faint)',
+          width: hovered ? 18 : 0, overflow: 'hidden',
+          transition: 'width 0.15s, padding 0.15s, color 0.1s',
+          lineHeight: 1, display: 'flex', alignItems: 'center',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
+        onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-faint)')}
+      >✕</button>
+    </div>
+  );
+}
+
 // ── Main widget ───────────────────────────────────────────────────────────────
 
 export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
@@ -518,7 +576,7 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
   const persisted = useMemo(() => readPersisted(), []);
   const [fromLoc, setFromLoc] = useState<SelectedLocation | null>(persisted.from);
   const [toLoc,   setToLoc]   = useState<SelectedLocation | null>(persisted.to);
-  const [recentPairs, setRecentPairs] = useState(persisted.recentPairs);
+  const [favorites, setFavorites] = useState<FavPair[]>(persisted.favorites);
   const [swapping, setSwapping] = useState(false);
 
   const [isManualTime, setIsManualTime] = useState(false);
@@ -557,11 +615,10 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
   // Mark ready immediately (no required data fetch)
   useEffect(() => { setHasLoaded(true); }, []);
 
-  // Persist whenever locations change
+  // Persist whenever locations or favorites change
   useEffect(() => {
-    const p: Persisted = { from: fromLoc, to: toLoc, recentPairs };
-    writePersisted(p);
-  }, [fromLoc, toLoc, recentPairs]);
+    writePersisted({ from: fromLoc, to: toLoc, favorites });
+  }, [fromLoc, toLoc, favorites]);
 
   // Trigger conversion whenever any input changes
   const convertRef = useRef<ReturnType<typeof setTimeout>>();
@@ -612,24 +669,36 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
       setInputTime(time);
       setInputDate(date);
     }
-    if (toLoc) addRecentPair(loc, toLoc);
   }
   function handleToSelect(loc: SelectedLocation) {
     setToLoc(loc);
-    if (fromLoc) addRecentPair(fromLoc, loc);
   }
-  function addRecentPair(from: SelectedLocation, to: SelectedLocation) {
-    setRecentPairs(prev => {
-      const key = `${from.timezone}:${to.timezone}`;
-      const filtered = prev.filter(p => `${p.from.timezone}:${p.to.timezone}` !== key);
-      return [{ from, to }, ...filtered].slice(0, 5);
-    });
+
+  function favKey(a: SelectedLocation, b: SelectedLocation) {
+    return `${a.timezone}:${b.timezone}`;
+  }
+  function isFavorited() {
+    if (!fromLoc || !toLoc) return false;
+    const k = favKey(fromLoc, toLoc);
+    return favorites.some(f => favKey(f.from, f.to) === k);
+  }
+  function toggleFavorite() {
+    if (!fromLoc || !toLoc) return;
+    const k = favKey(fromLoc, toLoc);
+    setFavorites(prev =>
+      prev.some(f => favKey(f.from, f.to) === k)
+        ? prev.filter(f => favKey(f.from, f.to) !== k)
+        : [...prev, { from: fromLoc, to: toLoc }],
+    );
+  }
+  function removeFavorite(fav: FavPair) {
+    setFavorites(prev => prev.filter(f => favKey(f.from, f.to) !== favKey(fav.from, fav.to)));
   }
 
   const mode = getLayoutMode(size.w, size.h);
   const compact = mode === 'micro' || mode === 'slim' || mode === 'compact';
   const showSeconds = mode === 'expanded' || mode === 'standard';
-  const showRecentPairs = (mode === 'expanded' || mode === 'standard') && recentPairs.length > 0;
+  const showFavorites = (mode === 'expanded' || mode === 'standard' || mode === 'compact') && favorites.length > 0;
 
   // ── Micro mode ─────────────────────────────────────────────────────────────
   if (mode === 'micro') {
@@ -753,16 +822,23 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
                 onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface3)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
               >⇄</button>
 
-              {/* UTC offset difference — clean single line, no day/hour badges */}
-              {conversion && (
-                <span style={{
-                  fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 12,
-                  background: 'var(--accent-dim)', color: 'var(--accent)',
-                  border: '1px solid rgba(124,106,255,0.3)',
-                  fontFamily: "'Space Mono', monospace", whiteSpace: 'nowrap',
-                }}>
-                  {conversion.offsetDifference === '0 hours' ? '= same' : conversion.offsetDifference}
-                </span>
+              {/* Favorite star — save/remove current pair */}
+              {fromLoc && toLoc && (
+                <button
+                  onClick={toggleFavorite}
+                  title={isFavorited() ? 'Remove from favorites' : 'Save as favorite'}
+                  style={{
+                    background: isFavorited() ? 'rgba(245,158,11,0.15)' : 'var(--surface3)',
+                    border: `1px solid ${isFavorited() ? 'rgba(245,158,11,0.4)' : 'var(--border)'}`,
+                    borderRadius: '50%', width: compact ? 26 : 30, height: compact ? 26 : 30,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: compact ? 12 : 14, transition: 'all 0.15s', flexShrink: 0,
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = isFavorited() ? 'rgba(245,158,11,0.25)' : 'var(--surface3)'; e.currentTarget.style.transform = 'scale(1.1)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = isFavorited() ? 'rgba(245,158,11,0.15)' : 'var(--surface3)'; e.currentTarget.style.transform = 'scale(1)'; }}
+                >
+                  {isFavorited() ? '★' : '☆'}
+                </button>
               )}
 
               {/* Time picker */}
@@ -846,15 +922,20 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
                 fontSize: 13, color: 'var(--text-muted)', transform: 'rotate(90deg)',
               }}
             >⇄</button>
-            {conversion && (
-              <span style={{
-                fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
-                background: 'var(--accent-dim)', color: 'var(--accent)',
-                border: '1px solid rgba(124,106,255,0.3)',
-                fontFamily: "'Space Mono', monospace", whiteSpace: 'nowrap',
-              }}>
-                {conversion.offsetDifference === '0 hours' ? '= same' : conversion.offsetDifference}
-              </span>
+            {fromLoc && toLoc && (
+              <button
+                onClick={toggleFavorite}
+                title={isFavorited() ? 'Remove from favorites' : 'Save as favorite'}
+                style={{
+                  background: isFavorited() ? 'rgba(245,158,11,0.15)' : 'var(--surface3)',
+                  border: `1px solid ${isFavorited() ? 'rgba(245,158,11,0.4)' : 'var(--border)'}`,
+                  borderRadius: '50%', width: 26, height: 26,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 12, transition: 'all 0.15s',
+                }}
+              >
+                {isFavorited() ? '★' : '☆'}
+              </button>
             )}
           </div>
         )}
@@ -877,25 +958,20 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {/* Recent pairs */}
-        {showRecentPairs && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingTop: 4 }}>
-            {recentPairs.map((pair, i) => (
-              <button
+        {/* Favorites bar */}
+        {showFavorites && (
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', paddingTop: 2 }}>
+            {favorites.map((fav, i) => (
+              <FavChip
                 key={i}
-                onClick={() => { setFromLoc(pair.from); setToLoc(pair.to); }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 4,
-                  background: 'var(--surface2)', border: '1px solid var(--border)',
-                  borderRadius: 8, padding: '3px 8px', fontSize: 11,
-                  color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'inherit',
-                  whiteSpace: 'nowrap', transition: 'background 0.1s',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface3)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface2)'; }}
-              >
-                {pair.from.flag} {pair.from.name} ⇄ {pair.to.flag} {pair.to.name}
-              </button>
+                fav={fav}
+                isActive={
+                  fromLoc?.timezone === fav.from.timezone &&
+                  toLoc?.timezone === fav.to.timezone
+                }
+                onSelect={() => { setFromLoc(fav.from); setToLoc(fav.to); setIsManualTime(false); }}
+                onRemove={() => removeFavorite(fav)}
+              />
             ))}
           </div>
         )}
