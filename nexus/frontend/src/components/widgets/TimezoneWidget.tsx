@@ -700,6 +700,7 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
                   {conversion.offsetDifference === '0 hours' ? '= same' : conversion.offsetDifference}
                 </span>
               ) : <div style={{ height: 1, width: '60%', background: 'var(--border)' }} />}
+
             </div>
           )}
           {toLoc && (
@@ -793,9 +794,12 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
                 onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface3)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
               >⇄</button>
 
-              {/* Offset pill */}
+              {/* Offset pill — show always once loaded; in live mode dayDiff is 0 */}
               {conversion && (
-                <OffsetPill diff={conversion.offsetDifference} dayDiff={conversion.dayDiff} />
+                <OffsetPill
+                  diff={conversion.offsetDifference}
+                  dayDiff={isManualTime ? conversion.dayDiff : 0}
+                />
               )}
 
               {/* Time picker */}
@@ -828,7 +832,9 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
             />
             {toLoc && (
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                {conversion ? (
+                {/* Live mode: always show ClockDisplay — stable size, no API-load flicker.
+                    Manual mode: show the converted time from the API. */}
+                {isManualTime && conversion ? (
                   <>
                     <div style={{
                       fontFamily: "'Space Mono', monospace", fontWeight: 700,
@@ -859,7 +865,21 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
                     )}
                   </>
                 ) : (
-                  <ClockDisplay timezone={toLoc.timezone} mode={mode} showSeconds={showSeconds} isResult />
+                  <>
+                    <ClockDisplay timezone={toLoc.timezone} mode={mode} showSeconds={showSeconds} isResult />
+                    {(mode === 'standard' || mode === 'expanded') && conversion && (
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{conversion.toOffset}</span>
+                        {conversion.toDST && (
+                          <span style={{
+                            fontSize: 9, fontWeight: 600, padding: '1px 6px', borderRadius: 8,
+                            background: 'rgba(245,158,11,0.15)', color: '#f59e0b',
+                            border: '1px solid rgba(245,158,11,0.3)',
+                          }}>DST</span>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
@@ -883,7 +903,7 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
                 fontSize: 13, color: 'var(--text-muted)', transform: 'rotate(90deg)',
               }}
             >⇄</button>
-            {conversion && <OffsetPill diff={conversion.offsetDifference} dayDiff={conversion.dayDiff} />}
+            {conversion && <OffsetPill diff={conversion.offsetDifference} dayDiff={isManualTime ? conversion.dayDiff : 0} />}
           </div>
         )}
 
