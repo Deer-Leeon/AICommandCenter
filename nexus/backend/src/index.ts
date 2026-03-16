@@ -40,6 +40,7 @@ import { currencyRouter }     from './routes/currency.js';
 import { sharedPhotoRouter }  from './routes/sharedPhoto.js';
 import { sharedCanvasRouter } from './routes/sharedCanvas.js';
 import { attachCanvasWS }     from './lib/canvasWS.js';
+import { bibleRouter }        from './routes/bible.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -106,6 +107,7 @@ app.use('/api/timezone',     timezoneRouter);
 app.use('/api/currency',     currencyRouter);
 app.use('/api/shared-photo',  sharedPhotoRouter);
 app.use('/api/shared-canvas', sharedCanvasRouter);
+app.use('/api/bible',         bibleRouter);
 
 app.get('/', (_req, res) => {
   res.json({ name: 'NEXUS API', version: '1.0.0', status: 'running' });
