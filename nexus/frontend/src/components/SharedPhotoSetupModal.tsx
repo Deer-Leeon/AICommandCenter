@@ -4,6 +4,7 @@
  */
 import { useState } from 'react';
 import { useConnections } from '../hooks/useConnections';
+import { preloadSharedPhoto } from './widgets/SharedPhotoWidget';
 
 interface Props {
   onConfirm: (connectionId: string) => void;
@@ -97,7 +98,10 @@ export function SharedPhotoSetupModal({ onConfirm, onCancel, onOpenConnections }
             return (
               <button
                 key={conn.connection_id}
-                onClick={() => setSelected(conn.connection_id)}
+                onClick={() => {
+                  setSelected(conn.connection_id);
+                  preloadSharedPhoto(conn.connection_id); // fire fetch immediately
+                }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 12,
                   padding: '10px 14px',

@@ -13,6 +13,27 @@ import { useSharedChannel } from '../../hooks/useSharedChannel';
 import { apiFetch, apiFetchMultipart } from '../../lib/api';
 import { nexusSSE } from '../../lib/nexusSSE';
 
+// ── Pre-load cache ────────────────────────────────────────────────────────────
+// The setup modal calls preloadSharedPhoto() as soon as the user clicks a
+// connection (before confirming).  By the time the widget mounts the fetch is
+// usually already resolved, so the photo appears with zero perceived delay.
+
+const _photoPreload = new Map<string, Promise<PhotoRecord | null>>();
+
+export function preloadSharedPhoto(connectionId: string) {
+  if (_photoPreload.has(connectionId)) return;
+  _photoPreload.set(
+    connectionId,
+    apiFetch(`/api/shared-photo/${connectionId}`)
+      .then(async (r) => {
+        if (!r.ok) return null;
+        const d = await r.json() as { empty?: boolean } & PhotoRecord;
+        return d.empty ? null : d;
+      })
+      .catch(() => null),
+  );
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface PhotoRecord {
@@ -252,8 +273,20 @@ export function SharedPhotoWidget({ connectionId, slotKey, onClose }: Props) {
   useSharedChannel(connectionId, 'shared_photo', handleSSE);
 
   // ── Initial load ───────────────────────────────────────────────────────────
+  // Uses the pre-load cache if the setup modal already fired the fetch, so
+  // the photo appears immediately on mount with no visible network delay.
   useEffect(() => {
     if (!connectionId) return;
+
+    const cached = _photoPreload.get(connectionId);
+    if (cached) {
+      cached.then((photo) => {
+        if (photo) { setPhoto(photo); setPhotoVisible(true); }
+      }).catch(() => {});
+      _photoPreload.delete(connectionId);
+      return;
+    }
+
     apiFetch(`/api/shared-photo/${connectionId}`)
       .then(async (r) => {
         if (r.status === 403) { setDissolved(true); return; }
