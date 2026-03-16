@@ -685,7 +685,7 @@ export function SharedPhotoWidget({ connectionId, slotKey, onClose }: Props) {
                 autoPlay
                 playsInline
                 muted
-                style={{ zIndex: 3, transform: 'scaleX(-1)' /* mirror for selfie cam */ }}
+                style={{ zIndex: 3 }}
               />
 
               {/* Camera label */}
