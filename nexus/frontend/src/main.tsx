@@ -106,6 +106,7 @@ function Root() {
         params.get('google_tasks_connected') === 'true'    ||
         params.get('google_docs_connected') === 'true'     ||
         params.get('google_drive_connected') === 'true'    ||
+        params.get('google_gmail_connected') === 'true'    ||
         params.get('google_connected') === 'true'          ||
         params.get('slack_connected') === 'true';
       if (anySuccess) {

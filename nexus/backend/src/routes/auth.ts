@@ -196,7 +196,7 @@ authRouter.get('/google/callback', async (req: Request, res: Response) => {
   const serviceKey = colonIdx > 0 ? rawState.slice(colonIdx + 1) : 'google';
 
   // Map service key → provider stored in user_tokens
-  const validServices = ['google-calendar', 'google-tasks', 'google-docs', 'google-drive'];
+  const validServices = ['google-calendar', 'google-tasks', 'google-docs', 'google-drive', 'google-gmail'];
   const provider = validServices.includes(serviceKey) ? serviceKey : 'google';
 
   // Build the success redirect param
@@ -205,6 +205,7 @@ authRouter.get('/google/callback', async (req: Request, res: Response) => {
     provider === 'google-tasks'    ? 'google_tasks_connected=true'    :
     provider === 'google-docs'     ? 'google_docs_connected=true'     :
     provider === 'google-drive'    ? 'google_drive_connected=true'    :
+    provider === 'google-gmail'    ? 'google_gmail_connected=true'    :
     'google_connected=true';
 
   try {

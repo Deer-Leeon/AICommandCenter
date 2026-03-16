@@ -109,15 +109,18 @@ export default function App() {
     const googleDocsOk   = params.get('google_docs_connected') === 'true';
     const googleDriveOk  = params.get('google_drive_connected') === 'true';
     const googleOk       = params.get('google_connected') === 'true';
+    const googleGmailOk  = params.get('google_gmail_connected') === 'true';
     const slackOk        = params.get('slack_connected') === 'true';
-    const anySuccess = googleCalOk || googleTasksOk || googleDocsOk || googleDriveOk || googleOk || slackOk;
+    // Gmail connects silently — don't open Settings on success
+    const anySuccessWithSettings = googleCalOk || googleTasksOk || googleDocsOk || googleDriveOk || googleOk || slackOk;
+    const anySuccess = anySuccessWithSettings || googleGmailOk;
     const hasOAuthParams = anySuccess ||
       params.has('google_error') || params.has('slack_error') || params.has('auth_error');
 
     if (hasOAuthParams) {
       window.history.replaceState({}, '', '/');
       refreshServiceStatus();
-      if (anySuccess) setShowSettings(true);
+      if (anySuccessWithSettings) setShowSettings(true);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
