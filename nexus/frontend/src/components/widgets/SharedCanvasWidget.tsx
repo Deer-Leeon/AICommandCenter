@@ -66,10 +66,6 @@ function clearCachedCanvas(connectionId: string) {
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Tool       = 'brush' | 'eraser' | 'fill' | 'pan';
-// Only two visible states: idle (dot hidden) and saved (brief green flash).
-// 'unsaved'/'saving' are gone — localStorage write is instant and considered
-// the authoritative save; Supabase upload happens silently in background.
-type SaveStatus = 'idle' | 'saved';
 type LayoutMode = 'micro' | 'slim' | 'standard' | 'expanded';
 
 interface StrokeMsg {
@@ -321,13 +317,6 @@ const STYLES = `
   flex-shrink:0;
 }
 .sc-pill-btn:hover { background:var(--surface3); color:var(--text); }
-/* Save dot: only idle (invisible) or saved (brief green) — no orange */
-.sc-save-dot {
-  width:7px; height:7px; border-radius:50%;
-  transition:background 0.3s; flex-shrink:0;
-}
-.sc-save-dot.saved   { background:#22c55e; }
-.sc-save-dot.idle    { background:transparent; }
 .sc-hint {
   position:absolute; inset:0;
   display:flex; align-items:center; justify-content:center;
@@ -369,7 +358,6 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
   const [color,            setColor]            = useState('#000000');
   const [brushSize,        setBrushSize]        = useState(8);
   const [toolbarExpanded,  setToolbarExpanded]  = useState(false);
-  const [saveStatus,       setSaveStatus]       = useState<SaveStatus>('idle');
   const [dissolved,        setDissolved]        = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [savedToPhotoMsg,  setSavedToPhotoMsg]  = useState<string | null>(null);
@@ -652,12 +640,7 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     // 1. Write to localStorage NOW (synchronous, instant persistence)
     writeCachedCanvas(connectionId, world.toDataURL('image/png'));
 
-    // 2. Show green immediately, fade to idle after 1.2 s
-    setSaveStatus('saved');
-    if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current);
-    saveDebounceRef.current = setTimeout(() => setSaveStatus('idle'), 1200);
-
-    // 3. Background Supabase upload (silent, no further status changes)
+    // 2. Background Supabase upload (silent)
     saveSnapshot();
   }, [connectionId, saveSnapshot]);
 
@@ -1146,7 +1129,6 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     setHintVisible(true);
     setShowClearConfirm(false);
     scheduleOverlayRedraw();
-    setSaveStatus('idle');
     // Cancel any in-flight or queued saves — the canvas is now empty
     // and we want the DELETE to be the last backend operation.
     isSavingRef.current = false;
@@ -1397,7 +1379,6 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
               {tool === 'brush' ? '🖌️' : tool === 'eraser' ? '◻️' : tool === 'fill' ? '🪣' : '✋'}
             </span>
           )}
-          <div className={`sc-save-dot ${saveStatus}`} />
           {!isMicro && (
             <button className="sc-pill-btn" onClick={undo} title="Undo (Cmd+Z)">↩</button>
           )}
