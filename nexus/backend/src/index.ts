@@ -39,6 +39,7 @@ import { timezoneRouter }     from './routes/timezone.js';
 import { currencyRouter }     from './routes/currency.js';
 import { sharedPhotoRouter }  from './routes/sharedPhoto.js';
 import { sharedCanvasRouter } from './routes/sharedCanvas.js';
+import { attachCanvasWS }     from './lib/canvasWS.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -110,7 +111,7 @@ app.get('/', (_req, res) => {
   res.json({ name: 'NEXUS API', version: '1.0.0', status: 'running' });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   const hasSupabase = !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
   const hasSlack = !!(process.env.SLACK_BOT_TOKEN && process.env.SLACK_BOT_TOKEN !== 'xoxb-');
   const hasObsidian = !!process.env.OBSIDIAN_API_KEY;
@@ -130,5 +131,8 @@ app.listen(PORT, () => {
   console.log(`   Health:    http://localhost:${PORT}/api/health`);
   console.log(`   OAuth:     http://localhost:${PORT}/api/auth/google  (requires Bearer token)\n`);
 });
+
+// Attach the WebSocket relay for real-time canvas strokes (no per-message overhead)
+attachCanvasWS(server);
 
 export default app;
