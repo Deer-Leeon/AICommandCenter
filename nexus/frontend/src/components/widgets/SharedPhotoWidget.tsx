@@ -336,10 +336,10 @@ export function SharedPhotoWidget({ connectionId, slotKey, onClose }: Props) {
     setTimeout(() => setToast(null), 3600);
   }
 
-  // ── Attach stream to video element once camera state renders it ───────────
-  // startCamera() calls setWidgetState('camera') last, so the <video> element
-  // doesn't exist yet when we have the stream.  This effect fires after the
-  // DOM updates and safely wires the stream to the newly-mounted video element.
+  // ── Attach stream to video element once it's in the DOM ───────────────────
+  // startCamera() switches to camera state FIRST (instant UI), then awaits
+  // getUserMedia.  When the stream arrives, this effect wires it to the
+  // already-mounted <video> element.
   useEffect(() => {
     if (widgetState !== 'camera' || !streamRef.current || !videoRef.current) return;
     videoRef.current.srcObject = streamRef.current;
@@ -347,9 +347,13 @@ export function SharedPhotoWidget({ connectionId, slotKey, onClose }: Props) {
   }, [widgetState, stream]);
 
   // ── Camera ─────────────────────────────────────────────────────────────────
+  // Switch to camera state FIRST so the <video> element mounts immediately and
+  // the UI feels instant.  getUserMedia then resolves in the background; the
+  // useEffect above wires the stream to the already-visible video element.
   async function startCamera(deviceId?: string) {
+    stopStream();
+    setWidgetState('camera'); // show camera UI immediately — no perceived delay
     try {
-      stopStream();
       const constraints: MediaStreamConstraints = {
         video: deviceId
           ? { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } }
@@ -357,7 +361,7 @@ export function SharedPhotoWidget({ connectionId, slotKey, onClose }: Props) {
       };
       const s = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = s;
-      setStream(s);
+      setStream(s); // triggers the useEffect which sets srcObject + plays
 
       // Enumerate cameras (only once)
       if (cameras.length === 0) {
@@ -369,10 +373,8 @@ export function SharedPhotoWidget({ connectionId, slotKey, onClose }: Props) {
       const track = s.getVideoTracks()[0];
       setCameraLabel(track?.label || 'Camera');
       setCameraError(null);
-      setWidgetState('camera'); // <video> mounts after this; useEffect above attaches stream
     } catch {
       setCameraError('Camera access denied — use Upload instead');
-      setWidgetState('camera');
     }
   }
 
@@ -818,11 +820,10 @@ export function SharedPhotoWidget({ connectionId, slotKey, onClose }: Props) {
               disabled={isUploading}
               style={{ display: 'flex', alignItems: 'center', gap: 6 }}
             >
-              {isUploading ? (
-                <span style={{ display: 'inline-block', animation: 'sp-pulse 0.8s linear infinite', fontSize: 14 }}>⏳</span>
-              ) : (
-                <>✓ {mode === 'micro' ? '' : 'Share'}</>
-              )}
+              {isUploading
+                ? (mode === 'micro' ? '…' : 'Sharing…')
+                : <>✓ {mode === 'micro' ? '' : 'Share'}</>
+              }
             </button>
           </div>
         </>
