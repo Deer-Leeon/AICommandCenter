@@ -2,7 +2,7 @@
  * SharedPhotoSetupModal — shown when the user drops the Photo Frame widget.
  * Follows the exact same pattern as ChessSetupModal / TodoSetupModal.
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useConnections } from '../hooks/useConnections';
 import { preloadSharedPhoto } from './widgets/SharedPhotoWidget';
 
@@ -15,6 +15,13 @@ interface Props {
 export function SharedPhotoSetupModal({ onConfirm, onCancel, onOpenConnections }: Props) {
   const { active, loading } = useConnections(true);
   const [selected, setSelected] = useState<string | null>(null);
+
+  // Pre-load photos for ALL connections as soon as the list is available so
+  // every fetch is in-flight before the user even clicks a row.
+  useEffect(() => {
+    if (active.length === 0) return;
+    active.forEach((conn) => preloadSharedPhoto(conn.connection_id));
+  }, [active]);
 
   function handleConfirm() {
     if (selected) onConfirm(selected);
