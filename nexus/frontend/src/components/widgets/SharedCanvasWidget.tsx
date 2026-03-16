@@ -356,14 +356,16 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
   const completedStrokesRef   = useRef<Set<string>>(new Set());
 
   // ── Performance refs ───────────────────────────────────────────────────────
-  const saveDebounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const overlayDirtyRef  = useRef(false);
-  const overlayRafRef    = useRef(0);
-  const undoStackRef     = useRef<string[]>([]);   // dataURL strings (PNG compressed)
-  const viewSizeRef      = useRef({ w: 0, h: 0 });
-  const toolRef          = useRef<Tool>('brush');
-  const colorRef         = useRef('#000000');
-  const brushSizeRef     = useRef(8);
+  const saveDebounceRef          = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const overlayDirtyRef          = useRef(false);
+  const overlayRafRef            = useRef(0);
+  const undoStackRef             = useRef<string[]>([]);   // dataURL strings (PNG compressed)
+  const viewSizeRef              = useRef({ w: 0, h: 0 });
+  const toolRef                  = useRef<Tool>('brush');
+  const colorRef                 = useRef('#000000');
+  const brushSizeRef             = useRef(8);
+  // Throttle for in-progress stroke SSE broadcasts (~12fps over HTTP POST)
+  const sseProgressThrottleRef   = useRef(0);
 
   // Keep tool/color/size refs in sync (avoid stale closures in event handlers)
   useEffect(() => { toolRef.current = tool; },          [tool]);
@@ -616,23 +618,11 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
       scheduleOverlayRedraw();
     }
 
-    if (type === 'canvas:snapshot_saved') {
-      const p = payload as { snapshotUrl?: string };
-      if (p?.snapshotUrl) {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          const ctx = getWorldCtx();
-          if (!ctx) return;
-          ctx.fillStyle = '#FFFFFF';
-          ctx.fillRect(0, 0, WORLD_W, WORLD_H);
-          ctx.drawImage(img, 0, 0, WORLD_W, WORLD_H);
-          blitViewport();
-          setHintVisible(false);
-        };
-        img.src = p.snapshotUrl;
-      }
-    }
+    // canvas:snapshot_saved — do NOT reload the canvas here.
+    // Snapshots are only for initial load (REST GET on mount).
+    // Reloading here would overwrite live strokes with a potentially stale/cached PNG.
+    // Stroke-by-stroke sync (canvas:stroke via WS + SSE) already keeps both
+    // canvases perfectly in sync without any snapshot reload.
   }, [blitViewport, getWorldCtx, processStroke, scheduleOverlayRedraw]);
 
   useSharedChannel(connectionId, 'shared_canvas', handleSSE);
@@ -646,8 +636,8 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
 
     const [sx, sy] = getEventScreenPos(e);
 
-    // Pan tool — or middle mouse button
-    if (toolRef.current === 'pan' || e.button === 1) {
+    // Pan tool — or middle mouse button — or shift+drag
+    if (toolRef.current === 'pan' || e.button === 1 || e.shiftKey) {
       isPanningRef.current = true;
       panStartRef.current = { x: sx, y: sy, panX: panXRef.current, panY: panYRef.current };
       (e.currentTarget as HTMLCanvasElement).setPointerCapture(e.pointerId);
@@ -719,17 +709,30 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     stroke.points.push([wx, wy]);
     scheduleOverlayRedraw();
 
-    // Broadcast ONLY the latest point in progress (delta, not full history)
-    // The receiver accumulates points on their side.
-    wsSend({
+    const progressMsg = {
       strokeId:   stroke.strokeId,
       tool:       stroke.tool,
       color:      stroke.color,
       size:       stroke.size,
       points:     stroke.points,
       isComplete: false,
-    });
-  }, [blitViewport, scheduleOverlayRedraw, wsSend]);
+    };
+
+    // Fast path: WS on every move (partner sees live drawing with <5 ms delay)
+    wsSend(progressMsg);
+
+    // SSE fallback: HTTP POST throttled to ~12 fps so partner sees live preview
+    // even when WS is unavailable — no flooding the server
+    const now = Date.now();
+    if (now - sseProgressThrottleRef.current >= 80) {
+      sseProgressThrottleRef.current = now;
+      apiFetch(`/api/shared-canvas/${connectionId}/stroke`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ ...progressMsg, userId: user?.id }),
+      }).catch(() => {});
+    }
+  }, [blitViewport, connectionId, scheduleOverlayRedraw, user?.id, wsSend]);
 
   const handlePointerUp = useCallback((_e: RPointerEvent<HTMLCanvasElement>) => {
     if (isPanningRef.current) {
@@ -814,6 +817,24 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     ro.observe(container);
     return () => ro.disconnect();
   }, [handleViewportResize]);
+
+  // ── Two-finger trackpad scroll → pan (must be non-passive to preventDefault) ─
+  useEffect(() => {
+    const canvas = viewportRef.current;
+    if (!canvas) return;
+
+    function onWheel(e: WheelEvent) {
+      e.preventDefault();
+      const { w, h } = viewSizeRef.current;
+      panXRef.current = Math.max(0, Math.min(WORLD_W - w, panXRef.current + e.deltaX));
+      panYRef.current = Math.max(0, Math.min(WORLD_H - h, panYRef.current + e.deltaY));
+      blitViewport();
+      scheduleOverlayRedraw();
+    }
+
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', onWheel);
+  }, [blitViewport, scheduleOverlayRedraw]);
 
   // ── Initialise world canvas (once on mount) ────────────────────────────────
   useEffect(() => {
