@@ -199,9 +199,6 @@ export default function App() {
 
   if (!layoutLoaded) return null;
 
-  // Is the active page empty?
-  const isPageEmpty = Object.keys(grid).length === 0;
-
   // Page transition animation class for the active page key
   const pageClassName = pageTransitionDir
     ? `page-enter-${pageTransitionDir}`
@@ -235,18 +232,6 @@ export default function App() {
               <Grid onOpenPicker={(row, col) => setPickerCell({ row, col })} />
               <WidgetCanvas gridEl={gridRef} />
 
-              {/* Empty-page hint — visible only when the current page has no widgets */}
-              {isPageEmpty && (
-                <div className="page-empty-hint">
-                  <span style={{ fontSize: 40, color: 'var(--accent)', opacity: 0.7 }}>＋</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>
-                    Add your first widget
-                  </span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', opacity: 0.6 }}>
-                    Open the sidebar → drag a widget here
-                  </span>
-                </div>
-              )}
             </div>
 
             {showLayoutEditor && <GridLayoutMode onClose={() => setShowLayoutEditor(false)} />}
