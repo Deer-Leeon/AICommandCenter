@@ -153,7 +153,7 @@ export default function App() {
 
     if (isNaN(row) || isNaN(col)) return;
 
-    if (widgetId === 'todo' || widgetId === 'shared_chess') {
+    if (widgetId === 'todo' || widgetId === 'shared_chess' || widgetId === 'shared_photo') {
       // Intercept — show the setup modal before committing the placement
       setPendingDrop({ widgetId, row, col, slotKey: cellKey });
       return;
