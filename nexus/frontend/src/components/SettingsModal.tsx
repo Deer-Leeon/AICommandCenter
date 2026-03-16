@@ -1501,22 +1501,37 @@ function DesktopAppPanel() {
             borderRadius: '10px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '6px',
+            gap: '8px',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '14px' }}>⚠️</span>
             <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)' }}>
-              "NEXUS is damaged" warning on first open?
+              Seeing "NEXUS is damaged" on first open?
             </span>
           </div>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
-            macOS blocks unsigned apps downloaded from the internet. To fix it, open <strong>Terminal</strong> and run:
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.6' }}>
+            macOS blocks apps that aren't signed by Apple. This is normal for independent apps.
           </div>
-          <GatekeeperFix />
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
-            Then double-click NEXUS in Applications to open normally.
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)' }}>
+              Easy fix (no Terminal needed):
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.6' }}>
+              In <strong>Finder</strong>, go to <strong>Applications</strong> → <strong>right-click NEXUS</strong> → <strong>Open</strong> → click <strong>Open</strong> in the dialog. You only need to do this once.
+            </div>
           </div>
+          <details style={{ marginTop: '2px' }}>
+            <summary style={{ fontSize: '11px', color: 'var(--text-muted)', cursor: 'pointer', userSelect: 'none' }}>
+              Terminal alternative
+            </summary>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
+              <GatekeeperFix />
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                Then double-click NEXUS to open normally.
+              </div>
+            </div>
+          </details>
         </div>
       </div>
 
