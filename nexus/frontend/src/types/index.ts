@@ -6,6 +6,24 @@ export interface GridSpan {
   rowSpan: number; // ≥ 1
 }
 
+// ── Multi-page dashboard types ─────────────────────────────────────────────
+
+export interface Page {
+  id: string;          // stable uuid
+  name: string;        // user-defined name
+  emoji: string;       // single emoji icon
+  grid: Record<string, WidgetType>;
+  spans: Record<string, GridSpan>;
+  connections: Record<string, string>;
+  createdAt: string;   // ISO-8601
+}
+
+export interface PagesLayout {
+  v: 3;
+  pages: Page[];
+  activePage: string;  // id of the active page
+}
+
 export interface CalendarEvent {
   id: string;
   title: string;

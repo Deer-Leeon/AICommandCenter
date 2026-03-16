@@ -5,6 +5,7 @@ import { MobileBottomBar } from './MobileBottomBar';
 import { MobileSearchOverlay } from './MobileSearchOverlay';
 import { MobileLayoutEditor } from './MobileLayoutEditor';
 import { SettingsModal } from '../components/SettingsModal';
+import { useStore } from '../store/useStore';
 import type { WidgetType } from '../types';
 
 const BOTTOM_BAR_H = 56;
@@ -14,6 +15,7 @@ export default function MobileApp() {
   const [showLayoutEditor, setShowLayoutEditor] = useState(false);
   const [showSearch, setShowSearch]     = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const { pages, activePage, setActivePage } = useStore();
 
   function handleLayoutSave(newOrder: WidgetType[], _newActiveIdx: number) {
     setOrder(newOrder);
@@ -58,6 +60,36 @@ export default function MobileApp() {
           </span>
         </button>
       </div>
+
+      {/* ── Page selector ───────────────────────────────────────────────── */}
+      {pages.length > 1 && (
+        <div style={{
+          display: 'flex', overflowX: 'auto', gap: 6,
+          padding: '0 14px 6px', scrollbarWidth: 'none', flexShrink: 0,
+        }}>
+          {pages.map((page) => {
+            const isActive = page.id === activePage;
+            return (
+              <button
+                key={page.id}
+                onClick={() => setActivePage(page.id)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '5px 12px', borderRadius: 20, whiteSpace: 'nowrap',
+                  border: isActive ? '1px solid rgba(var(--accent-rgb),0.5)' : '1px solid var(--border)',
+                  background: isActive ? 'rgba(var(--accent-rgb),0.12)' : 'var(--surface)',
+                  color: isActive ? 'var(--accent)' : 'var(--text-muted)',
+                  fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: isActive ? 700 : 400,
+                  cursor: 'pointer', flexShrink: 0,
+                }}
+              >
+                <span style={{ fontSize: 14 }}>{page.emoji}</span>
+                {page.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* ── Card stack ───────────────────────────────────────────────────── */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0, padding: '4px 0 4px' }}>

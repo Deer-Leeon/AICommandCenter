@@ -8,6 +8,8 @@ import type {
   DocFile,
   TodoItem,
   ServiceConnectionState,
+  Page,
+  PagesLayout,
 } from '../types';
 import { API_BASE_URL } from '../config';
 import { apiFetch } from '../lib/api';
@@ -46,14 +48,36 @@ function makeInitialStates(): Record<string, ServiceConnectionState> {
   return Object.fromEntries(SERVICES.map((s) => [s, initialState()]));
 }
 
+// ── Default starter pages for brand-new users ─────────────────────────────
+export function makeStarterPages(): Page[] {
+  const now = new Date().toISOString();
+  return [
+    { id: crypto.randomUUID(), name: 'Home',     emoji: '🏠', grid: {}, spans: {}, connections: {}, createdAt: now },
+    { id: crypto.randomUUID(), name: 'Work',     emoji: '💼', grid: {}, spans: {}, connections: {}, createdAt: now },
+    { id: crypto.randomUUID(), name: 'Personal', emoji: '🎮', grid: {}, spans: {}, connections: {}, createdAt: now },
+  ];
+}
+
 interface NexusStore {
-  // Widget placement
+  // ── Multi-page system ────────────────────────────────────────────────────
+  pages: Page[];
+  activePage: string;
+  pageTransitionDir: 'left' | 'right' | null;
+
+  setActivePage: (id: string) => void;
+  addPage: (name: string, emoji: string) => string; // returns new page id
+  deletePage: (id: string) => void;
+  renamePage: (id: string, name: string, emoji: string) => void;
+  reorderPages: (fromIndex: number, toIndex: number) => void;
+  setPages: (pages: Page[], activePage: string) => void;
+
+  // Widget placement (writes to active page automatically)
   grid: Record<string, WidgetType | null>;
   setGrid: (grid: Record<string, WidgetType | null>) => void;
   placeWidget: (widgetId: WidgetType, row: number, col: number) => void;
   removeWidget: (key: string) => void;
 
-  // Grid zone spans (key = "row,col" top-left of merged zone)
+  // Grid zone spans
   gridSpans: Record<string, GridSpan>;
   setGridSpans: (spans: Record<string, GridSpan>) => void;
   mergeZone: (rowStart: number, colStart: number, rowSpan: number, colSpan: number) => void;
@@ -62,8 +86,7 @@ interface NexusStore {
   moveWidget: (fromKey: string, toKey: string) => void;
   swapWidgets: (keyA: string, keyB: string) => void;
 
-  // Shared widget connection bindings (key = "row,col" → connectionId)
-  // Only present for shared widgets; personal widgets have no entry here.
+  // Shared widget connection bindings
   gridConnections: Record<string, string>;
   setGridConnections: (conns: Record<string, string>) => void;
   setWidgetConnection: (key: string, connectionId: string) => void;
@@ -87,7 +110,7 @@ interface NexusStore {
   activeContexts: string[];
   toggleContext: (context: string) => void;
 
-  // Service connection states (stale-while-revalidate)
+  // Service connection states
   serviceStates: Record<string, ServiceConnectionState>;
   refreshServiceStatus: () => Promise<void>;
 
@@ -111,30 +134,34 @@ interface NexusStore {
   flashingWidget: string | null;
   flashWidget: (widgetId: string) => void;
 
-  // Refetch triggers — increment to force an immediate data refresh in the relevant hook
+  // Refetch triggers
   calendarRefetchKey: number;
   triggerCalendarRefetch: () => void;
   todosRefetchKey: number;
   triggerTodosRefetch: () => void;
 
-  // Optimistic calendar events buffer:
-  // maps event-id → timestamp it was added so we never overwrite an
-  // optimistically-added event with a stale API response during propagation delay.
   pendingCalendarEventIds: Record<string, number>;
   addPendingCalendarEventId: (id: string) => void;
   clearPendingCalendarEventId: (id: string) => void;
 }
 
-// ── Synchronous localStorage bootstrap ───────────────────────────────────────
-// Read the cached layout before the store is created so the very FIRST render
-// already has the correct grid and layoutLoaded=true. This eliminates the
-// null → App flash caused by the async useEffect in useLayoutPersistence.
-//
-// The cache key is USER-SCOPED (nexus_layout_v2_<userId>) so that logging in
-// with a different account never pre-populates the grid with another user's
-// widgets. The user ID is read synchronously from the Supabase auth session
-// that is already in localStorage under 'nexus-auth'.
+// ── Helper: sync the flat grid/spans/connections back into the pages array ──
+// Called by every write operation so both representations stay in sync.
+function syncToPages(
+  pages: Page[],
+  activePage: string,
+  grid: Record<string, WidgetType | null>,
+  gridSpans: Record<string, GridSpan>,
+  gridConnections: Record<string, string>,
+): Page[] {
+  return pages.map((p) =>
+    p.id === activePage
+      ? { ...p, grid: grid as Record<string, WidgetType>, spans: gridSpans, connections: gridConnections }
+      : p
+  );
+}
 
+// ── Synchronous localStorage bootstrap ───────────────────────────────────────
 function getBootUserId(): string | null {
   try {
     const raw = localStorage.getItem('nexus-auth');
@@ -146,34 +173,91 @@ function getBootUserId(): string | null {
   }
 }
 
+// v2 key (legacy, for migration)
 export function layoutCacheKey(userId: string) {
   return `nexus_layout_v2_${userId}`;
 }
+// v3 key (current)
+export function layoutCacheKeyV3(userId: string) {
+  return `nexus_layout_v3_${userId}`;
+}
 
-function bootLayout(): { grid: Record<string, WidgetType | null>; gridSpans: Record<string, GridSpan>; gridConnections: Record<string, string>; layoutLoaded: boolean } {
+interface BootResult {
+  grid: Record<string, WidgetType | null>;
+  gridSpans: Record<string, GridSpan>;
+  gridConnections: Record<string, string>;
+  pages: Page[];
+  activePage: string;
+  layoutLoaded: boolean;
+}
+
+interface LayoutV2 {
+  v: 2;
+  widgets: Record<string, WidgetType>;
+  spans: Record<string, GridSpan>;
+  connections: Record<string, string>;
+}
+
+function bootLayout(): BootResult {
+  const empty: BootResult = {
+    grid: {}, gridSpans: {}, gridConnections: {}, pages: [], activePage: '', layoutLoaded: false,
+  };
   try {
     const userId = getBootUserId();
-    if (!userId) return { grid: {}, gridSpans: {}, gridConnections: {}, layoutLoaded: false };
-    const raw = localStorage.getItem(layoutCacheKey(userId));
-    if (!raw) return { grid: {}, gridSpans: {}, gridConnections: {}, layoutLoaded: false };
-    const parsed = JSON.parse(raw) as { v?: number; widgets?: Record<string, WidgetType>; spans?: Record<string, GridSpan>; connections?: Record<string, string> };
-    if (parsed?.v === 2 && parsed.widgets) {
-      return {
-        grid:            parsed.widgets,
-        gridSpans:       parsed.spans ?? {},
-        gridConnections: parsed.connections ?? {},
-        layoutLoaded:    true,
-      };
+    if (!userId) return empty;
+
+    // Try v3 first
+    const rawV3 = localStorage.getItem(layoutCacheKeyV3(userId));
+    if (rawV3) {
+      const parsed = JSON.parse(rawV3) as PagesLayout;
+      if (parsed?.v === 3 && Array.isArray(parsed.pages) && parsed.pages.length > 0) {
+        const activeId = parsed.activePage || parsed.pages[0].id;
+        const activePg = parsed.pages.find((p) => p.id === activeId) ?? parsed.pages[0];
+        return {
+          grid:            activePg.grid ?? {},
+          gridSpans:       activePg.spans ?? {},
+          gridConnections: activePg.connections ?? {},
+          pages:           parsed.pages,
+          activePage:      activePg.id,
+          layoutLoaded:    true,
+        };
+      }
+    }
+
+    // Try v2 migration — wrap existing single layout into a "Main" page
+    const rawV2 = localStorage.getItem(layoutCacheKey(userId));
+    if (rawV2) {
+      const parsed = JSON.parse(rawV2) as LayoutV2;
+      if (parsed?.v === 2 && parsed.widgets) {
+        const page: Page = {
+          id:          crypto.randomUUID(),
+          name:        'Main',
+          emoji:       '🏠',
+          grid:        parsed.widgets,
+          spans:       parsed.spans ?? {},
+          connections: parsed.connections ?? {},
+          createdAt:   new Date().toISOString(),
+        };
+        // Save v3 immediately so subsequent loads use the stable page id
+        const v3: PagesLayout = { v: 3, pages: [page], activePage: page.id };
+        try { localStorage.setItem(layoutCacheKeyV3(userId), JSON.stringify(v3)); } catch { /* quota */ }
+        return {
+          grid:            parsed.widgets,
+          gridSpans:       parsed.spans ?? {},
+          gridConnections: parsed.connections ?? {},
+          pages:           [page],
+          activePage:      page.id,
+          layoutLoaded:    true,
+        };
+      }
     }
   } catch { /* ignore — fall through to defaults */ }
-  return { grid: {}, gridSpans: {}, gridConnections: {}, layoutLoaded: false };
+  return empty;
 }
 
 const _boot = bootLayout();
 
 // ── Synchronous widget-data bootstrap ─────────────────────────────────────────
-// Pre-populate Zustand with the user's last-known data so widgets render
-// immediately with real content instead of skeletons.
 function bootWidgetData() {
   return {
     calendarEvents: wcRead<CalendarEvent[]>(WC_KEY.CALENDAR_EVENTS)?.data ?? [],
@@ -185,15 +269,131 @@ function bootWidgetData() {
 
 const _widgetBoot = bootWidgetData();
 
-export const useStore = create<NexusStore>((set) => ({
+export const useStore = create<NexusStore>((set, get) => ({
+  // ── Multi-page ─────────────────────────────────────────────────────────────
+  pages:               _boot.pages,
+  activePage:          _boot.activePage,
+  pageTransitionDir:   null,
+
+  setActivePage: (id) => {
+    const { pages, activePage } = get();
+    if (id === activePage) return;
+    const targetPage = pages.find((p) => p.id === id);
+    if (!targetPage) return;
+
+    const fromIdx = pages.findIndex((p) => p.id === activePage);
+    const toIdx   = pages.findIndex((p) => p.id === id);
+    const dir: 'left' | 'right' = toIdx > fromIdx ? 'right' : 'left';
+
+    set({
+      activePage:        id,
+      pageTransitionDir: dir,
+      grid:              targetPage.grid ?? {},
+      gridSpans:         targetPage.spans ?? {},
+      gridConnections:   targetPage.connections ?? {},
+    });
+
+    // Clear transition direction after animation completes
+    setTimeout(() => set({ pageTransitionDir: null }), 250);
+  },
+
+  addPage: (name, emoji) => {
+    const { pages } = get();
+    const newPage: Page = {
+      id:          crypto.randomUUID(),
+      name,
+      emoji,
+      grid:        {},
+      spans:       {},
+      connections: {},
+      createdAt:   new Date().toISOString(),
+    };
+    const newPages = [...pages, newPage];
+    const fromIdx = pages.findIndex((p) => p.id === get().activePage);
+    const toIdx   = newPages.length - 1;
+    const dir: 'left' | 'right' = toIdx > fromIdx ? 'right' : 'left';
+
+    set({
+      pages:             newPages,
+      activePage:        newPage.id,
+      pageTransitionDir: dir,
+      grid:              {},
+      gridSpans:         {},
+      gridConnections:   {},
+    });
+    setTimeout(() => set({ pageTransitionDir: null }), 250);
+    return newPage.id;
+  },
+
+  deletePage: (id) => {
+    const { pages, activePage } = get();
+    if (pages.length <= 1) return;
+    const idx      = pages.findIndex((p) => p.id === id);
+    const newPages = pages.filter((p) => p.id !== id);
+    let newActive  = activePage;
+    let dir: 'left' | 'right' | null = null;
+
+    if (activePage === id) {
+      const newIdx = Math.min(idx, newPages.length - 1);
+      newActive    = newPages[newIdx].id;
+      dir          = idx > 0 ? 'left' : 'right';
+    }
+
+    const targetPage = newPages.find((p) => p.id === newActive)!;
+    set({
+      pages:             newPages,
+      activePage:        newActive,
+      pageTransitionDir: dir,
+      grid:              activePage === id ? (targetPage.grid ?? {}) : get().grid,
+      gridSpans:         activePage === id ? (targetPage.spans ?? {}) : get().gridSpans,
+      gridConnections:   activePage === id ? (targetPage.connections ?? {}) : get().gridConnections,
+    });
+    if (dir) setTimeout(() => set({ pageTransitionDir: null }), 250);
+  },
+
+  renamePage: (id, name, emoji) =>
+    set((state) => ({
+      pages: state.pages.map((p) => (p.id === id ? { ...p, name, emoji } : p)),
+    })),
+
+  reorderPages: (fromIndex, toIndex) =>
+    set((state) => {
+      const newPages = [...state.pages];
+      const [moved]  = newPages.splice(fromIndex, 1);
+      newPages.splice(toIndex, 0, moved);
+      return { pages: newPages };
+    }),
+
+  setPages: (pages, activePage) => {
+    const targetPage = pages.find((p) => p.id === activePage) ?? pages[0];
+    if (!targetPage) return;
+    set({
+      pages,
+      activePage:      targetPage.id,
+      grid:            targetPage.grid ?? {},
+      gridSpans:       targetPage.spans ?? {},
+      gridConnections: targetPage.connections ?? {},
+      layoutLoaded:    true,
+    });
+  },
+
+  // ── Grid (writes to active page simultaneously) ────────────────────────────
   grid: _boot.grid,
 
-  setGrid: (grid) => set({ grid }),
+  setGrid: (grid) =>
+    set((state) => ({
+      grid,
+      pages: syncToPages(state.pages, state.activePage, grid, state.gridSpans, state.gridConnections),
+    })),
 
   placeWidget: (widgetId, row, col) =>
-    set((state) => ({
-      grid: { ...state.grid, [`${row},${col}`]: widgetId },
-    })),
+    set((state) => {
+      const newGrid = { ...state.grid, [`${row},${col}`]: widgetId };
+      return {
+        grid:  newGrid,
+        pages: syncToPages(state.pages, state.activePage, newGrid, state.gridSpans, state.gridConnections),
+      };
+    }),
 
   removeWidget: (key) =>
     set((state) => {
@@ -201,19 +401,25 @@ export const useStore = create<NexusStore>((set) => ({
       const newConns = { ...state.gridConnections };
       delete newGrid[key];
       delete newConns[key];
-      return { grid: newGrid, gridConnections: newConns };
+      return {
+        grid:            newGrid,
+        gridConnections: newConns,
+        pages:           syncToPages(state.pages, state.activePage, newGrid, state.gridSpans, newConns),
+      };
     }),
 
   gridSpans: _boot.gridSpans,
-  setGridSpans: (spans) => set({ gridSpans: spans }),
+
+  setGridSpans: (spans) =>
+    set((state) => ({
+      gridSpans: spans,
+      pages: syncToPages(state.pages, state.activePage, state.grid, spans, state.gridConnections),
+    })),
 
   mergeZone: (rowStart, colStart, rowSpan, colSpan) =>
     set((state) => {
-      const newGrid = { ...state.grid };
+      const newGrid  = { ...state.grid };
       const newSpans = { ...state.gridSpans };
-
-      // If one cell in the area already has a widget (expand-occupied-zone case),
-      // preserve it by moving it to the new top-left key.
       let preservedWidget: WidgetType | null = null;
       for (let r = rowStart; r < rowStart + rowSpan; r++) {
         for (let c = colStart; c < colStart + colSpan; c++) {
@@ -223,21 +429,26 @@ export const useStore = create<NexusStore>((set) => ({
           if (r !== rowStart || c !== colStart) delete newSpans[k];
         }
       }
-
-      // Record the new span on the top-left cell
       newSpans[`${rowStart},${colStart}`] = { rowSpan, colSpan };
       if (preservedWidget) newGrid[`${rowStart},${colStart}`] = preservedWidget;
-
-      return { grid: newGrid, gridSpans: newSpans };
+      return {
+        grid:      newGrid,
+        gridSpans: newSpans,
+        pages:     syncToPages(state.pages, state.activePage, newGrid, newSpans, state.gridConnections),
+      };
     }),
 
   splitZone: (key) =>
     set((state) => {
-      const newGrid = { ...state.grid };
+      const newGrid  = { ...state.grid };
       const newSpans = { ...state.gridSpans };
-      delete newGrid[key];        // remove widget from the zone being split
-      delete newSpans[key];       // revert to 1×1
-      return { grid: newGrid, gridSpans: newSpans };
+      delete newGrid[key];
+      delete newSpans[key];
+      return {
+        grid:      newGrid,
+        gridSpans: newSpans,
+        pages:     syncToPages(state.pages, state.activePage, newGrid, newSpans, state.gridConnections),
+      };
     }),
 
   moveWidget: (fromKey, toKey) =>
@@ -252,9 +463,6 @@ export const useStore = create<NexusStore>((set) => ({
       delete newSpans[fromKey];
       delete newConns[fromKey];
 
-      // Clear any pre-existing span records in the entire target area so that
-      // dropping a 2×1 widget onto two plain 1×1 cells (or a differently-sized
-      // pre-merged empty zone) always leaves a clean slate before placing the widget.
       const [toR, toC] = toKey.split(',').map(Number);
       for (let r = toR; r < toR + span.rowSpan; r++) {
         for (let c = toC; c < toC + span.colSpan; c++) {
@@ -264,12 +472,15 @@ export const useStore = create<NexusStore>((set) => ({
 
       if (widget != null) newGrid[toKey] = widget;
       if (span.rowSpan > 1 || span.colSpan > 1) newSpans[toKey] = span;
-      if (conn !== undefined) newConns[toKey] = conn; // connection binding follows the widget
-      return { grid: newGrid, gridSpans: newSpans, gridConnections: newConns };
+      if (conn !== undefined) newConns[toKey] = conn;
+      return {
+        grid:            newGrid,
+        gridSpans:       newSpans,
+        gridConnections: newConns,
+        pages:           syncToPages(state.pages, state.activePage, newGrid, newSpans, newConns),
+      };
     }),
 
-  // Swap the widget types at two positions; spans stay fixed so each widget
-  // inherits the zone it moves into (this is intentional for different-size swaps).
   swapWidgets: (keyA, keyB) =>
     set((state) => {
       const newGrid  = { ...state.grid };
@@ -278,23 +489,42 @@ export const useStore = create<NexusStore>((set) => ({
       const widgetB = newGrid[keyB];
       if (widgetB != null) newGrid[keyA] = widgetB; else delete newGrid[keyA];
       if (widgetA != null) newGrid[keyB] = widgetA; else delete newGrid[keyB];
-      // Connection bindings follow their respective widgets through the swap
       const connA = newConns[keyA];
       const connB = newConns[keyB];
       if (connB !== undefined) newConns[keyA] = connB; else delete newConns[keyA];
       if (connA !== undefined) newConns[keyB] = connA; else delete newConns[keyB];
-      return { grid: newGrid, gridConnections: newConns };
+      return {
+        grid:            newGrid,
+        gridConnections: newConns,
+        pages:           syncToPages(state.pages, state.activePage, newGrid, state.gridSpans, newConns),
+      };
     }),
 
   gridConnections: _boot.gridConnections,
-  setGridConnections: (conns) => set({ gridConnections: conns }),
+
+  setGridConnections: (conns) =>
+    set((state) => ({
+      gridConnections: conns,
+      pages:           syncToPages(state.pages, state.activePage, state.grid, state.gridSpans, conns),
+    })),
+
   setWidgetConnection: (key, connectionId) =>
-    set((state) => ({ gridConnections: { ...state.gridConnections, [key]: connectionId } })),
+    set((state) => {
+      const newConns = { ...state.gridConnections, [key]: connectionId };
+      return {
+        gridConnections: newConns,
+        pages:           syncToPages(state.pages, state.activePage, state.grid, state.gridSpans, newConns),
+      };
+    }),
+
   removeWidgetConnection: (key) =>
     set((state) => {
-      const next = { ...state.gridConnections };
-      delete next[key];
-      return { gridConnections: next };
+      const newConns = { ...state.gridConnections };
+      delete newConns[key];
+      return {
+        gridConnections: newConns,
+        pages:           syncToPages(state.pages, state.activePage, state.grid, state.gridSpans, newConns),
+      };
     }),
 
   swapNotifyEnabled: localStorage.getItem('nexus_swap_notify') !== 'false',
@@ -305,15 +535,12 @@ export const useStore = create<NexusStore>((set) => ({
 
   resizeZone: (oldKey, rowStart, colStart, rowSpan, colSpan) =>
     set((state) => {
-      const newGrid = { ...state.grid };
+      const newGrid  = { ...state.grid };
       const newSpans = { ...state.gridSpans };
-
-      // Preserve the widget sitting at the old top-left key (may move to new key)
       const preservedWidget = newGrid[oldKey] ?? null;
       const oldSpan = newSpans[oldKey] ?? { rowSpan: 1, colSpan: 1 };
       const [oldR, oldC] = oldKey.split(',').map(Number);
 
-      // Clear every cell the old span covered
       for (let r = oldR; r < oldR + oldSpan.rowSpan; r++) {
         for (let c = oldC; c < oldC + oldSpan.colSpan; c++) {
           delete newGrid[`${r},${c}`];
@@ -321,12 +548,14 @@ export const useStore = create<NexusStore>((set) => ({
         }
       }
 
-      // Apply new span at the (possibly different) top-left key
       const newKey = `${rowStart},${colStart}`;
       newSpans[newKey] = { rowSpan, colSpan };
       if (preservedWidget) newGrid[newKey] = preservedWidget;
-
-      return { grid: newGrid, gridSpans: newSpans };
+      return {
+        grid:      newGrid,
+        gridSpans: newSpans,
+        pages:     syncToPages(state.pages, state.activePage, newGrid, newSpans, state.gridConnections),
+      };
     }),
 
   layoutLoaded: _boot.layoutLoaded,
@@ -349,8 +578,6 @@ export const useStore = create<NexusStore>((set) => ({
   serviceStates: makeInitialStates(),
 
   refreshServiceStatus: async () => {
-    // Mark checking=true for all services but DO NOT change connected/lastConfirmedAt —
-    // this prevents any UI flash during routine background polls
     set((state) => ({
       serviceStates: Object.fromEntries(
         Object.entries(state.serviceStates).map(([k, v]) => [k, { ...v, checking: true }])
@@ -359,7 +586,6 @@ export const useStore = create<NexusStore>((set) => ({
 
     const now = Date.now();
 
-    // Run health check + all 4 Google services + Slack in parallel
     const [
       healthResult,
       googleCalResult,
@@ -378,7 +604,6 @@ export const useStore = create<NexusStore>((set) => ({
       apiFetch('/api/plaid/status'),
     ]);
 
-    // --- Health check (ollama, obsidian — server-level services) ---
     if (healthResult.status === 'fulfilled' && healthResult.value.ok) {
       const data = (await healthResult.value.json()) as Record<string, boolean>;
       const perUserServices = new Set(['googleCalendar', 'googleTasks', 'googleDocs', 'googleDrive', 'slack', 'plaid']);
@@ -396,7 +621,6 @@ export const useStore = create<NexusStore>((set) => ({
       applyTimeoutLogic(now, ['ollama', 'obsidian']);
     }
 
-    // Helper to apply a single per-user Google service result
     function applyGoogleStatus(
       result: PromiseSettledResult<Response>,
       storeKey: 'googleCalendar' | 'googleTasks' | 'googleDocs' | 'googleDrive'
@@ -425,7 +649,6 @@ export const useStore = create<NexusStore>((set) => ({
     applyGoogleStatus(googleDocsResult,  'googleDocs');
     applyGoogleStatus(googleDriveResult, 'googleDrive');
 
-    // --- Plaid status ---
     if (plaidResult.status === 'fulfilled' && plaidResult.value.ok) {
       plaidResult.value.json().then((d) => {
         const { connected } = d as { connected: boolean };
@@ -444,7 +667,6 @@ export const useStore = create<NexusStore>((set) => ({
       applyTimeoutLogic(now, ['plaid']);
     }
 
-    // --- Per-user Slack status ---
     if (slackResult.status === 'fulfilled' && slackResult.value.ok) {
       const { connected } = (await slackResult.value.json()) as { connected: boolean };
       set((state) => ({
@@ -452,7 +674,7 @@ export const useStore = create<NexusStore>((set) => ({
           ...state.serviceStates,
           slack: {
             connected,
-              lastConfirmedAt: connected ? now : (state.serviceStates.slack ?? initialState()).lastConfirmedAt,
+            lastConfirmedAt: connected ? now : (state.serviceStates.slack ?? initialState()).lastConfirmedAt,
             checking: false,
           },
         },
@@ -471,7 +693,6 @@ export const useStore = create<NexusStore>((set) => ({
             return [
               key,
               {
-                // Keep showing connected if we confirmed recently — it might be a transient error
                 connected: withinTimeout ? prev.connected : false,
                 lastConfirmedAt: prev.lastConfirmedAt,
                 checking: false,
@@ -533,10 +754,6 @@ export const useStore = create<NexusStore>((set) => ({
 }));
 
 // ─── Convenience selector ───────────────────────────────────────────────────
-// Returns display state for a single service:
-// neverConnected = true  → show "not connected" empty state
-// isStale = true         → show last good data + subtle reconnecting badge
-// isConnected = true     → normal
 export function useServiceState(service: string) {
   const state = useStore((s) => s.serviceStates[service] ?? initialState());
   const neverConnected = state.lastConfirmedAt === null && !state.connected;

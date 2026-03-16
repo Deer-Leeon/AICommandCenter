@@ -26,17 +26,22 @@ import { ChessSetupModal }      from './components/ChessSetupModal';
 import { SharedPhotoSetupModal }  from './components/SharedPhotoSetupModal';
 import { SharedCanvasSetupModal } from './components/SharedCanvasSetupModal';
 import { WidgetPickerModal }   from './components/WidgetPickerModal';
+import { PageNavBar }          from './components/PageNavBar';
 import { devBootCheck } from './lib/devUtils';
 import { nexusSSE } from './lib/nexusSSE';
 import { WIDGET_CONFIGS, type WidgetType } from './types';
 import { prefetchConnections } from './hooks/useConnections';
 import { prefetchProfile } from './hooks/useProfile';
 
-// How long to wait before force-revealing regardless of widget readiness (ms)
 const REVEAL_TIMEOUT = 1_200;
 
 export default function App() {
-  const { placeWidget, setWidgetConnection, refreshServiceStatus, layoutLoaded, grid } = useStore();
+  const {
+    placeWidget, setWidgetConnection, refreshServiceStatus,
+    layoutLoaded, grid,
+    pages, activePage, setActivePage,
+    pageTransitionDir,
+  } = useStore();
   const { initPending, startReveal } = useRevealStore();
   const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -50,33 +55,22 @@ export default function App() {
     'account' | 'permissions' | 'connections' | 'animation' | 'searchbar' | 'widgets'
   >('account');
 
-  // ── Global SSE connection (one per app, not per widget) ──────────────────
   useEffect(() => {
     if (!user) return;
     nexusSSE.start();
     return () => nexusSSE.stop();
   }, [user]);
 
-  // ── Pre-fetch settings data in background so panels open instantly ────────
   useEffect(() => {
     if (!user) return;
-    // Fire-and-forget — populates module-level caches used by Settings panels
     prefetchProfile();
     prefetchConnections();
   }, [user]);
+
   const revealTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load layout from server, scoped to the logged-in user.
-  // Passing user?.id ensures that when accounts switch the grid is cleared
-  // and reloaded from the new account's server-side layout.
   useLayoutPersistence(user?.id);
 
-  // Once the layout is known, register every widget on the dashboard as
-  // "pending" and start the hard-timeout fallback.
-  // useLayoutEffect fires before the browser paints, in the same synchronous
-  // phase as widgets' useLayoutEffect calls (children fire before parents).
-  // This means widgets will have already called markReady() before initPending()
-  // runs — so startReveal() fires immediately, before the first paint.
   useLayoutEffect(() => {
     if (!layoutLoaded) return;
 
@@ -86,8 +80,6 @@ export default function App() {
 
     initPending(widgetTypes);
 
-    // Hard timeout: reveal everything after timeout regardless of widget status.
-    // Prevents an indefinitely-hidden dashboard if one widget's fetch hangs.
     revealTimeoutRef.current = setTimeout(startReveal, REVEAL_TIMEOUT);
 
     return () => {
@@ -103,7 +95,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, [refreshServiceStatus]);
 
-  // DEV-only: log cache boot report once the grid is known
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     const widgetTypes = [...new Set(Object.values(grid).filter(Boolean))] as string[];
@@ -111,7 +102,6 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layoutLoaded]);
 
-  // Handle OAuth redirects that return to the main app
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const googleCalOk    = params.get('google_calendar_connected') === 'true';
@@ -131,6 +121,47 @@ export default function App() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Keyboard shortcuts for page navigation ────────────────────────────────
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!e.ctrlKey && !e.metaKey) return;
+      if (pages.length <= 1) return;
+
+      const curIdx = pages.findIndex((p) => p.id === activePage);
+
+      // Ctrl+] or Ctrl+Tab → next page
+      if (e.key === ']' || (e.key === 'Tab' && !e.shiftKey)) {
+        // Don't intercept plain Ctrl+Tab (browser tab switching)
+        if (e.key === ']') {
+          e.preventDefault();
+          const next = (curIdx + 1) % pages.length;
+          setActivePage(pages[next].id);
+        }
+        return;
+      }
+
+      // Ctrl+[ or Ctrl+Shift+Tab → prev page
+      if (e.key === '[' || (e.key === 'Tab' && e.shiftKey)) {
+        if (e.key === '[') {
+          e.preventDefault();
+          const prev = (curIdx - 1 + pages.length) % pages.length;
+          setActivePage(pages[prev].id);
+        }
+        return;
+      }
+
+      // Ctrl+1–9 → jump to page
+      const num = parseInt(e.key, 10);
+      if (num >= 1 && num <= 9 && pages[num - 1]) {
+        e.preventDefault();
+        setActivePage(pages[num - 1].id);
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [pages, activePage, setActivePage]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -155,7 +186,6 @@ export default function App() {
     if (isNaN(row) || isNaN(col)) return;
 
     if (widgetId === 'todo' || widgetId === 'shared_chess' || widgetId === 'shared_photo' || widgetId === 'shared_canvas') {
-      // Intercept — show the setup modal before committing the placement
       setPendingDrop({ widgetId, row, col, slotKey: cellKey });
       return;
     }
@@ -167,9 +197,15 @@ export default function App() {
     ? WIDGET_CONFIGS.find((w) => w.id === activeDragId)
     : null;
 
-  // layoutLoaded is set to true immediately if localStorage has a cached layout,
-  // so this guard only blocks on the very first-ever visit (no cache yet).
   if (!layoutLoaded) return null;
+
+  // Is the active page empty?
+  const isPageEmpty = Object.keys(grid).length === 0;
+
+  // Page transition animation class for the active page key
+  const pageClassName = pageTransitionDir
+    ? `page-enter-${pageTransitionDir}`
+    : '';
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
@@ -177,7 +213,6 @@ export default function App() {
         className="flex h-screen w-screen overflow-hidden relative"
         style={{ background: 'var(--bg)', zIndex: 1 }}
       >
-        {/* Sidebar */}
         <Sidebar
           isOpen={sidebarOpen}
           onToggle={() => setSidebarOpen((o) => !o)}
@@ -187,23 +222,35 @@ export default function App() {
           onExitLayout={() => setShowLayoutEditor(false)}
         />
 
-        {/* Main area */}
         <div className="flex flex-col flex-1 overflow-hidden min-w-0">
-          {/* Grid + Canvas
-               - overflow: clip (not just hidden) hard-clips filter/blur effects to this box
-               - isolation: isolate creates a self-contained stacking context so the
-                 overlay's z-index:50 cannot escape to paint over the search bar below
-               - containerType: size enables cqh units in child animations               */}
           <div
             className="flex-1 relative"
             ref={(el) => setGridRef(el)}
             style={{ containerType: 'size', overflow: 'clip', isolation: 'isolate' }}
           >
-            <Grid onOpenPicker={(row, col) => setPickerCell({ row, col })} />
-            <WidgetCanvas gridEl={gridRef} />
+            {/* Page content — keyed on activePage so widgets unmount/remount on switch.
+                Only Grid and WidgetCanvas are inside the key boundary; modals and the
+                RevealOverlay remain mounted outside it so they are unaffected. */}
+            <div key={activePage} className={pageClassName} style={{ position: 'absolute', inset: 0 }}>
+              <Grid onOpenPicker={(row, col) => setPickerCell({ row, col })} />
+              <WidgetCanvas gridEl={gridRef} />
+
+              {/* Empty-page hint — visible only when the current page has no widgets */}
+              {isPageEmpty && (
+                <div className="page-empty-hint">
+                  <span style={{ fontSize: 40, color: 'var(--accent)', opacity: 0.7 }}>＋</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-muted)', textAlign: 'center' }}>
+                    Add your first widget
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', opacity: 0.6 }}>
+                    Open the sidebar → drag a widget here
+                  </span>
+                </div>
+              )}
+            </div>
+
             {showLayoutEditor && <GridLayoutMode onClose={() => setShowLayoutEditor(false)} />}
             {showSettings && <SettingsModal onClose={() => setShowSettings(false)} initialTab={settingsInitialTab} />}
-            {/* Widget picker — opens when clicking an empty cell "+" */}
             {pickerCell && (
               <WidgetPickerModal
                 targetCell={pickerCell}
@@ -219,7 +266,6 @@ export default function App() {
               />
             )}
 
-            {/* Widget setup modals — intercept shared widget drops before grid placement */}
             {pendingDrop?.widgetId === 'todo' && (
               <TodoSetupModal
                 onConfirm={(connectionId) => {
@@ -264,24 +310,23 @@ export default function App() {
                 onOpenConnections={() => { setSettingsInitialTab('connections'); setShowSettings(true); }}
               />
             )}
-            {/* Wave reveal — scoped to the widget grid only; sidebar + input bar stay visible */}
+
+            {/* Wave reveal — scoped to the widget grid only */}
             <RevealOverlay />
           </div>
-
 
           <StatusBar onLayoutClick={showLayoutEditor ? undefined : () => setShowLayoutEditor(true)} />
         </div>
       </div>
 
-      {/* Global invite toast — listens for SSE invite_received events */}
+      {/* Page navigation bar — floating pill at bottom center */}
+      <PageNavBar />
+
       <InviteToast
         onOpenConnections={() => { setSettingsInitialTab('connections'); setShowSettings(true); }}
       />
-
-      {/* DEV-only cache diagnostics overlay */}
       <DevCacheOverlay />
 
-      {/* Drag overlay */}
       <DragOverlay>
         {activeDragConfig && (
           <div
