@@ -1310,6 +1310,52 @@ function WidgetsPanel() {
 
 // ─── DesktopAppPanel ──────────────────────────────────────────────────────────
 
+function GatekeeperFix() {
+  const [copied, setCopied] = useState(false);
+  const cmd = 'xattr -cr /Applications/NEXUS.app';
+
+  function handleCopy() {
+    navigator.clipboard.writeText(cmd).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: '8px',
+        padding: '8px 12px',
+      }}
+    >
+      <code style={{ flex: 1, fontSize: '12px', fontFamily: 'Space Mono, monospace', color: 'var(--text)', userSelect: 'all' }}>
+        {cmd}
+      </code>
+      <button
+        onClick={handleCopy}
+        style={{
+          flexShrink: 0,
+          padding: '4px 10px',
+          background: copied ? 'rgba(var(--accent-rgb),0.15)' : 'var(--surface2)',
+          border: '1px solid var(--border)',
+          borderRadius: '6px',
+          fontSize: '11px',
+          color: copied ? 'var(--accent)' : 'var(--text-muted)',
+          cursor: 'pointer',
+          fontFamily: 'Space Mono, monospace',
+          transition: 'all 0.15s',
+        }}
+      >
+        {copied ? 'Copied!' : 'Copy'}
+      </button>
+    </div>
+  );
+}
+
 const DMG_DOWNLOAD_URL_ARM   = 'https://github.com/Deer-Leeon/AICommandCenter/releases/latest/download/NEXUS-1.0.0-arm64.dmg';
 const DMG_DOWNLOAD_URL_INTEL = 'https://github.com/Deer-Leeon/AICommandCenter/releases/latest/download/NEXUS-1.0.0-x64.dmg';
 
@@ -1443,6 +1489,34 @@ function DesktopAppPanel() {
               <span style={{ fontSize: '13px', color: 'var(--text)', paddingTop: '2px' }}>{text}</span>
             </div>
           ))}
+        </div>
+
+        {/* Gatekeeper warning */}
+        <div
+          style={{
+            marginTop: '12px',
+            padding: '12px 14px',
+            background: 'rgba(255, 180, 0, 0.08)',
+            border: '1px solid rgba(255, 180, 0, 0.25)',
+            borderRadius: '10px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '6px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '14px' }}>⚠️</span>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)' }}>
+              "NEXUS is damaged" warning on first open?
+            </span>
+          </div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+            macOS blocks unsigned apps downloaded from the internet. To fix it, open <strong>Terminal</strong> and run:
+          </div>
+          <GatekeeperFix />
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+            Then double-click NEXUS in Applications to open normally.
+          </div>
         </div>
       </div>
 
