@@ -562,21 +562,19 @@ input[type="time"] {
   text-transform: uppercase;
   flex-shrink: 0;
   text-align: center;
-  padding: 8px 16px 4px;
+  padding: 6px 16px 2px;
 }
 
-/* Scrollable verse text area */
+/* Verse text area — no scroll, font size adapts to fit */
 .bv-verse-scroll {
   flex: 1;
-  overflow-y: auto;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 6px 20px 8px;
+  padding: 4px 20px 6px;
   min-height: 0;
-  scrollbar-width: none;
 }
-.bv-verse-scroll::-webkit-scrollbar { display: none; }
 
 .bv-text {
   font-family: 'DM Serif Display', 'Georgia', serif;
@@ -592,7 +590,7 @@ input[type="time"] {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 12px 8px;
+  padding: 5px 10px 6px;
   flex-shrink: 0;
   border-top: 1px solid var(--border);
   gap: 8px;

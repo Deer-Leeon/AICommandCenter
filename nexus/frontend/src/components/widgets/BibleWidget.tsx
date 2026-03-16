@@ -51,19 +51,22 @@ function daysSince(iso: string) {
   return `${d} days ago`;
 }
 
-// Font size scales based on text length and available height
-function computeFontSize(textLen: number, widgetH: number): number {
-  // Available height minus header (28px) and footer (44px)
-  const usable = Math.max(80, widgetH - 72);
-  // Estimate lines needed at a given font size (line-height ~1.7, chars per line ~22)
-  // Binary-search approach: pick biggest font that fits
-  for (let fs = 24; fs >= 12; fs -= 1) {
-    const charsPerLine = Math.max(1, Math.floor(usable / (fs * 0.6)));
-    const lines = Math.ceil(textLen / charsPerLine);
-    const neededHeight = lines * fs * 1.7;
-    if (neededHeight <= usable) return fs;
+// Font size scales so the full verse always fits without scrolling.
+// Uses both width and height of the available text area.
+function computeFontSize(textLen: number, widgetW: number, widgetH: number): number {
+  // Available space: subtract tab bar (~32px), label (~22px), footer (~40px), padding (~16px)
+  const usableH = Math.max(40, widgetH - 110);
+  // Subtract left+right padding (40px)
+  const usableW = Math.max(60, widgetW - 40);
+
+  // DM Serif Display italic: avg char width ≈ 0.52 × font-size, line-height = 1.7
+  for (let fs = 22; fs >= 9; fs -= 0.5) {
+    const charsPerLine = Math.max(1, Math.floor(usableW / (fs * 0.52)));
+    const lines        = Math.ceil(textLen / charsPerLine);
+    const neededH      = lines * fs * 1.7;
+    if (neededH <= usableH) return Math.round(fs * 2) / 2; // round to 0.5px
   }
-  return 12;
+  return 9;
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -210,7 +213,7 @@ export function BibleWidget({ onClose: _onClose }: { onClose: () => void }) {
 
   const trShort = (id: string) => TRANSLATIONS.find(t => t.id === id)?.short ?? id.toUpperCase();
 
-  const fontSize = verse ? computeFontSize(verse.text.length, size.h) : 16;
+  const fontSize = verse ? computeFontSize(verse.text.length, size.w, size.h) : 16;
 
   // ── Verse view ────────────────────────────────────────────────────────────────
   const VerseContent = ({ fs }: { fs: number }) => (
