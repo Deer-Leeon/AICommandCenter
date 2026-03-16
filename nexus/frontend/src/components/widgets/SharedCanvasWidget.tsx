@@ -176,6 +176,25 @@ const STYLES = `
   15%,80%{opacity:1;transform:translateY(0) translateX(-50%)}
   100%{opacity:0;transform:translateY(-6px) translateX(-50%)}
 }
+@keyframes sc-minimap-in {
+  from{opacity:0;transform:scale(0.92)}
+  to{opacity:1;transform:scale(1)}
+}
+@keyframes sc-minimap-out {
+  from{opacity:1;transform:scale(1)}
+  to{opacity:0;transform:scale(0.92)}
+}
+.sc-minimap {
+  position:absolute; top:10px; right:10px; z-index:30;
+  border-radius:7px; overflow:hidden;
+  box-shadow:0 2px 12px rgba(0,0,0,0.55);
+  border:1px solid rgba(255,255,255,0.18);
+  pointer-events:none;
+  animation:sc-minimap-in 0.18s ease both;
+}
+.sc-minimap.hiding {
+  animation:sc-minimap-out 0.35s ease forwards;
+}
 
 .sc-widget {
   position:relative; width:100%; height:100%;
@@ -330,16 +349,19 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
   const [savedToPhotoMsg,  setSavedToPhotoMsg]  = useState<string | null>(null);
   const [hintVisible,      setHintVisible]      = useState(true);
   const [layoutMode,       setLayoutMode]       = useState<LayoutMode>('standard');
+  const [minimapVisible,   setMinimapVisible]   = useState(false);
+  const [minimapHiding,    setMinimapHiding]     = useState(false);
   const [customColors,     setCustomColors]     = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('nexus_canvas_custom_colors') ?? '[]') as string[]; }
     catch { return []; }
   });
 
   // ── Canvas refs ────────────────────────────────────────────────────────────
-  const worldRef     = useRef<HTMLCanvasElement>(null);  // 2000×2000 hidden world
-  const viewportRef  = useRef<HTMLCanvasElement>(null);  // widget-size, shown to user
-  const overlayRef   = useRef<HTMLCanvasElement>(null);  // partner strokes + cursor
-  const containerRef = useRef<HTMLDivElement>(null);
+  const worldRef      = useRef<HTMLCanvasElement>(null);  // 2000×2000 hidden world
+  const viewportRef   = useRef<HTMLCanvasElement>(null);  // widget-size, shown to user
+  const overlayRef    = useRef<HTMLCanvasElement>(null);  // partner strokes + cursor
+  const minimapRef    = useRef<HTMLCanvasElement>(null);  // minimap overlay
+  const containerRef  = useRef<HTMLDivElement>(null);
   const colorInputRef = useRef<HTMLInputElement>(null);
 
   // ── Drawing refs ───────────────────────────────────────────────────────────
@@ -366,6 +388,9 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
   const brushSizeRef             = useRef(8);
   // Throttle for in-progress stroke SSE broadcasts (~12fps over HTTP POST)
   const sseProgressThrottleRef   = useRef(0);
+  // Minimap hide-timer
+  const minimapHideTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const minimapHidingRef         = useRef(false);
 
   // Keep tool/color/size refs in sync (avoid stale closures in event handlers)
   useEffect(() => { toolRef.current = tool; },          [tool]);
@@ -414,6 +439,62 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     // Copy the pan-offset slice of the world onto the viewport 1:1 — no scaling!
     ctx.drawImage(world, panXRef.current, panYRef.current, w, h, 0, 0, w, h);
   }, []);
+
+  // ── Minimap: draw world thumbnail + viewport indicator ────────────────────
+  const drawMinimap = useCallback(() => {
+    const mm    = minimapRef.current;
+    const world = worldRef.current;
+    if (!mm || !world) return;
+    const { w, h } = viewSizeRef.current;
+    if (w === 0 || h === 0) return;
+
+    const mmW = mm.width;
+    const mmH = mm.height;
+    const ctx = mm.getContext('2d');
+    if (!ctx) return;
+
+    // World thumbnail
+    ctx.clearRect(0, 0, mmW, mmH);
+    ctx.drawImage(world, 0, 0, mmW, mmH);
+
+    // Viewport rect (in minimap coords)
+    const scaleX = mmW / WORLD_W;
+    const scaleY = mmH / WORLD_H;
+    const rx = panXRef.current * scaleX;
+    const ry = panYRef.current * scaleY;
+    const rw = Math.min(w * scaleX, mmW);
+    const rh = Math.min(h * scaleY, mmH);
+
+    // Semi-transparent dark overlay everywhere outside viewport
+    ctx.fillStyle = 'rgba(0,0,0,0.42)';
+    ctx.fillRect(0, 0, mmW, mmH);
+    ctx.clearRect(rx, ry, rw, rh);     // punch out the viewport window
+    ctx.drawImage(world, panXRef.current, panYRef.current, w, h, rx, ry, rw, rh); // re-draw brighter
+
+    // Viewport border
+    ctx.strokeStyle = 'rgba(124,106,255,0.9)';
+    ctx.lineWidth   = 1.5;
+    ctx.strokeRect(rx + 0.75, ry + 0.75, rw - 1.5, rh - 1.5);
+  }, []);
+
+  // Show the minimap and auto-hide 1.2 s after last pan event
+  const showMinimapBriefly = useCallback(() => {
+    minimapHidingRef.current = false;
+    setMinimapHiding(false);
+    setMinimapVisible(true);
+    drawMinimap();
+
+    if (minimapHideTimerRef.current) clearTimeout(minimapHideTimerRef.current);
+    minimapHideTimerRef.current = setTimeout(() => {
+      minimapHidingRef.current = true;
+      setMinimapHiding(true);
+      minimapHideTimerRef.current = setTimeout(() => {
+        minimapHidingRef.current = false;
+        setMinimapVisible(false);
+        setMinimapHiding(false);
+      }, 380);    // matches sc-minimap-out animation duration
+    }, 1200);
+  }, [drawMinimap]);
 
   // ── Overlay redraw (rAF-batched) ───────────────────────────────────────────
   const performOverlayRedraw = useCallback(() => {
@@ -694,6 +775,7 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
       panYRef.current = Math.max(0, Math.min(WORLD_H - h, startPanY - (sy - startSy)));
       blitViewport();
       scheduleOverlayRedraw();
+      showMinimapBriefly();
       return;
     }
 
@@ -732,7 +814,7 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
         body:    JSON.stringify({ ...progressMsg, userId: user?.id }),
       }).catch(() => {});
     }
-  }, [blitViewport, connectionId, scheduleOverlayRedraw, user?.id, wsSend]);
+  }, [blitViewport, connectionId, scheduleOverlayRedraw, showMinimapBriefly, user?.id, wsSend]);
 
   const handlePointerUp = useCallback((_e: RPointerEvent<HTMLCanvasElement>) => {
     if (isPanningRef.current) {
@@ -818,6 +900,12 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     return () => ro.disconnect();
   }, [handleViewportResize]);
 
+  // Re-draw the minimap canvas after it mounts (minimapVisible becoming true
+  // triggers the element to appear in the DOM on the next render)
+  useEffect(() => {
+    if (minimapVisible) drawMinimap();
+  }, [minimapVisible, drawMinimap]);
+
   // ── Two-finger trackpad scroll → pan (must be non-passive to preventDefault) ─
   useEffect(() => {
     const canvas = viewportRef.current;
@@ -830,11 +918,12 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
       panYRef.current = Math.max(0, Math.min(WORLD_H - h, panYRef.current + e.deltaY));
       blitViewport();
       scheduleOverlayRedraw();
+      showMinimapBriefly();
     }
 
     canvas.addEventListener('wheel', onWheel, { passive: false });
     return () => canvas.removeEventListener('wheel', onWheel);
-  }, [blitViewport, scheduleOverlayRedraw]);
+  }, [blitViewport, scheduleOverlayRedraw, showMinimapBriefly]);
 
   // ── Initialise world canvas (once on mount) ────────────────────────────────
   useEffect(() => {
@@ -965,6 +1054,13 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     return `url('data:image/svg+xml,${encodeURIComponent(svg)}') ${half + 3} ${half + 3}, crosshair`;
   }, [tool, color, brushSize]);
 
+  // ── Minimap size — 18% of widget, capped 48–120 px, aspect matches WORLD ──
+  const minimapSize = useMemo(() => {
+    const { w, h } = viewSizeRef.current;
+    const base = Math.min(Math.max(Math.min(w, h) * 0.18, 48), 120);
+    return Math.round(base);
+  }, [layoutMode]); // recalc when layout mode changes (widget resized)
+
   // ── Layout flags ───────────────────────────────────────────────────────────
   const isMicro = layoutMode === 'micro';
   const isSide  = layoutMode === 'expanded'
@@ -997,6 +1093,17 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
         className="sc-canvas-layer"
         style={{ pointerEvents: 'none', zIndex: 2 }}
       />
+
+      {/* Minimap — shows while panning, fades out after ~1.2 s */}
+      {minimapVisible && (
+        <canvas
+          ref={minimapRef}
+          className={`sc-minimap${minimapHiding ? ' hiding' : ''}`}
+          width={minimapSize}
+          height={minimapSize}
+          style={{ width: minimapSize, height: minimapSize }}
+        />
+      )}
 
       {/* Empty state hint */}
       {hintVisible && (
