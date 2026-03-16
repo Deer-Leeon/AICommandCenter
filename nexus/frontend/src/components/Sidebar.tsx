@@ -370,7 +370,7 @@ export function Sidebar({ isOpen, onToggle, onOpenSettings, onOpenConnections, l
             </div>
           ) : (
             /* ── Widget chips grouped by category ── */
-            <div className="h-full overflow-y-auto nexus-scroll" style={{ padding: '2px 8px 0' }}>
+            <div className="h-full overflow-y-auto nexus-scroll" style={{ padding: '2px 8px 0', overflowX: 'hidden' }}>
               {CATEGORY_ORDER.map(cat => {
                 const configs = WIDGET_CONFIGS.filter(c => c.category === cat);
                 if (configs.length === 0) return null;
