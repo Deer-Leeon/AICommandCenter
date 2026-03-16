@@ -37,9 +37,6 @@ import { apiFetch, apiFetchMultipart } from '../../lib/api';
 const WORLD_W  = 2000;
 const WORLD_H  = 2000;
 const MAX_UNDO = 12;
-// Save 500 ms after the last completed stroke — short enough that a quick
-// refresh still captures the work, long enough to batch rapid strokes.
-const SAVE_DEBOUNCE_MS = 500;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -390,6 +387,10 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
   const brushSizeRef             = useRef(8);
   // Throttle for in-progress stroke SSE broadcasts (~12fps over HTTP POST)
   const sseProgressThrottleRef   = useRef(0);
+  // Snapshot save mutex — ensures only one upload runs at a time,
+  // and queues exactly one more save if a stroke arrives during an upload.
+  const isSavingRef              = useRef(false);
+  const saveQueuedRef            = useRef(false);
   // Minimap hide-timer
   const minimapHideTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
   const minimapHidingRef         = useRef(false);
@@ -576,11 +577,23 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blitViewport, getWorldCtx, scheduleOverlayRedraw]);
 
-  // ── Snapshot save ──────────────────────────────────────────────────────────
+  // ── Snapshot save — mutex pattern ─────────────────────────────────────────
+  // Every completed stroke calls scheduleSave(), which calls saveSnapshot()
+  // immediately. If a save is already in flight, the next call is queued and
+  // fires as soon as the current one finishes — guaranteeing no stroke is lost
+  // even when drawing quickly. At most ONE pending request is ever in flight.
   const saveSnapshot = useCallback(async () => {
+    if (isSavingRef.current) {
+      saveQueuedRef.current = true;  // will run again after this one finishes
+      return;
+    }
+
     const world = worldRef.current;
     if (!world) return;
+
+    isSavingRef.current = true;
     setSaveStatus('saving');
+
     try {
       const blob: Blob | null = await new Promise((r) => world.toBlob(r, 'image/png'));
       if (!blob) throw new Error('toBlob null');
@@ -591,13 +604,22 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
       if (res.ok) setTimeout(() => setSaveStatus('idle'), 2500);
     } catch {
       setSaveStatus('unsaved');
+    } finally {
+      isSavingRef.current = false;
+      if (saveQueuedRef.current) {
+        saveQueuedRef.current = false;
+        saveSnapshot();  // process the queued save
+      }
     }
   }, [connectionId]);
 
+  // Called after every completed stroke — fires the save immediately (no delay).
+  // The mutex above serialises concurrent calls without dropping any.
   const scheduleSave = useCallback(() => {
     setSaveStatus('unsaved');
     if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current);
-    saveDebounceRef.current = setTimeout(saveSnapshot, SAVE_DEBOUNCE_MS);
+    saveDebounceRef.current = null;
+    saveSnapshot();
   }, [saveSnapshot]);
 
   // ── World ↔ Screen coordinate conversion ──────────────────────────────────
@@ -944,7 +966,10 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     async function load() {
       const res = await apiFetch(`/api/shared-canvas/${connectionId}`);
       if (!res.ok || cancelled) return;
-      const data = await res.json() as { empty?: boolean; snapshotUrl?: string; version?: number };
+      const data = await res.json() as {
+        empty?: boolean; snapshotUrl?: string;
+        version?: number; lastDrawnAt?: string;
+      };
       if (data.empty || !data.snapshotUrl) return;
 
       const img = new Image();
@@ -955,14 +980,19 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
         if (!ctx) return;
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, WORLD_W, WORLD_H);
-        ctx.drawImage(img, 0, 0, WORLD_W, WORLD_H);
+        // Draw at the image's natural size — no forced scaling
+        ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight);
         blitViewport();
         setHintVisible(false);
       };
-      // Cache-bust: same storage path is always reused (upsert), so the
-      // browser would serve the old PNG without this version param.
-      const bust = data.version != null ? `?v=${data.version}` : `?t=${Date.now()}`;
-      img.src = data.snapshotUrl + bust;
+      // Use lastDrawnAt as cache-buster — it's a unique timestamp that changes
+      // on every save, survives clear+redraw cycles (version resets to 1 after
+      // clear, but lastDrawnAt is always a new timestamp). This guarantees the
+      // browser fetches the actual current PNG instead of a cached old one.
+      const ts = data.lastDrawnAt
+        ? new Date(data.lastDrawnAt).getTime()
+        : Date.now();
+      img.src = `${data.snapshotUrl}?t=${ts}`;
     }
     load().catch(() => {});
     return () => { cancelled = true; };
@@ -980,22 +1010,19 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [undo]);
 
-  // ── Save on page hide / tab close ─────────────────────────────────────────
-  // visibilitychange → hidden fires reliably on tab close, navigation, and
-  // Cmd+R/F5 refresh — and unlike beforeunload it supports async work.
-  // This ensures any pending debounced save fires immediately so strokes
-  // drawn just before closing aren't lost.
+  // ── Save immediately on page hide / tab close ────────────────────────────
+  // visibilitychange → hidden fires before unload on Chrome/Safari. We always
+  // try to save here so the last few strokes survive a quick Cmd+R.
+  // The mutex in saveSnapshot prevents double-saves if a normal save just ran.
   useEffect(() => {
     function onHide() {
       if (document.visibilityState !== 'hidden') return;
-      if (!saveDebounceRef.current) return;   // nothing pending
-      clearTimeout(saveDebounceRef.current);
-      saveDebounceRef.current = null;
+      if (saveStatus === 'idle' || saveStatus === 'saved') return; // nothing to save
       saveSnapshot();
     }
     document.addEventListener('visibilitychange', onHide);
     return () => document.removeEventListener('visibilitychange', onHide);
-  }, [saveSnapshot]);
+  }, [saveSnapshot, saveStatus]);
 
   // ── Cleanup ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1016,11 +1043,17 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     partnerStrokesRef.current.clear();
     currentStrokeRef.current = null;
     undoStackRef.current = [];
+    completedStrokesRef.current.clear();
     blitViewport();
     setHintVisible(true);
     setShowClearConfirm(false);
     scheduleOverlayRedraw();
     setSaveStatus('idle');
+    // Cancel any in-flight or queued saves — the canvas is now empty
+    // and we want the DELETE to be the last backend operation.
+    isSavingRef.current = false;
+    saveQueuedRef.current = false;
+    if (saveDebounceRef.current) { clearTimeout(saveDebounceRef.current); saveDebounceRef.current = null; }
     await apiFetch(`/api/shared-canvas/${connectionId}`, { method: 'DELETE' });
   }, [blitViewport, connectionId, getWorldCtx, saveToUndoStack, scheduleOverlayRedraw]);
 
