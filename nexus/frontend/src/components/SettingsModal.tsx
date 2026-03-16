@@ -1312,7 +1312,7 @@ function WidgetsPanel() {
 
 function GatekeeperFix() {
   const [copied, setCopied] = useState(false);
-  const cmd = 'xattr -cr /Applications/NEXUS.app';
+  const cmd = 'xattr -cr /Applications/NEXUS.app && open /Applications/NEXUS.app';
 
   function handleCopy() {
     navigator.clipboard.writeText(cmd).catch(() => {});
@@ -1511,27 +1511,12 @@ function DesktopAppPanel() {
             </span>
           </div>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.6' }}>
-            macOS blocks apps that aren't signed by Apple. This is normal for independent apps.
+            macOS quarantines unsigned apps downloaded from the internet. Run this once in <strong>Terminal</strong> to fix it:
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)' }}>
-              Easy fix (no Terminal needed):
-            </div>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.6' }}>
-              In <strong>Finder</strong>, go to <strong>Applications</strong> → <strong>right-click NEXUS</strong> → <strong>Open</strong> → click <strong>Open</strong> in the dialog. You only need to do this once.
-            </div>
+          <GatekeeperFix />
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+            Open <strong>Terminal</strong> (press <strong>⌘ Space</strong>, type <em>Terminal</em>, press Enter) → paste the command above → press Enter. Then open NEXUS normally.
           </div>
-          <details style={{ marginTop: '2px' }}>
-            <summary style={{ fontSize: '11px', color: 'var(--text-muted)', cursor: 'pointer', userSelect: 'none' }}>
-              Terminal alternative
-            </summary>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
-              <GatekeeperFix />
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                Then double-click NEXUS to open normally.
-              </div>
-            </div>
-          </details>
         </div>
       </div>
 
