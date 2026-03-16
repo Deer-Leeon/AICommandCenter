@@ -243,6 +243,12 @@ body::after {
   border-radius: 4px;
 }
 
+.gmail-shimmer {
+  background: linear-gradient(90deg, var(--surface2) 25%, var(--surface3) 50%, var(--surface2) 75%);
+  background-size: 400px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    WAVE REVEAL SYSTEM
    Total duration: 1500 ms

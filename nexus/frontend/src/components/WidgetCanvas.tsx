@@ -34,6 +34,7 @@ const CurrencyWidget      = lazy(() => import('./widgets/CurrencyWidget').then(m
 const SharedPhotoWidget   = lazy(() => import('./widgets/SharedPhotoWidget').then(m => ({ default: m.SharedPhotoWidget })));
 const SharedCanvasWidget  = lazy(() => import('./widgets/SharedCanvasWidget').then(m => ({ default: m.SharedCanvasWidget })));
 const BibleWidget         = lazy(() => import('./widgets/BibleWidget').then(m => ({ default: m.BibleWidget })));
+const GmailWidget         = lazy(() => import('./widgets/GmailWidget').then(m => ({ default: m.GmailWidget })));
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface WidgetRect { top: number; left: number; width: number; height: number; }
@@ -180,6 +181,7 @@ const WIDGET_COMPONENTS: Partial<Record<WidgetType, React.ComponentType<{ onClos
   timezone: TimezoneWidget,
   currency: CurrencyWidget,
   bible:    BibleWidget,
+  gmail:    GmailWidget,
 };
 
 // Delays matched to 0.6s ease-out smooth reveal (no keyframe staging):

@@ -23,16 +23,18 @@ export async function getUserTokens(userId: string): Promise<UserTokenRow | null
   return data as UserTokenRow;
 }
 
-export type GoogleService = 'google-calendar' | 'google-tasks' | 'google-docs' | 'google-drive';
+export type GoogleService = 'google-calendar' | 'google-tasks' | 'google-docs' | 'google-drive' | 'google-gmail';
 
 /**
  * Ordered fallback chains for each Google service.
+ * gmail.modify scope is NOT in the legacy 'google' token, so no fallback.
  */
 const GOOGLE_TOKEN_FALLBACKS: Record<GoogleService, string[]> = {
   'google-calendar': ['google-calendar', 'google'],
   'google-tasks':    ['google-tasks', 'google-calendar', 'google'],
   'google-docs':     ['google-docs', 'google'],
   'google-drive':    ['google-drive', 'google-docs', 'google'],
+  'google-gmail':    ['google-gmail'],
 };
 
 // ── In-memory token-row cache ─────────────────────────────────────────────────

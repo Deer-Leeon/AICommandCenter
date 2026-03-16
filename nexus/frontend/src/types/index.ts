@@ -1,4 +1,4 @@
-export type WidgetType = 'calendar' | 'slack' | 'obsidian' | 'docs' | 'todo' | 'weather' | 'tasks' | 'plaid' | 'stocks' | 'links' | 'notes' | 'wordle' | 'news' | 'typing' | 'shared_chess' | 'pomodoro' | 'lofi' | 'spotify' | 'f1' | 'football' | 'timezone' | 'currency' | 'shared_photo' | 'shared_canvas' | 'bible';
+export type WidgetType = 'calendar' | 'slack' | 'obsidian' | 'docs' | 'todo' | 'weather' | 'tasks' | 'plaid' | 'stocks' | 'links' | 'notes' | 'wordle' | 'news' | 'typing' | 'shared_chess' | 'pomodoro' | 'lofi' | 'spotify' | 'f1' | 'football' | 'timezone' | 'currency' | 'shared_photo' | 'shared_canvas' | 'bible' | 'gmail';
 
 // Describes how many grid cells a zone occupies beyond the default 1×1
 export interface GridSpan {
@@ -281,4 +281,5 @@ export const WIDGET_CONFIGS: WidgetConfig[] = [
   { id: 'timezone',    label: 'Time Zones',   icon: '🌐', accentColor: '#7c6aff', serviceTag: 'LOCAL', category: 'Tools'   },
   { id: 'currency',    label: 'Currency',     icon: '💱', accentColor: '#3de8b0', serviceTag: 'API',   category: 'Finance' },
   { id: 'bible',       label: 'Bible Verse',  icon: '✝️', accentColor: '#c4a55a', serviceTag: 'API',   category: 'Info'    },
+  { id: 'gmail',       label: 'Gmail',        icon: '✉️', accentColor: '#ea4335', serviceTag: 'API',   category: 'Work'    },
 ];

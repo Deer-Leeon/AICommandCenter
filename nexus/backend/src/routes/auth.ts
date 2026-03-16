@@ -18,6 +18,7 @@ const CALENDAR_SCOPES = ['https://www.googleapis.com/auth/calendar'];
 const TASKS_SCOPES    = ['https://www.googleapis.com/auth/tasks'];
 const DOCS_SCOPES     = ['https://www.googleapis.com/auth/documents'];
 const DRIVE_SCOPES    = ['https://www.googleapis.com/auth/drive.readonly'];
+const GMAIL_SCOPES    = ['https://www.googleapis.com/auth/gmail.modify'];
 
 /** Legacy combined scope set — kept so the old /google/initiate route still works */
 const GOOGLE_SCOPES = [...CALENDAR_SCOPES, ...TASKS_SCOPES, ...DOCS_SCOPES, ...DRIVE_SCOPES];
@@ -26,13 +27,14 @@ const GOOGLE_SCOPES = [...CALENDAR_SCOPES, ...TASKS_SCOPES, ...DOCS_SCOPES, ...D
 // Mirrors the GOOGLE_TOKEN_FALLBACKS logic in tokenService so status checks
 // correctly reflect existing broader tokens.
 
-type GoogleServiceKey = 'google-calendar' | 'google-tasks' | 'google-docs' | 'google-drive';
+type GoogleServiceKey = 'google-calendar' | 'google-tasks' | 'google-docs' | 'google-drive' | 'google-gmail';
 
 const TOKEN_FALLBACKS: Record<GoogleServiceKey, string[]> = {
   'google-calendar': ['google-calendar', 'google'],
   'google-tasks':    ['google-tasks', 'google-calendar', 'google'],
   'google-docs':     ['google-docs', 'google'],
   'google-drive':    ['google-drive', 'google-docs', 'google'],
+  'google-gmail':    ['google-gmail'],
 };
 
 async function hasGoogleServiceToken(userId: string, service: GoogleServiceKey): Promise<boolean> {
@@ -91,6 +93,16 @@ authRouter.post('/google-drive/initiate', requireAuth, (req: AuthRequest, res: R
   res.json({ url });
 });
 
+authRouter.post('/google-gmail/initiate', requireAuth, (req: AuthRequest, res: Response) => {
+  const url = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    prompt: 'consent',
+    scope: GMAIL_SCOPES,
+    state: `${req.user!.id}:google-gmail`,
+  });
+  res.json({ url });
+});
+
 // ── Per-service status checks ──────────────────────────────────────────────────
 
 authRouter.get('/google-calendar/status', requireAuth, async (req: AuthRequest, res: Response) => {
@@ -110,6 +122,11 @@ authRouter.get('/google-docs/status', requireAuth, async (req: AuthRequest, res:
 
 authRouter.get('/google-drive/status', requireAuth, async (req: AuthRequest, res: Response) => {
   const connected = await hasGoogleServiceToken(req.user!.id, 'google-drive');
+  res.json({ connected });
+});
+
+authRouter.get('/google-gmail/status', requireAuth, async (req: AuthRequest, res: Response) => {
+  const connected = await hasGoogleServiceToken(req.user!.id, 'google-gmail');
   res.json({ connected });
 });
 
