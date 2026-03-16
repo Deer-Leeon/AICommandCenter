@@ -14,24 +14,25 @@ import { apiFetch, apiFetchMultipart } from '../../lib/api';
 import { nexusSSE } from '../../lib/nexusSSE';
 
 // ── Pre-load cache ────────────────────────────────────────────────────────────
-// The setup modal calls preloadSharedPhoto() as soon as the user clicks a
-// connection (before confirming).  By the time the widget mounts the fetch is
-// usually already resolved, so the photo appears with zero perceived delay.
+// The setup modal calls preloadSharedPhoto() the moment the user clicks a
+// connection.  The fetch resolves and stores in _photoResolved before the user
+// even hits "Create Photo Frame".  The widget then reads the resolved value
+// synchronously in its useState initializer — no empty-state flash at all.
 
-const _photoPreload = new Map<string, Promise<PhotoRecord | null>>();
+const _photoFetching  = new Set<string>();
+const _photoResolved  = new Map<string, PhotoRecord | null>(); // resolved values only
 
 export function preloadSharedPhoto(connectionId: string) {
-  if (_photoPreload.has(connectionId)) return;
-  _photoPreload.set(
-    connectionId,
-    apiFetch(`/api/shared-photo/${connectionId}`)
-      .then(async (r) => {
-        if (!r.ok) return null;
-        const d = await r.json() as { empty?: boolean } & PhotoRecord;
-        return d.empty ? null : d;
-      })
-      .catch(() => null),
-  );
+  if (_photoFetching.has(connectionId) || _photoResolved.has(connectionId)) return;
+  _photoFetching.add(connectionId);
+  apiFetch(`/api/shared-photo/${connectionId}`)
+    .then(async (r) => {
+      if (!r.ok) { _photoResolved.set(connectionId, null); return; }
+      const d = await r.json() as { empty?: boolean } & PhotoRecord;
+      _photoResolved.set(connectionId, d.empty ? null : d);
+    })
+    .catch(() => { _photoResolved.set(connectionId, null); })
+    .finally(() => { _photoFetching.delete(connectionId); });
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -174,9 +175,17 @@ export function SharedPhotoWidget({ connectionId, slotKey, onClose }: Props) {
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [widgetState, setWidgetState]       = useState<WidgetState>('display');
-  const [photo, setPhoto]                   = useState<PhotoRecord | null>(null);
+  // Initialise synchronously from the pre-load cache so the photo is present
+  // on the very first render — no empty-state flash.
+  const [photo, setPhoto]                   = useState<PhotoRecord | null>(
+    () => _photoResolved.get(connectionId) ?? null,
+  );
   const [prevPhotoUrl, setPrevPhotoUrl]     = useState<string | null>(null);  // for dissolve
-  const [photoVisible, setPhotoVisible]     = useState(true);
+  const [photoVisible, setPhotoVisible]     = useState<boolean>(() => {
+    const cached = _photoResolved.get(connectionId);
+    _photoResolved.delete(connectionId); // consume — widget owns it now
+    return cached != null;
+  });
   const [dissolved, setDissolved]           = useState(false);
   const [mode, setMode]                     = useState<LayoutMode>('standard');
 
@@ -273,19 +282,12 @@ export function SharedPhotoWidget({ connectionId, slotKey, onClose }: Props) {
   useSharedChannel(connectionId, 'shared_photo', handleSSE);
 
   // ── Initial load ───────────────────────────────────────────────────────────
-  // Uses the pre-load cache if the setup modal already fired the fetch, so
-  // the photo appears immediately on mount with no visible network delay.
+  // Skip the fetch entirely if the useState initializer already loaded the
+  // photo from the pre-load cache.  Fall back to a normal fetch only when the
+  // user placed the widget faster than the pre-load could resolve.
   useEffect(() => {
     if (!connectionId) return;
-
-    const cached = _photoPreload.get(connectionId);
-    if (cached) {
-      cached.then((photo) => {
-        if (photo) { setPhoto(photo); setPhotoVisible(true); }
-      }).catch(() => {});
-      _photoPreload.delete(connectionId);
-      return;
-    }
+    if (photo !== null) return; // already hydrated from cache — nothing to do
 
     apiFetch(`/api/shared-photo/${connectionId}`)
       .then(async (r) => {
@@ -296,7 +298,8 @@ export function SharedPhotoWidget({ connectionId, slotKey, onClose }: Props) {
         setPhotoVisible(true);
       })
       .catch(() => { /* silent */ });
-  }, [connectionId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectionId]); // intentionally omit `photo` — only run once on mount
 
   // ── Cleanup object URLs ────────────────────────────────────────────────────
   useEffect(() => {
