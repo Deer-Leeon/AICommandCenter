@@ -1,0 +1,57 @@
+appId: com.nexus.app
+productName: NEXUS
+copyright: "Copyright © 2026 Leon Buchmiller"
+
+# electron-builder runs from the nexus/electron/ directory.
+# All relative paths below are relative to nexus/electron/.
+
+directories:
+  buildResources: build
+  output: dist-app
+
+# Pack the compiled JS and all production node_modules (electron-builder
+# automatically excludes devDependencies from the bundle).
+files:
+  - dist/**
+  - node_modules/**
+  - package.json
+  - "!dist-app/**"
+  - "!node_modules/electron-builder/**"
+  - "!node_modules/typescript/**"
+  - "!node_modules/ts-node/**"
+
+# Copy the built React SPA into Resources/frontend/dist inside the .app bundle.
+# main.ts reads it via process.resourcesPath at runtime.
+extraResources:
+  - from: ../frontend/dist
+    to: frontend/dist
+
+mac:
+  category: public.app-category.productivity
+  # icon: build/icon.icns  # uncomment once you have a 1024×1024 icon.icns
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+
+dmg:
+  title: NEXUS
+  # icon: build/icon.icns  # uncomment once you have icon.icns
+  window:
+    width: 540
+    height: 380
+
+# Auto-update: publish to GitHub Releases
+publish:
+  provider: github
+  owner: Deer-Leeon
+  repo: nexus-releases
+  private: false
+
+# Post-sign notarization (direct .dmg distribution only)
+afterSign: notarize.js

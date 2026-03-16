@@ -13,10 +13,16 @@
     "start": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
     "start:backend": "cd backend && node dist/index.js",
     "start:frontend": "cd frontend && npx vite preview --port 4173",
-    "mcp": "cd backend && tsx src/mcp/mcpServer.ts"
+    "mcp": "cd backend && tsx src/mcp/mcpServer.ts",
+    "electron:dev": "concurrently \"npm run dev:frontend\" \"wait-on http://localhost:5173 && cd electron && npm run build && NODE_ENV=development ./node_modules/.bin/electron dist/main.js\"",
+    "electron:build": "npm run build:frontend && cd electron && npm run build && npx electron-builder --config electron-builder.yml",
+    "electron:build:dmg": "cd frontend && VITE_ELECTRON=true npx vite build && cd ../electron && npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_NOTARIZE=true npx electron-builder --mac dmg --config electron-builder.yml",
+    "electron:build:dmg:signed": "cd frontend && VITE_ELECTRON=true npx vite build && cd ../electron && npm run build && npx electron-builder --mac dmg --config electron-builder.yml",
+    "electron:install": "cd electron && npm install"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
-    "tsx": "^4.16.2"
+    "tsx": "^4.16.2",
+    "wait-on": "^7.2.0"
   }
 }

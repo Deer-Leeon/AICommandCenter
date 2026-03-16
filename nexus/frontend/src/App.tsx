@@ -52,7 +52,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [pickerCell, setPickerCell] = useState<{ row: number; col: number } | null>(null);
   const [settingsInitialTab, setSettingsInitialTab] = useState<
-    'account' | 'permissions' | 'connections' | 'animation' | 'searchbar' | 'widgets'
+    'account' | 'permissions' | 'connections' | 'animation' | 'searchbar' | 'widgets' | 'desktop'
   >('account');
 
   useEffect(() => {

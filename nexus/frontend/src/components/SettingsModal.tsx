@@ -11,7 +11,7 @@ import { supabase } from '../lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type SettingsTab = 'account' | 'permissions' | 'connections' | 'animation' | 'searchbar' | 'widgets';
+type SettingsTab = 'account' | 'permissions' | 'connections' | 'animation' | 'searchbar' | 'widgets' | 'desktop';
 
 interface NavItem {
   id: SettingsTab;
@@ -26,6 +26,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'animation',   icon: '✦',  label: 'Animation'   },
   { id: 'searchbar',   icon: '🔍', label: 'Search Bar'  },
   { id: 'widgets',     icon: '⊞',  label: 'Widgets'     },
+  { id: 'desktop',     icon: '🖥',  label: 'Desktop App' },
 ];
 
 // ─── AccountPanel ──────────────────────────────────────────────────────────────
@@ -1307,6 +1308,207 @@ function WidgetsPanel() {
   );
 }
 
+// ─── DesktopAppPanel ──────────────────────────────────────────────────────────
+
+const DMG_DOWNLOAD_URL_ARM   = 'https://github.com/Deer-Leeon/AICommandCenter/releases/latest/download/NEXUS-1.0.0-arm64.dmg';
+const DMG_DOWNLOAD_URL_INTEL = 'https://github.com/Deer-Leeon/AICommandCenter/releases/latest/download/NEXUS-1.0.0-x64.dmg';
+
+function DesktopAppPanel() {
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    navigator.clipboard.writeText('https://nexus.lj-buchmiller.com').catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
+      {/* Hero */}
+      <div
+        style={{
+          background: 'linear-gradient(135deg, rgba(var(--accent-rgb),0.08) 0%, rgba(var(--accent-rgb),0.02) 100%)',
+          border: '1px solid rgba(var(--accent-rgb),0.18)',
+          borderRadius: '16px',
+          padding: '24px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ fontSize: '32px' }}>🖥</span>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '17px', color: 'var(--text)' }}>NEXUS for Mac</div>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+              Native desktop app · Menu bar tray · Global shortcut · Auto-updates
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Download buttons */}
+      <div>
+        <div
+          style={{ fontSize: '11px', fontFamily: 'Space Mono, monospace', letterSpacing: '0.1em',
+            textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '10px' }}
+        >
+          Download
+        </div>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <a
+            href={DMG_DOWNLOAD_URL_ARM}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '14px',
+              background: 'var(--accent)',
+              borderRadius: '12px',
+              color: '#fff',
+              textDecoration: 'none',
+              fontWeight: 600,
+              fontSize: '14px',
+              transition: 'opacity 0.15s',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.85')}
+            onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
+          >
+            <span>⬇ Download for Mac</span>
+            <span style={{ fontSize: '11px', opacity: 0.75, fontWeight: 400 }}>Apple Silicon (M1/M2/M3)</span>
+          </a>
+          <a
+            href={DMG_DOWNLOAD_URL_INTEL}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '14px',
+              background: 'var(--surface2)',
+              border: '1px solid var(--border)',
+              borderRadius: '12px',
+              color: 'var(--text)',
+              textDecoration: 'none',
+              fontWeight: 600,
+              fontSize: '14px',
+              transition: 'background 0.15s',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface3, var(--surface2))')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--surface2)')}
+          >
+            <span>⬇ Download for Mac</span>
+            <span style={{ fontSize: '11px', opacity: 0.6, fontWeight: 400 }}>Intel (x64)</span>
+          </a>
+        </div>
+        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px', textAlign: 'center' }}>
+          macOS 12 Monterey or later required
+        </div>
+      </div>
+
+      {/* Installation steps */}
+      <div>
+        <div
+          style={{ fontSize: '11px', fontFamily: 'Space Mono, monospace', letterSpacing: '0.1em',
+            textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '10px' }}
+        >
+          How to Install
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {[
+            { n: '1', text: 'Download the .dmg file above' },
+            { n: '2', text: 'Open the .dmg and drag NEXUS into Applications' },
+            { n: '3', text: 'Open NEXUS from Launchpad or Applications' },
+            { n: '4', text: 'Sign in with your existing NEXUS account — all your widgets and pages are already there' },
+          ].map(({ n, text }) => (
+            <div key={n} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+              <span
+                style={{
+                  width: '22px', height: '22px', borderRadius: '50%', flexShrink: 0,
+                  background: 'rgba(var(--accent-rgb),0.15)', color: 'var(--accent)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '11px', fontWeight: 700, fontFamily: 'Space Mono, monospace',
+                }}
+              >
+                {n}
+              </span>
+              <span style={{ fontSize: '13px', color: 'var(--text)', paddingTop: '2px' }}>{text}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Features list */}
+      <div>
+        <div
+          style={{ fontSize: '11px', fontFamily: 'Space Mono, monospace', letterSpacing: '0.1em',
+            textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '10px' }}
+        >
+          Desktop Features
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {[
+            { icon: '⌘', text: 'Global shortcut Cmd+Shift+N — open NEXUS from anywhere' },
+            { icon: '🔔', text: 'Native Mac notifications for Pomodoro, Chess, shared widgets' },
+            { icon: '🗂', text: 'Menu bar tray — Spotify, Pomodoro, calendar at a glance' },
+            { icon: '🔄', text: 'Auto-updates silently in the background' },
+            { icon: '🔒', text: 'Same account, same widgets, same data as the web app' },
+          ].map(({ icon, text }) => (
+            <div key={text} style={{ display: 'flex', alignItems: 'center', gap: '10px',
+              padding: '8px 10px', background: 'var(--surface2)', borderRadius: '8px' }}>
+              <span style={{ fontSize: '15px', flexShrink: 0 }}>{icon}</span>
+              <span style={{ fontSize: '13px', color: 'var(--text)' }}>{text}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Web fallback note */}
+      <div
+        style={{
+          padding: '12px 14px',
+          background: 'rgba(255,255,255,0.03)',
+          border: '1px solid var(--border)',
+          borderRadius: '10px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+        }}
+      >
+        <span style={{ fontSize: '16px', flexShrink: 0 }}>🌐</span>
+        <div>
+          <div style={{ fontSize: '13px', color: 'var(--text)', fontWeight: 500 }}>
+            Prefer the browser?
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+              nexus.lj-buchmiller.com
+            </span>
+            <button
+              onClick={handleCopy}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: '11px', color: 'var(--accent)', padding: '0',
+              }}
+            >
+              {copied ? '✓ Copied' : 'Copy'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
 // ─── SettingsModal ────────────────────────────────────────────────────────────
 
 interface SettingsModalProps {
@@ -1416,7 +1618,7 @@ export function SettingsModal({ onClose, initialTab }: SettingsModalProps) {
           {/* Right content — all panels mount immediately so API calls fire
               in parallel; CSS visibility hides inactive panels instantly */}
           <div className="flex-1 overflow-y-auto nexus-scroll p-5" style={{ position: 'relative' }}>
-            {(['account', 'permissions', 'connections', 'animation', 'searchbar', 'widgets'] as const).map((tab) => (
+            {(['account', 'permissions', 'connections', 'animation', 'searchbar', 'widgets', 'desktop'] as const).map((tab) => (
               <div key={tab} style={{ display: activeTab === tab ? 'block' : 'none' }}>
                 {tab === 'account'     && <AccountPanel />}
                 {tab === 'permissions' && <PermissionsPanel />}
@@ -1424,6 +1626,7 @@ export function SettingsModal({ onClose, initialTab }: SettingsModalProps) {
                 {tab === 'animation'   && <AnimationPanel />}
                 {tab === 'searchbar'   && <SearchBarPanel />}
                 {tab === 'widgets'     && <WidgetsPanel />}
+                {tab === 'desktop'     && <DesktopAppPanel />}
               </div>
             ))}
           </div>

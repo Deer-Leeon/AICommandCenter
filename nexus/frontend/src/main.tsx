@@ -26,6 +26,8 @@ import App from './App';
 import MobileApp from './mobile/MobileApp';
 import PrivacyPage from './pages/PrivacyPage';
 import { isMobileDevice } from './mobile/useMobileDetect';
+import { TrayApp } from './components/TrayApp';
+import { isElectron } from './lib/isElectron';
 
 // Detect once at module load time (viewport/UA won't change mid-session)
 const IS_MOBILE = isMobileDevice();
@@ -38,17 +40,27 @@ const IS_MOBILE = isMobileDevice();
  *     would 404 since there's no server to handle them).
  *   • Auth tokens land in window.location.hash after Google OAuth redirect;
  *     Supabase's detectSessionInUrl picks them up before the router renders.
+ *
+ * In Electron context:
+ *   • The app is loaded as a local file:// URL in production, so BrowserRouter
+ *     would break navigation (pushState has no dev server to handle paths).
+ *     HashRouter keeps everything working on the file:// origin.
+ *   • The /tray route renders TrayApp inside the menu-bar popover window.
+ *     It must be excluded from the full app initialization and layout.
  */
 const IS_EXTENSION =
   import.meta.env.VITE_IS_EXTENSION === 'true' ||
   (typeof chrome !== 'undefined' && !!chrome?.runtime?.id);
 
-const AppRouter = IS_EXTENSION ? HashRouter : BrowserRouter;
+const IS_ELECTRON = isElectron();
+
+// HashRouter for: extension pages, Electron (file:// origin)
+const AppRouter = IS_EXTENSION || IS_ELECTRON ? HashRouter : BrowserRouter;
 
 // ── Service Worker registration (web only) ────────────────────────────────────
 // Register after first paint so it never blocks the critical path.
-// Not registered in extension builds — extension pages can't use SW this way.
-if (!IS_EXTENSION && 'serviceWorker' in navigator) {
+// Not registered in extension builds or Electron — can't use SW on those origins.
+if (!IS_EXTENSION && !IS_ELECTRON && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(() => {
       // SW registration failure is non-fatal
@@ -81,6 +93,29 @@ function Root() {
     setServicesConnected(true);
   };
 
+  // ── Electron: handle OAuth params forwarded by main process ─────────────
+  // When the user completes a Google/Spotify OAuth flow in the Electron app,
+  // main.ts intercepts the production redirect and forwards the query string
+  // via IPC so we can process it without navigating away.
+  useEffect(() => {
+    if (!IS_ELECTRON || !window.electronAPI) return;
+    window.electronAPI.onOAuthParams((qs: string) => {
+      const params = new URLSearchParams(qs);
+      const anySuccess =
+        params.get('google_calendar_connected') === 'true' ||
+        params.get('google_tasks_connected') === 'true'    ||
+        params.get('google_docs_connected') === 'true'     ||
+        params.get('google_drive_connected') === 'true'    ||
+        params.get('google_connected') === 'true'          ||
+        params.get('slack_connected') === 'true';
+      if (anySuccess) {
+        handleServicesComplete();
+      }
+    });
+  // Register once on mount — dependencies are stable
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // The static #nexus-preload div from index.html covers the entire screen before
   // React runs. It must be removed as soon as auth resolves so the correct page
   // (LoginPage, ConnectServicesPage, or App) becomes visible.
@@ -112,12 +147,22 @@ function Root() {
   return (
     <AppRouter>
       <Routes>
+        {/* ── Electron tray panel ─────────────────────────────────────────────
+            Rendered in a separate frameless BrowserWindow by tray.ts.
+            Must come BEFORE the wildcard route so it is matched first.
+            No auth gate, no layout, no page switcher — just the mini-panel. */}
+        {IS_ELECTRON && (
+          <Route path="/tray" element={<TrayApp />} />
+        )}
+
         {/* /auth/callback is only needed on the web — in the extension, Supabase
             tokens are delivered in the hash of the main index.html URL and
-            detectSessionInUrl handles them without a dedicated callback page. */}
-        {!IS_EXTENSION && (
+            detectSessionInUrl handles them without a dedicated callback page.
+            In Electron, deep links via nexus:// are forwarded by main.ts. */}
+        {!IS_EXTENSION && !IS_ELECTRON && (
           <Route path="/auth/callback" element={<AuthCallback />} />
         )}
+
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route
           path="/*"

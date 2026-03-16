@@ -1,8 +1,14 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+// When building for Electron, all asset URLs must be relative (./assets/...)
+// because the app loads from a file:// URL, not a web server.
+// Set VITE_ELECTRON=true in the electron:build:dmg script to enable this.
+const isElectronBuild = process.env.VITE_ELECTRON === 'true';
+
 export default defineConfig({
   plugins: [react()],
+  base: isElectronBuild ? './' : '/',
   server: {
     proxy: {
       '/api': {
