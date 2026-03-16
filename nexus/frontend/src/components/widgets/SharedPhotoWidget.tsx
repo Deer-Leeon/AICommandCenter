@@ -167,6 +167,26 @@ video.sp-video {
 }
 `;
 
+// ── localStorage photo cache (survives page reload) ───────────────────────────
+function lsKey(cid: string) { return `nexus_sp_${cid}`; }
+
+function readCachedPhoto(connectionId: string): PhotoRecord | null {
+  // Priority: in-memory pre-load (freshest) → localStorage (persisted across reloads)
+  const mem = _photoResolved.get(connectionId);
+  if (mem !== undefined) return mem;
+  try {
+    const raw = localStorage.getItem(lsKey(connectionId));
+    return raw ? (JSON.parse(raw) as PhotoRecord) : null;
+  } catch { return null; }
+}
+
+function writeCachedPhoto(connectionId: string, photo: PhotoRecord | null) {
+  try {
+    if (photo) localStorage.setItem(lsKey(connectionId), JSON.stringify(photo));
+    else        localStorage.removeItem(lsKey(connectionId));
+  } catch { /* storage full — silently ignore */ }
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function SharedPhotoWidget({ connectionId, slotKey, onClose }: Props) {
@@ -175,16 +195,17 @@ export function SharedPhotoWidget({ connectionId, slotKey, onClose }: Props) {
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [widgetState, setWidgetState]       = useState<WidgetState>('display');
-  // Initialise synchronously from the pre-load cache so the photo is present
-  // on the very first render — no empty-state flash.
+  // Initialise synchronously from in-memory pre-load cache OR localStorage so
+  // the photo is always present on the very first render — zero empty-state flash.
   const [photo, setPhoto]                   = useState<PhotoRecord | null>(
-    () => _photoResolved.get(connectionId) ?? null,
+    () => readCachedPhoto(connectionId),
   );
   const [prevPhotoUrl, setPrevPhotoUrl]     = useState<string | null>(null);  // for dissolve
   const [photoVisible, setPhotoVisible]     = useState<boolean>(() => {
     const cached = _photoResolved.get(connectionId);
-    _photoResolved.delete(connectionId); // consume — widget owns it now
-    return cached != null;
+    _photoResolved.delete(connectionId); // consume in-memory entry
+    // localStorage hit also means we have a photo to show
+    return readCachedPhoto(connectionId) != null || cached != null;
   });
   const [dissolved, setDissolved]           = useState(false);
   const [mode, setMode]                     = useState<LayoutMode>('standard');
@@ -250,6 +271,11 @@ export function SharedPhotoWidget({ connectionId, slotKey, onClose }: Props) {
     timeTimer.current = setInterval(() => forceRender((n) => n + 1), 30_000);
     return () => clearInterval(timeTimer.current);
   }, []);
+
+  // ── Persist photo to localStorage so reloads show it immediately ──────────
+  useEffect(() => {
+    writeCachedPhoto(connectionId, photo);
+  }, [connectionId, photo]);
 
   // ── SSE: connection dissolved ──────────────────────────────────────────────
   useEffect(() => {
@@ -649,25 +675,21 @@ export function SharedPhotoWidget({ connectionId, slotKey, onClose }: Props) {
                 </div>
               )}
 
-              {/* Bottom left — partner presence */}
-              {mode !== 'micro' && partnerOnline && (
-                <div style={{ position: 'absolute', bottom: 72, left: 10 }}>
+              {/* Bottom row — presence left, action buttons right */}
+              <div style={{
+                position: 'absolute', bottom: 10, left: 10, right: 10,
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              }}>
+                {mode !== 'micro' && partnerOnline ? (
                   <div className="sp-pill">
                     <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e', flexShrink: 0 }} />
                     {partnerUsername ? `@${partnerUsername}` : partnerName}
                   </div>
+                ) : <div />}
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="sp-icon-btn" title="Take photo" onClick={() => startCamera()}>📷</button>
+                  <button className="sp-icon-btn" title="Upload photo" onClick={openFilePicker}>🖼️</button>
                 </div>
-              )}
-
-              {/* Bottom right — action buttons */}
-              <div style={{
-                position: 'absolute',
-                bottom: isCompact ? 8 : 70,
-                right: 10,
-                display: 'flex', gap: 6,
-              }}>
-                <button className="sp-icon-btn" title="Take photo" onClick={() => startCamera()}>📷</button>
-                <button className="sp-icon-btn" title="Upload photo" onClick={openFilePicker}>🖼️</button>
               </div>
             </div>
           )}
