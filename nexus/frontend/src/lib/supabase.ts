@@ -24,14 +24,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 
 /** Returns the OAuth redirect URL for the current context. */
 export function getAuthRedirectUrl(): string {
-  // Electron desktop wrapper: deep-link via custom URL scheme
-  if (typeof window !== 'undefined' && window.electronAPI?.isElectron) {
-    return 'nexus://auth/callback';
-  }
   // Chrome extension
   if (typeof chrome !== 'undefined' && chrome?.runtime?.id) {
     return `chrome-extension://${chrome.runtime.id}/index.extension.html`;
   }
+  // Electron in production loads the app from nexus.lj-buchmiller.com, so the
+  // redirect URL is the same as the standard web callback — no custom scheme needed.
   const origin =
     window.location.protocol === 'http:' && window.location.hostname !== 'localhost'
       ? `https://${window.location.host}`

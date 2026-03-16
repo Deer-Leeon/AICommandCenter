@@ -3,10 +3,12 @@ import * as path from 'path';
 
 const isDev = process.env.NODE_ENV === 'development';
 
-// The tray panel URL — hash route rendered by TrayApp.tsx
+// The tray panel URL — hash route rendered by TrayApp.tsx.
+// Production loads from the live web app (same as the main window) so the
+// Supabase session is shared and persists across restarts.
 const TRAY_URL = isDev
   ? 'http://localhost:5173/#/tray'
-  : `file://${path.join(process.resourcesPath, 'frontend/dist/index.html')}#/tray`;
+  : 'https://nexus.lj-buchmiller.com/#/tray';
 
 const TRAY_WIDTH  = 320;
 const TRAY_HEIGHT = 440;

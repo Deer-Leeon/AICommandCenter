@@ -17,12 +17,11 @@ import { sendNotification } from './notifications';
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const isDev = process.env.NODE_ENV === 'development';
-// In production the React SPA is bundled into the app as an extraResource
-// and lives at <app>/Contents/Resources/frontend/dist/index.html.
-// process.resourcesPath points to that Resources directory at runtime.
-const FRONTEND_URL = isDev
-  ? 'http://localhost:5173'
-  : `file://${path.join(process.resourcesPath, 'frontend/dist/index.html')}`;
+// In production load the live web app so that the Supabase session is stored
+// under the nexus.lj-buchmiller.com origin and persists across app restarts.
+// (file:// localStorage is less reliable due to Chromium origin isolation.)
+const PRODUCTION_URL = 'https://nexus.lj-buchmiller.com';
+const FRONTEND_URL = isDev ? 'http://localhost:5173' : PRODUCTION_URL;
 
 const PRODUCTION_HOST = 'nexus.lj-buchmiller.com';
 
@@ -115,23 +114,28 @@ function createMainWindow(): BrowserWindow {
     }
   });
 
-  // ── Spotify / Google OAuth redirect interception ────────────────────────────
-  // The deployed backend redirects to nexus.lj-buchmiller.com after OAuth.
-  // We intercept that navigation and forward the query params to the renderer
-  // so ConnectServicesPage.tsx can process them without leaving the Electron app.
+  // ── OAuth redirect interception (dev only) ──────────────────────────────────
+  // In dev the window loads from localhost:5173.  After Google OAuth the backend
+  // redirects to nexus.lj-buchmiller.com — we intercept that navigation and
+  // forward the query params back to the renderer so the app stays on localhost.
+  //
+  // In production the window already loads FROM nexus.lj-buchmiller.com, so
+  // the OAuth redirect back to that host is just a normal same-origin navigation
+  // handled naturally by App.tsx.  No interception needed.
 
-  win.webContents.on('will-navigate', (event, url) => {
-    try {
-      const parsed = new URL(url);
-      if (parsed.hostname === PRODUCTION_HOST && !isDev) {
-        // Don't intercept the initial page load in dev (which lands on localhost)
-        event.preventDefault();
-        win.webContents.send('oauth-params', parsed.search);
+  if (isDev) {
+    win.webContents.on('will-navigate', (event, url) => {
+      try {
+        const parsed = new URL(url);
+        if (parsed.hostname === PRODUCTION_HOST) {
+          event.preventDefault();
+          win.webContents.send('oauth-params', parsed.search);
+        }
+      } catch {
+        // Malformed URL — ignore
       }
-    } catch {
-      // Malformed URL — ignore
-    }
-  });
+    });
+  }
 
   // Allow external links to open in the system browser
   win.webContents.setWindowOpenHandler(({ url }) => {
