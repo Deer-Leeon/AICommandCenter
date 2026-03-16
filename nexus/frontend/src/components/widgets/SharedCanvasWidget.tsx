@@ -709,9 +709,13 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     } else {
       // In-progress stroke — skip if stroke was already completed
       if (completedStrokesRef.current.has(msg.strokeId)) return;
-      // Take the version with more points (WS and SSE may race)
+      // Only update stroke + cursor when this message is "newer" (has more or equal
+      // points than already stored). WS and SSE race: SSE may deliver an older
+      // throttled snapshot after WS already advanced further. Updating the cursor
+      // from that stale snapshot causes the visible "cursor jump" the user sees.
       const existing = partnerStrokesRef.current.get(msg.strokeId);
-      if (!existing || msg.points.length >= existing.points.length) {
+      const isNewer = !existing || msg.points.length >= existing.points.length;
+      if (isNewer) {
         partnerStrokesRef.current.set(msg.strokeId, {
           strokeId: msg.strokeId,
           tool:     msg.tool,
@@ -719,13 +723,13 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
           size:     msg.size,
           points:   msg.points,
         });
+        if (msg.points.length > 0) {
+          const last = msg.points[msg.points.length - 1];
+          partnerCursorRef.current = { x: last[0], y: last[1], name: partnerName };
+        }
+        // Draw to partner canvas IMMEDIATELY — no rAF, zero extra latency
+        redrawPartnerCanvas();
       }
-      if (msg.points.length > 0) {
-        const last = msg.points[msg.points.length - 1];
-        partnerCursorRef.current = { x: last[0], y: last[1], name: partnerName };
-      }
-      // Draw to partner canvas IMMEDIATELY — no rAF, zero extra latency
-      redrawPartnerCanvas();
     }
   }, [blitViewport, getWorldCtx, partnerName, redrawPartnerCanvas, user?.id]);
 
