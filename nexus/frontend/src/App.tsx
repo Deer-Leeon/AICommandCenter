@@ -23,7 +23,8 @@ import { DevCacheOverlay } from './components/DevCacheOverlay';
 import { InviteToast } from './components/InviteToast';
 import { TodoSetupModal }       from './components/TodoSetupModal';
 import { ChessSetupModal }      from './components/ChessSetupModal';
-import { SharedPhotoSetupModal } from './components/SharedPhotoSetupModal';
+import { SharedPhotoSetupModal }  from './components/SharedPhotoSetupModal';
+import { SharedCanvasSetupModal } from './components/SharedCanvasSetupModal';
 import { WidgetPickerModal }   from './components/WidgetPickerModal';
 import { devBootCheck } from './lib/devUtils';
 import { nexusSSE } from './lib/nexusSSE';
@@ -153,7 +154,7 @@ export default function App() {
 
     if (isNaN(row) || isNaN(col)) return;
 
-    if (widgetId === 'todo' || widgetId === 'shared_chess' || widgetId === 'shared_photo') {
+    if (widgetId === 'todo' || widgetId === 'shared_chess' || widgetId === 'shared_photo' || widgetId === 'shared_canvas') {
       // Intercept — show the setup modal before committing the placement
       setPendingDrop({ widgetId, row, col, slotKey: cellKey });
       return;
@@ -208,7 +209,7 @@ export default function App() {
                 targetCell={pickerCell}
                 onPlace={(widgetId, row, col) => {
                   const slotKey = `${row},${col}`;
-                  if (widgetId === 'todo' || widgetId === 'shared_chess' || widgetId === 'shared_photo') {
+                  if (widgetId === 'todo' || widgetId === 'shared_chess' || widgetId === 'shared_photo' || widgetId === 'shared_canvas') {
                     setPendingDrop({ widgetId, row, col, slotKey });
                   } else {
                     placeWidget(widgetId, row, col);
@@ -243,6 +244,17 @@ export default function App() {
             )}
             {pendingDrop?.widgetId === 'shared_photo' && (
               <SharedPhotoSetupModal
+                onConfirm={(connectionId) => {
+                  placeWidget(pendingDrop.widgetId, pendingDrop.row, pendingDrop.col);
+                  setWidgetConnection(pendingDrop.slotKey, connectionId);
+                  setPendingDrop(null);
+                }}
+                onCancel={() => setPendingDrop(null)}
+                onOpenConnections={() => { setSettingsInitialTab('connections'); setShowSettings(true); }}
+              />
+            )}
+            {pendingDrop?.widgetId === 'shared_canvas' && (
+              <SharedCanvasSetupModal
                 onConfirm={(connectionId) => {
                   placeWidget(pendingDrop.widgetId, pendingDrop.row, pendingDrop.col);
                   setWidgetConnection(pendingDrop.slotKey, connectionId);

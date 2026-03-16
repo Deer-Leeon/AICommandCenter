@@ -32,6 +32,7 @@ const FootballWidget    = lazy(() => import('./widgets/FootballWidget').then(m =
 const TimezoneWidget    = lazy(() => import('./widgets/TimezoneWidget').then(m => ({ default: m.TimezoneWidget })));
 const CurrencyWidget      = lazy(() => import('./widgets/CurrencyWidget').then(m => ({ default: m.CurrencyWidget })));
 const SharedPhotoWidget   = lazy(() => import('./widgets/SharedPhotoWidget').then(m => ({ default: m.SharedPhotoWidget })));
+const SharedCanvasWidget  = lazy(() => import('./widgets/SharedCanvasWidget').then(m => ({ default: m.SharedCanvasWidget })));
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface WidgetRect { top: number; left: number; width: number; height: number; }
@@ -262,7 +263,7 @@ function PlacedWidget({
   // shared_chess and shared_photo are intentionally absent from WIDGET_COMPONENTS —
   // they use their own special render paths in the JSX below.
   if (!config) return null;
-  if (!WidgetComponent && widgetType !== 'shared_chess' && widgetType !== 'shared_photo') return null;
+  if (!WidgetComponent && widgetType !== 'shared_chess' && widgetType !== 'shared_photo' && widgetType !== 'shared_canvas') return null;
   const row = parseInt(cellKey.split(',')[0], 10);
   const revealDelay = ROW_REVEAL_DELAY[row] ?? 900;
 
@@ -370,6 +371,8 @@ function PlacedWidget({
               ? <SharedChessWidget connectionId={connectionId ?? ''} slotKey={cellKey} onClose={onClose} />
               : widgetType === 'shared_photo'
               ? <SharedPhotoWidget connectionId={connectionId ?? ''} slotKey={cellKey} onClose={onClose} />
+              : widgetType === 'shared_canvas'
+              ? <SharedCanvasWidget connectionId={connectionId ?? ''} slotKey={cellKey} onClose={onClose} />
               : WidgetComponent
               ? <WidgetComponent onClose={onClose} />
               : null

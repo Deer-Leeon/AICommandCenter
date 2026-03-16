@@ -1,4 +1,4 @@
-export type WidgetType = 'calendar' | 'slack' | 'obsidian' | 'docs' | 'todo' | 'weather' | 'tasks' | 'plaid' | 'stocks' | 'links' | 'notes' | 'wordle' | 'news' | 'typing' | 'shared_chess' | 'pomodoro' | 'lofi' | 'spotify' | 'f1' | 'football' | 'timezone' | 'currency' | 'shared_photo';
+export type WidgetType = 'calendar' | 'slack' | 'obsidian' | 'docs' | 'todo' | 'weather' | 'tasks' | 'plaid' | 'stocks' | 'links' | 'notes' | 'wordle' | 'news' | 'typing' | 'shared_chess' | 'pomodoro' | 'lofi' | 'spotify' | 'f1' | 'football' | 'timezone' | 'currency' | 'shared_photo' | 'shared_canvas';
 
 // Describes how many grid cells a zone occupies beyond the default 1×1
 export interface GridSpan {
@@ -248,7 +248,8 @@ export const WIDGET_CONFIGS: WidgetConfig[] = [
   // Games
   { id: 'wordle',      label: 'Wordle',       icon: '🟩', accentColor: '#538d4e', serviceTag: 'API',   category: 'Games'   },
   { id: 'shared_chess', label: 'Chess',         icon: '♟️', accentColor: '#c0a060', serviceTag: 'SHARED', category: 'Games'   },
-  { id: 'shared_photo', label: 'Photo Frame',   icon: '📷', accentColor: '#a855f7', serviceTag: 'SHARED', category: 'Tools'   },
+  { id: 'shared_photo',   label: 'Photo Frame',    icon: '📷', accentColor: '#a855f7', serviceTag: 'SHARED', category: 'Tools'   },
+  { id: 'shared_canvas',  label: 'Drawing Canvas', icon: '🎨', accentColor: '#f97316', serviceTag: 'SHARED', category: 'Tools'   },
   { id: 'typing',      label: 'Typing',       icon: '⌨️', accentColor: '#7c6aff', serviceTag: 'CLOUD', category: 'Games'   },
   // Info
   { id: 'weather',     label: 'Weather',      icon: '🌤', accentColor: '#f59e0b', serviceTag: 'API',   category: 'Info'    },
