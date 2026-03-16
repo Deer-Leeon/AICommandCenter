@@ -23,7 +23,7 @@
  *   Points are stored as absolute world-pixel coordinates (0–WORLD_W / WORLD_H).
  */
 import {
-  useState, useEffect, useRef, useCallback, useMemo,
+  useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo,
   type PointerEvent as RPointerEvent,
 } from 'react';
 import { useAuth }             from '../../hooks/useAuth';
@@ -37,6 +37,31 @@ import { apiFetch, apiFetchMultipart } from '../../lib/api';
 const WORLD_W  = 2000;
 const WORLD_H  = 2000;
 const MAX_UNDO = 12;
+
+// ── localStorage canvas cache ──────────────────────────────────────────────
+// Store the canvas as a data URL so it can be painted instantly (before first
+// network response) on the next page load.  We cap at ~1.5 MB (base64) to
+// stay within the typical 5 MB localStorage budget.
+const CACHE_MAX_BYTES = 1_500_000;
+
+function readCachedCanvas(connectionId: string): string | null {
+  try { return localStorage.getItem(`nexus_canvas_${connectionId}`); }
+  catch { return null; }
+}
+
+function writeCachedCanvas(connectionId: string, dataUrl: string) {
+  try {
+    if (dataUrl.length <= CACHE_MAX_BYTES)
+      localStorage.setItem(`nexus_canvas_${connectionId}`, dataUrl);
+    else
+      localStorage.removeItem(`nexus_canvas_${connectionId}`);
+  } catch { /* storage full — ignore */ }
+}
+
+function clearCachedCanvas(connectionId: string) {
+  try { localStorage.removeItem(`nexus_canvas_${connectionId}`); }
+  catch { /* ignore */ }
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -601,7 +626,11 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
       fd.append('snapshot', blob, 'canvas.png');
       const res = await apiFetchMultipart(`/api/shared-canvas/${connectionId}/snapshot`, fd);
       setSaveStatus(res.ok ? 'saved' : 'unsaved');
-      if (res.ok) setTimeout(() => setSaveStatus('idle'), 2500);
+      if (res.ok) {
+        // Cache the canvas locally for instant next-load
+        writeCachedCanvas(connectionId, world.toDataURL('image/png'));
+        setTimeout(() => setSaveStatus('idle'), 2500);
+      }
     } catch {
       setSaveStatus('unsaved');
     } finally {
@@ -949,29 +978,95 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     return () => canvas.removeEventListener('wheel', onWheel);
   }, [blitViewport, scheduleOverlayRedraw, showMinimapBriefly]);
 
-  // ── Initialise world canvas (once on mount) ────────────────────────────────
-  useEffect(() => {
-    const world = worldRef.current;
-    if (!world) return;
+  // ── Initialise + instant paint (runs before browser's first paint) ───────
+  // 1. Size the world canvas to WORLD_W × WORLD_H.
+  // 2. Read the container dimensions synchronously (getBoundingClientRect is
+  //    available inside useLayoutEffect because the DOM is already committed).
+  // 3. If localStorage has a cached data URL for this connection, draw it
+  //    immediately — data URLs decode synchronously so img.complete is true
+  //    the moment we set img.src, giving us zero-delay display.
+  // This eliminates the "empty white flash" before the network response.
+  useLayoutEffect(() => {
+    const world     = worldRef.current;
+    const container = containerRef.current;
+    const vp        = viewportRef.current;
+    const ov        = overlayRef.current;
+    if (!world || !container || !vp || !ov) return;
+
     world.width  = WORLD_W;
     world.height = WORLD_H;
-    const ctx = world.getContext('2d')!;
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, WORLD_W, WORLD_H);
-  }, []);
 
-  // ── Load snapshot from backend ─────────────────────────────────────────────
+    // Size viewport/overlay synchronously so blitViewport works immediately
+    const rect = container.getBoundingClientRect();
+    const w = Math.round(rect.width);
+    const h = Math.round(rect.height);
+    if (w > 0 && h > 0) {
+      vp.width = w; vp.height = h;
+      ov.width = w; ov.height = h;
+      viewSizeRef.current = { w, h };
+    }
+
+    const ctx = world.getContext('2d')!;
+
+    const cached = readCachedCanvas(connectionId);
+    if (cached) {
+      const img = new Image();
+      img.src = cached; // data URL — browser decodes synchronously
+      if (img.complete) {
+        // Already decoded: draw and blit before the first paint
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, WORLD_W, WORLD_H);
+        ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight);
+        if (w > 0 && h > 0) blitViewport();
+        setHintVisible(false);
+      } else {
+        // Fallback: shouldn't normally happen for data URLs, but be safe
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, WORLD_W, WORLD_H);
+        img.onload = () => {
+          ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight);
+          blitViewport();
+          setHintVisible(false);
+        };
+      }
+    } else {
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, WORLD_W, WORLD_H);
+    }
+  // connectionId changes when the user re-binds the widget to another friend
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectionId]);
+
+  // ── Background refresh from backend ───────────────────────────────────────
+  // Always re-fetch after mount so we pick up any strokes the partner drew
+  // while you were offline. The localStorage version is shown instantly above;
+  // this silently replaces it if the backend has a newer snapshot.
   useEffect(() => {
     let cancelled = false;
-    async function load() {
+    async function refresh() {
       const res = await apiFetch(`/api/shared-canvas/${connectionId}`);
       if (!res.ok || cancelled) return;
       const data = await res.json() as {
         empty?: boolean; snapshotUrl?: string;
         version?: number; lastDrawnAt?: string;
       };
-      if (data.empty || !data.snapshotUrl) return;
 
+      if (data.empty || !data.snapshotUrl) {
+        // Backend is empty (cleared) — ensure local canvas is also white
+        const ctx = getWorldCtx();
+        if (ctx) {
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, WORLD_W, WORLD_H);
+          blitViewport();
+          setHintVisible(true);
+        }
+        clearCachedCanvas(connectionId);
+        return;
+      }
+
+      const ts = data.lastDrawnAt
+        ? new Date(data.lastDrawnAt).getTime()
+        : Date.now();
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
@@ -980,21 +1075,15 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
         if (!ctx) return;
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, WORLD_W, WORLD_H);
-        // Draw at the image's natural size — no forced scaling
         ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight);
         blitViewport();
         setHintVisible(false);
+        // Update local cache with the freshly-drawn world canvas
+        writeCachedCanvas(connectionId, worldRef.current?.toDataURL('image/png') ?? '');
       };
-      // Use lastDrawnAt as cache-buster — it's a unique timestamp that changes
-      // on every save, survives clear+redraw cycles (version resets to 1 after
-      // clear, but lastDrawnAt is always a new timestamp). This guarantees the
-      // browser fetches the actual current PNG instead of a cached old one.
-      const ts = data.lastDrawnAt
-        ? new Date(data.lastDrawnAt).getTime()
-        : Date.now();
       img.src = `${data.snapshotUrl}?t=${ts}`;
     }
-    load().catch(() => {});
+    refresh().catch(() => {});
     return () => { cancelled = true; };
   }, [connectionId, blitViewport, getWorldCtx]);
 
@@ -1054,6 +1143,7 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     isSavingRef.current = false;
     saveQueuedRef.current = false;
     if (saveDebounceRef.current) { clearTimeout(saveDebounceRef.current); saveDebounceRef.current = null; }
+    clearCachedCanvas(connectionId);
     await apiFetch(`/api/shared-canvas/${connectionId}`, { method: 'DELETE' });
   }, [blitViewport, connectionId, getWorldCtx, saveToUndoStack, scheduleOverlayRedraw]);
 
