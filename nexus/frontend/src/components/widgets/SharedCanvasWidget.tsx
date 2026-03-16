@@ -66,7 +66,10 @@ function clearCachedCanvas(connectionId: string) {
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Tool       = 'brush' | 'eraser' | 'fill' | 'pan';
-type SaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved';
+// Only two visible states: idle (dot hidden) and saved (brief green flash).
+// 'unsaved'/'saving' are gone — localStorage write is instant and considered
+// the authoritative save; Supabase upload happens silently in background.
+type SaveStatus = 'idle' | 'saved';
 type LayoutMode = 'micro' | 'slim' | 'standard' | 'expanded';
 
 interface StrokeMsg {
@@ -318,12 +321,11 @@ const STYLES = `
   flex-shrink:0;
 }
 .sc-pill-btn:hover { background:var(--surface3); color:var(--text); }
+/* Save dot: only idle (invisible) or saved (brief green) — no orange */
 .sc-save-dot {
   width:7px; height:7px; border-radius:50%;
   transition:background 0.3s; flex-shrink:0;
 }
-.sc-save-dot.unsaved { background:#f59e0b; }
-.sc-save-dot.saving  { background:#f59e0b; animation:sc-pulse-dot 0.8s infinite; }
 .sc-save-dot.saved   { background:#22c55e; }
 .sc-save-dot.idle    { background:transparent; }
 .sc-hint {
@@ -602,54 +604,62 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blitViewport, getWorldCtx, scheduleOverlayRedraw]);
 
-  // ── Snapshot save — mutex pattern ─────────────────────────────────────────
-  // Every completed stroke calls scheduleSave(), which calls saveSnapshot()
-  // immediately. If a save is already in flight, the next call is queued and
-  // fires as soon as the current one finishes — guaranteeing no stroke is lost
-  // even when drawing quickly. At most ONE pending request is ever in flight.
+  // ── Snapshot save ──────────────────────────────────────────────────────────
+  // saveSnapshot() runs entirely in the background with no visible status
+  // changes. The mutex ensures at most one upload is in-flight at a time and
+  // queues exactly one more if a stroke arrived during the upload.
   const saveSnapshot = useCallback(async () => {
     if (isSavingRef.current) {
-      saveQueuedRef.current = true;  // will run again after this one finishes
+      saveQueuedRef.current = true;
       return;
     }
-
     const world = worldRef.current;
     if (!world) return;
-
     isSavingRef.current = true;
-    setSaveStatus('saving');
-
     try {
       const blob: Blob | null = await new Promise((r) => world.toBlob(r, 'image/png'));
       if (!blob) throw new Error('toBlob null');
+
+      // Update localStorage cache from the blob (async, non-blocking)
+      const fr = new FileReader();
+      fr.onload = () => writeCachedCanvas(connectionId, fr.result as string);
+      fr.readAsDataURL(blob);
+
+      // Upload to Supabase (silent — UI was already updated)
       const fd = new FormData();
       fd.append('snapshot', blob, 'canvas.png');
-      const res = await apiFetchMultipart(`/api/shared-canvas/${connectionId}/snapshot`, fd);
-      setSaveStatus(res.ok ? 'saved' : 'unsaved');
-      if (res.ok) {
-        // Cache the canvas locally for instant next-load
-        writeCachedCanvas(connectionId, world.toDataURL('image/png'));
-        setTimeout(() => setSaveStatus('idle'), 2500);
-      }
+      await apiFetchMultipart(`/api/shared-canvas/${connectionId}/snapshot`, fd);
     } catch {
-      setSaveStatus('unsaved');
+      // Silent failure — localStorage already has the drawing
     } finally {
       isSavingRef.current = false;
       if (saveQueuedRef.current) {
         saveQueuedRef.current = false;
-        saveSnapshot();  // process the queued save
+        saveSnapshot();
       }
     }
   }, [connectionId]);
 
-  // Called after every completed stroke — fires the save immediately (no delay).
-  // The mutex above serialises concurrent calls without dropping any.
+  // ── scheduleSave: optimistic instant UI + background persistence ───────────
+  // Called after every completed stroke. Shows green IMMEDIATELY by writing
+  // to localStorage synchronously (~5-20 ms on modern hardware), then triggers
+  // the background Supabase upload silently. The user sees the green dot appear
+  // essentially at the same time as they lift their finger — no orange at all.
   const scheduleSave = useCallback(() => {
-    setSaveStatus('unsaved');
+    const world = worldRef.current;
+    if (!world) return;
+
+    // 1. Write to localStorage NOW (synchronous, instant persistence)
+    writeCachedCanvas(connectionId, world.toDataURL('image/png'));
+
+    // 2. Show green immediately, fade to idle after 1.2 s
+    setSaveStatus('saved');
     if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current);
-    saveDebounceRef.current = null;
+    saveDebounceRef.current = setTimeout(() => setSaveStatus('idle'), 1200);
+
+    // 3. Background Supabase upload (silent, no further status changes)
     saveSnapshot();
-  }, [saveSnapshot]);
+  }, [connectionId, saveSnapshot]);
 
   // ── World ↔ Screen coordinate conversion ──────────────────────────────────
   function screenToWorld(sx: number, sy: number): [number, number] {
@@ -1099,19 +1109,18 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [undo]);
 
-  // ── Save immediately on page hide / tab close ────────────────────────────
-  // visibilitychange → hidden fires before unload on Chrome/Safari. We always
-  // try to save here so the last few strokes survive a quick Cmd+R.
-  // The mutex in saveSnapshot prevents double-saves if a normal save just ran.
+  // ── Ensure Supabase upload completes on tab close ────────────────────────
+  // localStorage is already written synchronously in scheduleSave, so the
+  // drawing survives a refresh regardless. This just makes sure any pending
+  // in-flight or queued upload gets a chance to finish before the page unloads.
   useEffect(() => {
     function onHide() {
       if (document.visibilityState !== 'hidden') return;
-      if (saveStatus === 'idle' || saveStatus === 'saved') return; // nothing to save
       saveSnapshot();
     }
     document.addEventListener('visibilitychange', onHide);
     return () => document.removeEventListener('visibilitychange', onHide);
-  }, [saveSnapshot, saveStatus]);
+  }, [saveSnapshot]);
 
   // ── Cleanup ────────────────────────────────────────────────────────────────
   useEffect(() => {
