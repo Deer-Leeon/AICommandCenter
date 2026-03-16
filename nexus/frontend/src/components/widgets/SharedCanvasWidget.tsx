@@ -37,7 +37,9 @@ import { apiFetch, apiFetchMultipart } from '../../lib/api';
 const WORLD_W  = 2000;
 const WORLD_H  = 2000;
 const MAX_UNDO = 12;
-const SAVE_DEBOUNCE_MS = 2000;
+// Save 500 ms after the last completed stroke — short enough that a quick
+// refresh still captures the work, long enough to batch rapid strokes.
+const SAVE_DEBOUNCE_MS = 500;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -942,7 +944,7 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     async function load() {
       const res = await apiFetch(`/api/shared-canvas/${connectionId}`);
       if (!res.ok || cancelled) return;
-      const data = await res.json() as { empty?: boolean; snapshotUrl?: string };
+      const data = await res.json() as { empty?: boolean; snapshotUrl?: string; version?: number };
       if (data.empty || !data.snapshotUrl) return;
 
       const img = new Image();
@@ -953,12 +955,14 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
         if (!ctx) return;
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, WORLD_W, WORLD_H);
-        // Draw snapshot at its natural size anchored to top-left of world
         ctx.drawImage(img, 0, 0, WORLD_W, WORLD_H);
         blitViewport();
         setHintVisible(false);
       };
-      img.src = data.snapshotUrl;
+      // Cache-bust: same storage path is always reused (upsert), so the
+      // browser would serve the old PNG without this version param.
+      const bust = data.version != null ? `?v=${data.version}` : `?t=${Date.now()}`;
+      img.src = data.snapshotUrl + bust;
     }
     load().catch(() => {});
     return () => { cancelled = true; };
@@ -975,6 +979,23 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [undo]);
+
+  // ── Save on page hide / tab close ─────────────────────────────────────────
+  // visibilitychange → hidden fires reliably on tab close, navigation, and
+  // Cmd+R/F5 refresh — and unlike beforeunload it supports async work.
+  // This ensures any pending debounced save fires immediately so strokes
+  // drawn just before closing aren't lost.
+  useEffect(() => {
+    function onHide() {
+      if (document.visibilityState !== 'hidden') return;
+      if (!saveDebounceRef.current) return;   // nothing pending
+      clearTimeout(saveDebounceRef.current);
+      saveDebounceRef.current = null;
+      saveSnapshot();
+    }
+    document.addEventListener('visibilitychange', onHide);
+    return () => document.removeEventListener('visibilitychange', onHide);
+  }, [saveSnapshot]);
 
   // ── Cleanup ────────────────────────────────────────────────────────────────
   useEffect(() => {
