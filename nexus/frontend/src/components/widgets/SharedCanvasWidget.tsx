@@ -352,6 +352,8 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
   const partnerStrokesRef     = useRef<Map<string, ActiveStroke>>(new Map());
   const partnerCursorRef      = useRef<{ x: number; y: number; name: string } | null>(null);
   const partnerCursorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Dedup: track completed strokeIds so WS + SSE don't draw the same stroke twice
+  const completedStrokesRef   = useRef<Set<string>>(new Set());
 
   // ── Performance refs ───────────────────────────────────────────────────────
   const saveDebounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -526,21 +528,28 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     return [e.clientX - rect.left, e.clientY - rect.top];
   }
 
-  // ── WebSocket stroke handler (receives partner strokes) ───────────────────
-  const handleWsMessage = useCallback((raw: unknown) => {
-    const msg = raw as StrokeMsg;
+  // ── Shared stroke processor — used by BOTH WebSocket and SSE handlers ───────
+  // Deduplication: WS arrives first (~5 ms), SSE arrives ~100 ms later for the
+  // same completed stroke.  completedStrokesRef ensures each stroke is drawn
+  // to the world canvas exactly once regardless of which transport delivers it.
+  const processStroke = useCallback((msg: StrokeMsg) => {
     if (!msg?.strokeId) return;
-
-    // Ignore own echoes (server injects userId)
+    // Ignore own echoes (server injects userId on relay)
     if (msg.userId === user?.id) return;
 
     if (msg.isComplete) {
-      // Commit partner's completed stroke to the world canvas permanently
+      // Skip if this stroke was already committed (e.g. arrived via WS first)
+      if (completedStrokesRef.current.has(msg.strokeId)) return;
+      completedStrokesRef.current.add(msg.strokeId);
+      // Prevent unbounded growth — keep last 500 strokeIds
+      if (completedStrokesRef.current.size > 500) {
+        completedStrokesRef.current.delete(completedStrokesRef.current.values().next().value!);
+      }
+
       const ctx = getWorldCtx();
       if (ctx) drawStrokeOnCtx(ctx, msg);
       partnerStrokesRef.current.delete(msg.strokeId);
 
-      // Update partner cursor
       if (msg.points.length > 0) {
         const last = msg.points[msg.points.length - 1];
         partnerCursorRef.current = { x: last[0], y: last[1], name: partnerName };
@@ -553,28 +562,44 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
       blitViewport();
       setHintVisible(false);
     } else {
-      // Update in-progress partner stroke on overlay
-      partnerStrokesRef.current.set(msg.strokeId, {
-        strokeId: msg.strokeId,
-        tool:     msg.tool,
-        color:    msg.color,
-        size:     msg.size,
-        points:   msg.points,
-      });
+      // In-progress stroke — skip if stroke was already completed
+      if (completedStrokesRef.current.has(msg.strokeId)) return;
+      // Take the version with more points (WS and SSE may race)
+      const existing = partnerStrokesRef.current.get(msg.strokeId);
+      if (!existing || msg.points.length >= existing.points.length) {
+        partnerStrokesRef.current.set(msg.strokeId, {
+          strokeId: msg.strokeId,
+          tool:     msg.tool,
+          color:    msg.color,
+          size:     msg.size,
+          points:   msg.points,
+        });
+      }
       if (msg.points.length > 0) {
         const last = msg.points[msg.points.length - 1];
         partnerCursorRef.current = { x: last[0], y: last[1], name: partnerName };
       }
     }
-
     scheduleOverlayRedraw();
   }, [blitViewport, getWorldCtx, partnerName, scheduleOverlayRedraw, user?.id]);
 
+  // ── WebSocket handler — fast path (~5 ms) ─────────────────────────────────
+  const handleWsMessage = useCallback((raw: unknown) => {
+    processStroke(raw as StrokeMsg);
+  }, [processStroke]);
+
   const { send: wsSend } = useCanvasWebSocket(connectionId, handleWsMessage);
 
-  // ── SSE handler (snapshot_saved, cleared — non-stroke events) ─────────────
+  // ── SSE handler — reliable fallback path (~100 ms) ────────────────────────
+  // canvas:stroke events arrive here via HTTP POST → broadcastToConnection.
+  // If WS already delivered the stroke, completedStrokesRef deduplicates it.
   const handleSSE = useCallback((event: { type: string; payload: unknown }) => {
     const { type, payload } = event;
+
+    if (type === 'canvas:stroke') {
+      processStroke(payload as StrokeMsg);
+      return;
+    }
 
     if (type === 'canvas:cleared') {
       const ctx = getWorldCtx();
@@ -585,13 +610,13 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
       partnerStrokesRef.current.clear();
       currentStrokeRef.current = null;
       undoStackRef.current = [];
+      completedStrokesRef.current.clear();
       blitViewport();
       setHintVisible(true);
       scheduleOverlayRedraw();
     }
 
     if (type === 'canvas:snapshot_saved') {
-      // Partner saved — re-fetch their snapshot so we stay fully in sync
       const p = payload as { snapshotUrl?: string };
       if (p?.snapshotUrl) {
         const img = new Image();
@@ -608,7 +633,7 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
         img.src = p.snapshotUrl;
       }
     }
-  }, [blitViewport, getWorldCtx, scheduleOverlayRedraw]);
+  }, [blitViewport, getWorldCtx, processStroke, scheduleOverlayRedraw]);
 
   useSharedChannel(connectionId, 'shared_canvas', handleSSE);
 
@@ -726,18 +751,28 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     currentStrokeRef.current = null;
     scheduleOverlayRedraw();
 
-    // Final broadcast with isComplete=true
-    wsSend({
+    const completedMsg = {
       strokeId:   stroke.strokeId,
       tool:       stroke.tool,
       color:      stroke.color,
       size:       stroke.size,
       points:     stroke.points,
       isComplete: true,
-    });
+    };
+
+    // Fast path: WebSocket (~5 ms when connected)
+    wsSend(completedMsg);
+
+    // Reliable fallback: HTTP POST → SSE broadcast (~100 ms, always works).
+    // If WS delivered it first, completedStrokesRef deduplicates on the receiver.
+    apiFetch(`/api/shared-canvas/${connectionId}/stroke`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ ...completedMsg, userId: user?.id }),
+    }).catch(() => {});
 
     scheduleSave();
-  }, [blitViewport, getWorldCtx, scheduleSave, scheduleOverlayRedraw, wsSend]);
+  }, [blitViewport, connectionId, getWorldCtx, scheduleSave, scheduleOverlayRedraw, user?.id, wsSend]);
 
   const handlePointerLeave = useCallback(() => {
     if (isDrawingRef.current) handlePointerUp({} as RPointerEvent<HTMLCanvasElement>);
