@@ -556,9 +556,9 @@ input[type="time"] {
 
 .bv-label {
   font-family: 'Space Mono', monospace;
-  font-size: 8px;
-  letter-spacing: 0.18em;
-  color: var(--text-faint);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
   text-transform: uppercase;
   flex-shrink: 0;
   text-align: center;
