@@ -259,10 +259,10 @@ function PlacedWidget({
   // Guard: if the widget type doesn't exist in config (e.g. a stale DB entry
   // referencing a widget that was renamed or removed) skip rendering instead
   // of crashing the entire app with "Cannot read properties of undefined".
-  // shared_chess is intentionally absent from WIDGET_COMPONENTS — it uses its
-  // own special render path in the JSX below, so we must not guard it out here.
+  // shared_chess and shared_photo are intentionally absent from WIDGET_COMPONENTS —
+  // they use their own special render paths in the JSX below.
   if (!config) return null;
-  if (!WidgetComponent && widgetType !== 'shared_chess') return null;
+  if (!WidgetComponent && widgetType !== 'shared_chess' && widgetType !== 'shared_photo') return null;
   const row = parseInt(cellKey.split(',')[0], 10);
   const revealDelay = ROW_REVEAL_DELAY[row] ?? 900;
 
