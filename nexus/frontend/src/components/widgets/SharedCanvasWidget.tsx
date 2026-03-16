@@ -371,10 +371,11 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
   });
 
   // ── Canvas refs ────────────────────────────────────────────────────────────
-  const worldRef      = useRef<HTMLCanvasElement>(null);  // 2000×2000 hidden world
-  const viewportRef   = useRef<HTMLCanvasElement>(null);  // widget-size, shown to user
-  const overlayRef    = useRef<HTMLCanvasElement>(null);  // partner strokes + cursor
-  const minimapRef    = useRef<HTMLCanvasElement>(null);  // minimap overlay
+  const worldRef      = useRef<HTMLCanvasElement>(null);   // 2000×2000 hidden world
+  const viewportRef   = useRef<HTMLCanvasElement>(null);   // widget-size, shown to user (z:1)
+  const partnerRef    = useRef<HTMLCanvasElement>(null);   // partner in-progress strokes (z:2)
+  const overlayRef    = useRef<HTMLCanvasElement>(null);   // own in-progress stroke only (z:3)
+  const minimapRef    = useRef<HTMLCanvasElement>(null);   // minimap overlay
   const containerRef  = useRef<HTMLDivElement>(null);
   const colorInputRef = useRef<HTMLInputElement>(null);
 
@@ -514,33 +515,25 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     }, 1200);
   }, [drawMinimap]);
 
-  // ── Overlay redraw (rAF-batched) ───────────────────────────────────────────
-  const performOverlayRedraw = useCallback(() => {
-    overlayRafRef.current = 0;
-    if (!overlayDirtyRef.current) return;
-    overlayDirtyRef.current = false;
-
-    const ctx = getOverlayCtx();
+  // ── Partner canvas — drawn IMMEDIATELY on WS receive, no rAF delay ─────────
+  // Dedicated canvas for partner in-progress strokes + cursor. By drawing here
+  // synchronously the moment a WS message lands, we eliminate the up-to-16 ms
+  // rAF wait and the O(N) full-redraw cost from the shared overlay layer.
+  const redrawPartnerCanvas = useCallback(() => {
+    const pc = partnerRef.current;
     const { w, h } = viewSizeRef.current;
-    if (!ctx || w === 0 || h === 0) return;
+    if (!pc || w === 0 || h === 0) return;
+    const ctx = pc.getContext('2d');
+    if (!ctx) return;
 
     ctx.clearRect(0, 0, w, h);
-
-    // Apply inverse pan so world-coord strokes appear at the right screen position
     ctx.save();
     ctx.translate(-panXRef.current, -panYRef.current);
 
-    // My in-progress stroke (in world coords)
-    if (currentStrokeRef.current) {
-      drawStrokeOnCtx(ctx, currentStrokeRef.current);
-    }
-
-    // Partner strokes (in world coords)
     for (const stroke of partnerStrokesRef.current.values()) {
       drawStrokeOnCtx(ctx, stroke);
     }
 
-    // Partner cursor dot
     if (partnerCursorRef.current) {
       const { x, y, name } = partnerCursorRef.current;
       ctx.beginPath();
@@ -553,6 +546,28 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
       ctx.font = 'bold 10px system-ui';
       ctx.fillStyle = 'rgba(124,106,255,1)';
       ctx.fillText(name.charAt(0).toUpperCase(), x + 8, y - 4);
+    }
+
+    ctx.restore();
+  }, []);
+
+  // ── Overlay redraw (rAF-batched) — own stroke only ────────────────────────
+  const performOverlayRedraw = useCallback(() => {
+    overlayRafRef.current = 0;
+    if (!overlayDirtyRef.current) return;
+    overlayDirtyRef.current = false;
+
+    const ctx = getOverlayCtx();
+    const { w, h } = viewSizeRef.current;
+    if (!ctx || w === 0 || h === 0) return;
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.save();
+    ctx.translate(-panXRef.current, -panYRef.current);
+
+    // Only own in-progress stroke — partner strokes live on partnerRef (immediate)
+    if (currentStrokeRef.current) {
+      drawStrokeOnCtx(ctx, currentStrokeRef.current);
     }
 
     ctx.restore();
@@ -685,10 +700,11 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
         if (partnerCursorTimerRef.current) clearTimeout(partnerCursorTimerRef.current);
         partnerCursorTimerRef.current = setTimeout(() => {
           partnerCursorRef.current = null;
-          scheduleOverlayRedraw();
+          redrawPartnerCanvas(); // hide cursor after inactivity
         }, 3000);
       }
       blitViewport();
+      redrawPartnerCanvas(); // remove completed stroke from partner layer
       setHintVisible(false);
     } else {
       // In-progress stroke — skip if stroke was already completed
@@ -708,9 +724,10 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
         const last = msg.points[msg.points.length - 1];
         partnerCursorRef.current = { x: last[0], y: last[1], name: partnerName };
       }
+      // Draw to partner canvas IMMEDIATELY — no rAF, zero extra latency
+      redrawPartnerCanvas();
     }
-    scheduleOverlayRedraw();
-  }, [blitViewport, getWorldCtx, partnerName, scheduleOverlayRedraw, user?.id]);
+  }, [blitViewport, getWorldCtx, partnerName, redrawPartnerCanvas, user?.id]);
 
   // ── WebSocket handler — fast path (~5 ms) ─────────────────────────────────
   const handleWsMessage = useCallback((raw: unknown) => {
@@ -741,8 +758,8 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
       undoStackRef.current = [];
       completedStrokesRef.current.clear();
       blitViewport();
+      redrawPartnerCanvas(); // clear partner layer
       setHintVisible(true);
-      scheduleOverlayRedraw();
     }
 
     // canvas:snapshot_saved — do NOT reload the canvas here.
@@ -750,7 +767,7 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     // Reloading here would overwrite live strokes with a potentially stale/cached PNG.
     // Stroke-by-stroke sync (canvas:stroke via WS + SSE) already keeps both
     // canvases perfectly in sync without any snapshot reload.
-  }, [blitViewport, getWorldCtx, processStroke, scheduleOverlayRedraw]);
+  }, [blitViewport, getWorldCtx, processStroke, redrawPartnerCanvas]);
 
   useSharedChannel(connectionId, 'shared_canvas', handleSSE);
 
@@ -820,6 +837,7 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
       panXRef.current = Math.max(0, Math.min(WORLD_W - w, startPanX - (sx - startSx)));
       panYRef.current = Math.max(0, Math.min(WORLD_H - h, startPanY - (sy - startSy)));
       blitViewport();
+      redrawPartnerCanvas(); // re-apply pan transform immediately
       scheduleOverlayRedraw();
       showMinimapBriefly();
       return;
@@ -860,7 +878,7 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
         body:    JSON.stringify({ ...progressMsg, userId: user?.id }),
       }).catch(() => {});
     }
-  }, [blitViewport, connectionId, scheduleOverlayRedraw, showMinimapBriefly, user?.id, wsSend]);
+  }, [blitViewport, connectionId, redrawPartnerCanvas, scheduleOverlayRedraw, showMinimapBriefly, user?.id, wsSend]);
 
   const handlePointerUp = useCallback((_e: RPointerEvent<HTMLCanvasElement>) => {
     if (isPanningRef.current) {
@@ -910,26 +928,25 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     if (isPanningRef.current) isPanningRef.current = false;
   }, [handlePointerUp]);
 
-  // ── ResizeObserver — viewport & overlay resize, world never changes ────────
+  // ── ResizeObserver — viewport / partner / overlay resize, world never changes
   const handleViewportResize = useCallback((newW: number, newH: number) => {
-    const vp  = viewportRef.current;
-    const ov  = overlayRef.current;
-    if (!vp || !ov) return;
+    const vp = viewportRef.current;
+    const pc = partnerRef.current;
+    const ov = overlayRef.current;
+    if (!vp || !pc || !ov) return;
 
-    vp.width  = newW;
-    vp.height = newH;
-    ov.width  = newW;
-    ov.height = newH;
+    vp.width  = newW; vp.height = newH;
+    pc.width  = newW; pc.height = newH;
+    ov.width  = newW; ov.height = newH;
     viewSizeRef.current = { w: newW, h: newH };
 
-    // Clamp pan so we don't show outside world bounds
     panXRef.current = Math.max(0, Math.min(WORLD_W - newW, panXRef.current));
     panYRef.current = Math.max(0, Math.min(WORLD_H - newH, panYRef.current));
 
-    // Re-blit — content is untouched because world canvas never resizes
     blitViewport();
+    redrawPartnerCanvas(); // re-apply pan transform on partner layer after resize
     scheduleOverlayRedraw();
-  }, [blitViewport, scheduleOverlayRedraw]);
+  }, [blitViewport, redrawPartnerCanvas, scheduleOverlayRedraw]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -963,13 +980,14 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
       panXRef.current = Math.max(0, Math.min(WORLD_W - w, panXRef.current + e.deltaX));
       panYRef.current = Math.max(0, Math.min(WORLD_H - h, panYRef.current + e.deltaY));
       blitViewport();
+      redrawPartnerCanvas(); // re-apply pan transform immediately
       scheduleOverlayRedraw();
       showMinimapBriefly();
     }
 
     canvas.addEventListener('wheel', onWheel, { passive: false });
     return () => canvas.removeEventListener('wheel', onWheel);
-  }, [blitViewport, scheduleOverlayRedraw, showMinimapBriefly]);
+  }, [blitViewport, redrawPartnerCanvas, scheduleOverlayRedraw, showMinimapBriefly]);
 
   // ── Initialise + instant paint (runs before browser's first paint) ───────
   // 1. Size the world canvas to WORLD_W × WORLD_H.
@@ -983,18 +1001,20 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     const world     = worldRef.current;
     const container = containerRef.current;
     const vp        = viewportRef.current;
+    const pc        = partnerRef.current;
     const ov        = overlayRef.current;
-    if (!world || !container || !vp || !ov) return;
+    if (!world || !container || !vp || !pc || !ov) return;
 
     world.width  = WORLD_W;
     world.height = WORLD_H;
 
-    // Size viewport/overlay synchronously so blitViewport works immediately
+    // Size viewport/partner/overlay synchronously so blitViewport works immediately
     const rect = container.getBoundingClientRect();
     const w = Math.round(rect.width);
     const h = Math.round(rect.height);
     if (w > 0 && h > 0) {
       vp.width = w; vp.height = h;
+      pc.width = w; pc.height = h;
       ov.width = w; ov.height = h;
       viewSizeRef.current = { w, h };
     }
@@ -1126,6 +1146,7 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     undoStackRef.current = [];
     completedStrokesRef.current.clear();
     blitViewport();
+    redrawPartnerCanvas();
     setHintVisible(true);
     setShowClearConfirm(false);
     scheduleOverlayRedraw();
@@ -1136,7 +1157,7 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
     if (saveDebounceRef.current) { clearTimeout(saveDebounceRef.current); saveDebounceRef.current = null; }
     clearCachedCanvas(connectionId);
     await apiFetch(`/api/shared-canvas/${connectionId}`, { method: 'DELETE' });
-  }, [blitViewport, connectionId, getWorldCtx, saveToUndoStack, scheduleOverlayRedraw]);
+  }, [blitViewport, connectionId, getWorldCtx, redrawPartnerCanvas, saveToUndoStack, scheduleOverlayRedraw]);
 
   // ── Save to photo frame ────────────────────────────────────────────────────
   const saveToPhotoFrame = useCallback(async () => {
@@ -1222,11 +1243,18 @@ export function SharedCanvasWidget({ connectionId, onClose }: Props) {
         onPointerLeave={handlePointerLeave}
       />
 
-      {/* Overlay — in-progress strokes + partner cursor */}
+      {/* Partner canvas — in-progress partner strokes + cursor, drawn IMMEDIATELY on WS receive */}
+      <canvas
+        ref={partnerRef}
+        className="sc-canvas-layer"
+        style={{ pointerEvents: 'none', zIndex: 2 }}
+      />
+
+      {/* Overlay — own in-progress stroke only (rAF-batched, pointer-synced) */}
       <canvas
         ref={overlayRef}
         className="sc-canvas-layer"
-        style={{ pointerEvents: 'none', zIndex: 2 }}
+        style={{ pointerEvents: 'none', zIndex: 3 }}
       />
 
       {/* Minimap — shows while panning, fades out after ~1.2 s */}
