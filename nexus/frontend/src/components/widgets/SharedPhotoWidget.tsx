@@ -300,6 +300,16 @@ export function SharedPhotoWidget({ connectionId, slotKey, onClose }: Props) {
     setTimeout(() => setToast(null), 3600);
   }
 
+  // ── Attach stream to video element once camera state renders it ───────────
+  // startCamera() calls setWidgetState('camera') last, so the <video> element
+  // doesn't exist yet when we have the stream.  This effect fires after the
+  // DOM updates and safely wires the stream to the newly-mounted video element.
+  useEffect(() => {
+    if (widgetState !== 'camera' || !streamRef.current || !videoRef.current) return;
+    videoRef.current.srcObject = streamRef.current;
+    videoRef.current.play().catch(() => { /* ignore autoplay policy */ });
+  }, [widgetState, stream]);
+
   // ── Camera ─────────────────────────────────────────────────────────────────
   async function startCamera(deviceId?: string) {
     try {
@@ -313,11 +323,6 @@ export function SharedPhotoWidget({ connectionId, slotKey, onClose }: Props) {
       streamRef.current = s;
       setStream(s);
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = s;
-        videoRef.current.play().catch(() => { /* ignore autoplay policy */ });
-      }
-
       // Enumerate cameras (only once)
       if (cameras.length === 0) {
         const devices = await navigator.mediaDevices.enumerateDevices();
@@ -328,7 +333,7 @@ export function SharedPhotoWidget({ connectionId, slotKey, onClose }: Props) {
       const track = s.getVideoTracks()[0];
       setCameraLabel(track?.label || 'Camera');
       setCameraError(null);
-      setWidgetState('camera');
+      setWidgetState('camera'); // <video> mounts after this; useEffect above attaches stream
     } catch {
       setCameraError('Camera access denied — use Upload instead');
       setWidgetState('camera');
