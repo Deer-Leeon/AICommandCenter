@@ -1,8 +1,33 @@
-node_modules/
-frontend/node_modules/
-backend/node_modules/
+# Exclude everything that Dockerfile.backend doesn't need.
+# This dramatically reduces the Docker build context sent to Railway on every deploy.
+
+# Frontend — not needed for the backend build
+frontend/
+
+# Electron — not needed
+electron/
+
+# Node modules everywhere (never commit these)
+**/node_modules/
+
+# Build outputs
+**/dist/
 backend/dist/
+
+# Environment / secrets
 .env
-logs/
-.git/
+*.local
+tokens.json
+
+# Editor / OS
+.DS_Store
+.cursor/
 *.log
+
+# Git
+.git/
+.gitignore
+
+# Docs / misc
+*.md
+RELEASE_CHECKLIST.md
