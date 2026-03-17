@@ -243,16 +243,14 @@ const STYLES = `
   padding:0 14px; height:40px;
   background:var(--surface2); border:1px solid var(--border);
   border-radius:20px;
-  box-shadow:0 4px 24px rgba(0,0,0,0.4);
-  backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+  box-shadow:0 4px 24px rgba(0,0,0,0.5);
   pointer-events:auto; cursor:default; flex-shrink:0;
 }
 .sc-pill.micro { height:32px; padding:0 10px; gap:6px; }
 .sc-expanded {
   background:var(--surface2); border:1px solid var(--border);
   border-radius:14px; padding:12px;
-  box-shadow:0 4px 24px rgba(0,0,0,0.4);
-  backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+  box-shadow:0 4px 24px rgba(0,0,0,0.5);
   pointer-events:auto;
   display:flex; flex-direction:column; gap:10px;
   animation:sc-toolbar-in 0.22s cubic-bezier(0.34,1.56,0.64,1) both;
@@ -326,7 +324,7 @@ const STYLES = `
 }
 .sc-dissolved {
   position:absolute; inset:0; z-index:30;
-  background:rgba(0,0,0,0.72); backdrop-filter:blur(4px);
+  background:rgba(0,0,0,0.80);
   display:flex; flex-direction:column; align-items:center;
   justify-content:center; gap:14px;
   color:var(--text); text-align:center; padding:24px;
@@ -339,7 +337,7 @@ const STYLES = `
 .sc-toast-pill {
   display:flex; align-items:center; gap:6px;
   padding:6px 12px; border-radius:20px;
-  background:rgba(0,0,0,0.72); backdrop-filter:blur(8px);
+  background:rgba(30,30,40,0.92);
   font-size:12px; color:#fff; white-space:nowrap;
   border:1px solid rgba(255,255,255,0.15);
 }
