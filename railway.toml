@@ -1,0 +1,11 @@
+# Railway config — used when Root Directory is the repo root (not nexus/).
+# Uses the root-level Dockerfile which accounts for the nexus/ prefix on all paths.
+
+[build]
+  builder = "DOCKERFILE"
+
+[deploy]
+  healthcheckPath = "/"
+  healthcheckTimeout = 30
+  restartPolicyType = "ON_FAILURE"
+  restartPolicyMaxRetries = 3

@@ -1,0 +1,16 @@
+# Exclude everything the backend Dockerfile doesn't need.
+# Keeps the Docker build context small when building from the repo root.
+
+nexus/frontend/
+nexus/electron/
+nexus/ios/
+nexus/supabase/
+**/node_modules/
+**/dist/
+.git/
+.cursor/
+**/*.md
+.DS_Store
+nexus/.env
+nexus/*.local
+nexus/logs/
