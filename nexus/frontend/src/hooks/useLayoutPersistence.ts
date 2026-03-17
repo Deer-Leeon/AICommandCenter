@@ -30,11 +30,7 @@ function writeCachedLayoutV3(userId: string, layout: PagesLayout) {
   } catch { /* storage quota exceeded — non-fatal */ }
 }
 
-// Migrate a v2 payload from the server into a v3 PagesLayout.
-// Wraps the existing single-page data in a "Main" page.
 function migrateV2toV3(v2: LayoutV2, existingPages?: Page[]): PagesLayout {
-  // If the user already has a v3 layout locally (e.g. a Main page from a previous
-  // migration), update that page's data instead of creating a duplicate.
   if (existingPages && existingPages.length > 0) {
     const mainPage = existingPages[0];
     const updated: Page = {
@@ -45,7 +41,6 @@ function migrateV2toV3(v2: LayoutV2, existingPages?: Page[]): PagesLayout {
     };
     return { v: 3, pages: [updated, ...existingPages.slice(1)], activePage: mainPage.id };
   }
-
   const page: Page = {
     id:          crypto.randomUUID(),
     name:        'Main',
@@ -59,23 +54,19 @@ function migrateV2toV3(v2: LayoutV2, existingPages?: Page[]): PagesLayout {
 }
 
 export function useLayoutPersistence(userId?: string) {
-  const { pages, activePage, setPages } = useStore();
+  const { setPages } = useStore();
 
-  const loadedRef         = useRef(false);
-  const saveTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const prevUserIdRef     = useRef<string | undefined>(undefined);
-  const localModifiedRef  = useRef(false);
-
-  // Track local modifications so we don't overwrite mid-flight edits with
-  // a stale server response. Any change to pages (which mirrors all grid writes)
-  // counts as a local modification once loading is complete.
-  useEffect(() => {
-    const unsub = useStore.subscribe((state, prev) => {
-      if (!loadedRef.current) return;
-      if (state.pages !== prev.pages) localModifiedRef.current = true;
-    });
-    return unsub;
-  }, []);
+  const loadedRef        = useRef(false);
+  const saveTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevUserIdRef    = useRef<string | undefined>(undefined);
+  const localModifiedRef = useRef(false);
+  /**
+   * Set to true immediately before calling setPages() for a server/SSE-sourced
+   * layout. The store subscription reads this flag synchronously (Zustand fires
+   * subscribers synchronously) and skips the save — preventing the "SSE triggers
+   * re-save" ping-pong that was causing widgets to disappear.
+   */
+  const remoteAppliedRef = useRef(false);
 
   // ── Reset + reload whenever the logged-in user changes ────────────────────
   useEffect(() => {
@@ -83,24 +74,31 @@ export function useLayoutPersistence(userId?: string) {
     prevUserIdRef.current = userId;
 
     if (!userId) {
-      // Logged out — clear all grid state
-      useStore.setState({ pages: [], activePage: '', grid: {}, gridSpans: {}, gridConnections: {}, layoutLoaded: false });
-      loadedRef.current = false;
+      useStore.setState({
+        pages: [], activePage: '', grid: {}, gridSpans: {},
+        gridConnections: {}, layoutLoaded: false,
+      });
+      loadedRef.current        = false;
       localModifiedRef.current = false;
+      remoteAppliedRef.current = false;
       return;
     }
 
-    loadedRef.current = false;
+    loadedRef.current        = false;
     localModifiedRef.current = false;
+    remoteAppliedRef.current = false;
 
-    // 1. Instant paint from v3 localStorage cache
+    // 1. Instant paint from v3 localStorage cache (loadedRef is still false
+    //    so the subscription below will skip this call — no spurious save)
     const cached = readCachedLayoutV3(userId);
     if (cached && cached.pages.length > 0) {
       setPages(cached.pages, cached.activePage || cached.pages[0].id);
       loadedRef.current = true;
     } else {
-      // No v3 cache — clear any leftover state
-      useStore.setState({ pages: [], activePage: '', grid: {}, gridSpans: {}, gridConnections: {}, layoutLoaded: false });
+      useStore.setState({
+        pages: [], activePage: '', grid: {}, gridSpans: {},
+        gridConnections: {}, layoutLoaded: false,
+      });
     }
 
     // 2. Background server sync — always authoritative
@@ -110,40 +108,31 @@ export function useLayoutPersistence(userId?: string) {
         if (localModifiedRef.current) return;
 
         let resolved: PagesLayout | null = null;
-
         if (raw && typeof raw === 'object') {
           const payload = raw as Record<string, unknown>;
-
           if (payload.v === 3) {
-            // Server already has v3 data
             const v3 = payload as unknown as PagesLayout;
-            if (Array.isArray(v3.pages) && v3.pages.length > 0) {
-              resolved = v3;
-            }
+            if (Array.isArray(v3.pages) && v3.pages.length > 0) resolved = v3;
           } else if (payload.v === 2) {
-            // Server has v2 — migrate, preserving existing local pages if any
             const localCache = readCachedLayoutV3(userId);
             resolved = migrateV2toV3(payload as unknown as LayoutV2, localCache?.pages);
           } else if (Object.keys(payload).length > 0) {
-            // Legacy un-versioned format
-            const legacyV2: LayoutV2 = { v: 2, widgets: raw as Record<string, WidgetType>, spans: {}, connections: {} };
+            const legacyV2: LayoutV2 = {
+              v: 2, widgets: raw as Record<string, WidgetType>, spans: {}, connections: {},
+            };
             const localCache = readCachedLayoutV3(userId);
             resolved = migrateV2toV3(legacyV2, localCache?.pages);
           }
         }
-
-        // Empty server response → create starter pages for new users
         if (!resolved || resolved.pages.length === 0) {
           const starterPages = makeStarterPages();
           resolved = { v: 3, pages: starterPages, activePage: starterPages[0].id };
         }
-
         writeCachedLayoutV3(userId, resolved);
+        remoteAppliedRef.current = true;
         setPages(resolved.pages, resolved.activePage || resolved.pages[0].id);
       })
-      .catch(() => {
-        // Server unavailable — local cache is already shown, nothing more to do
-      })
+      .catch(() => {})
       .finally(() => {
         loadedRef.current = true;
         useStore.getState().setLayoutLoaded(true);
@@ -151,37 +140,63 @@ export function useLayoutPersistence(userId?: string) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
-  // ── Save on every change to pages (debounced 800 ms) ─────────────────────
+  // ── Local change detection + debounced save ───────────────────────────────
+  // Uses a Zustand subscription instead of a useEffect([pages]) so we can
+  // distinguish local edits from remote SSE applications via remoteAppliedRef.
+  //
+  // Leading debounce (not trailing): the timer starts on the FIRST change and
+  // fires 150ms later reading the LATEST store state. This means:
+  //   - Fast drags save 150ms after they START, not 150ms after they END
+  //   - No 2-3s delay from continuous drag events resetting the timer
+  //   - The final position is still captured because we read useStore.getState()
+  //     at fire time, not the stale closure value
   useEffect(() => {
-    if (!loadedRef.current || !userId) return;
+    if (!userId) return;
 
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    const unsub = useStore.subscribe((state, prev) => {
+      if (!loadedRef.current) return;
+      if (state.pages === prev.pages && state.activePage === prev.activePage) return;
 
-    saveTimerRef.current = setTimeout(() => {
-      const payload: PagesLayout = { v: 3, pages, activePage };
-      writeCachedLayoutV3(userId, payload);
-      apiFetch('/api/layout', {
-        method: 'PUT',
-        body: JSON.stringify({ grid: payload }),
-      })
-        .then(() => {
-          // Mark clean so subsequent remote changes from other sessions apply
-          // cleanly instead of being blocked by a stale localModified flag.
-          localModifiedRef.current = false;
+      // Remote SSE update — skip save, reset flag
+      if (remoteAppliedRef.current) {
+        remoteAppliedRef.current = false;
+        return;
+      }
+
+      // Local edit
+      localModifiedRef.current = true;
+
+      // Leading debounce: only start a timer if one isn't already running.
+      // The timer callback reads the LATEST state from the store, so it always
+      // captures the final position even if many intermediate states arrived.
+      if (saveTimerRef.current) return;
+      saveTimerRef.current = setTimeout(() => {
+        saveTimerRef.current = null;
+        const { pages, activePage } = useStore.getState();
+        const payload: PagesLayout = { v: 3, pages, activePage };
+        writeCachedLayoutV3(userId, payload);
+        apiFetch('/api/layout', {
+          method: 'PUT',
+          body: JSON.stringify({ grid: payload }),
         })
-        .catch(() => {});
-    }, 150); // 150ms — fast enough for instant feel, slow enough to batch drags
+          .then(() => { localModifiedRef.current = false; })
+          .catch(() => {});
+      }, 150);
+    });
 
     return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      unsub();
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
     };
-  // pages and activePage are the source of truth for all grid changes
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pages, activePage, userId]);
+  }, [userId]);
 
   // ── Real-time cross-session sync ──────────────────────────────────────────
-  // The backend embeds the full layout payload in the layout:update event so
-  // we can apply it immediately — no extra GET round-trip, ~0ms perceived lag.
+  // Receives layout:update events from other sessions (browser ↔ desktop app).
+  // The full layout is embedded in the event — no extra GET round-trip needed.
+  // remoteAppliedRef prevents the setPages() call from triggering a re-save.
   useEffect(() => {
     if (!userId) return;
 
@@ -193,7 +208,6 @@ export function useLayoutPersistence(userId?: string) {
       if (!raw) return;
 
       let resolved: PagesLayout | null = null;
-
       if (raw.v === 3) {
         const v3 = raw as unknown as PagesLayout;
         if (Array.isArray(v3.pages) && v3.pages.length > 0) resolved = v3;
@@ -204,6 +218,7 @@ export function useLayoutPersistence(userId?: string) {
 
       if (resolved) {
         writeCachedLayoutV3(userId, resolved);
+        remoteAppliedRef.current = true; // Suppress re-save on receiving end
         setPages(resolved.pages, resolved.activePage || resolved.pages[0].id);
       }
     });
