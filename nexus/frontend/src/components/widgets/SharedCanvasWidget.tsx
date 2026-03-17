@@ -210,8 +210,7 @@ const STYLES = `
 .sc-minimap {
   position:absolute; top:10px; right:10px; z-index:30;
   border-radius:7px; overflow:hidden;
-  box-shadow:0 2px 12px rgba(0,0,0,0.55);
-  border:1px solid rgba(255,255,255,0.18);
+  border:1px solid rgba(255,255,255,0.22);
   pointer-events:none;
   animation:sc-minimap-in 0.18s ease both;
 }
@@ -232,6 +231,9 @@ const STYLES = `
   transform:translateX(-50%);
   display:flex; flex-direction:column; align-items:center; gap:8px;
   z-index:20; pointer-events:none;
+  /* isolation:isolate creates a self-contained compositing boundary so the
+     toolbar stack context can never bleed into the <canvas> GPU layers below */
+  isolation:isolate;
 }
 .sc-toolbar-wrap.side {
   bottom:auto; left:auto; right:10px; top:50%;
@@ -241,16 +243,18 @@ const STYLES = `
 .sc-pill {
   display:flex; align-items:center; gap:8px;
   padding:0 14px; height:40px;
-  background:var(--surface2); border:1px solid var(--border);
+  background:var(--surface); border:1px solid rgba(255,255,255,0.14);
   border-radius:20px;
-  box-shadow:0 4px 24px rgba(0,0,0,0.5);
+  /* No box-shadow — large shadows create black-blob GPU compositing artifacts
+     when stacked over <canvas> layers with CSS transforms. Border provides
+     sufficient visual separation against any canvas background. */
   pointer-events:auto; cursor:default; flex-shrink:0;
 }
 .sc-pill.micro { height:32px; padding:0 10px; gap:6px; }
 .sc-expanded {
-  background:var(--surface2); border:1px solid var(--border);
+  background:var(--surface); border:1px solid rgba(255,255,255,0.14);
   border-radius:14px; padding:12px;
-  box-shadow:0 4px 24px rgba(0,0,0,0.5);
+  /* box-shadow removed — same reason as .sc-pill (GPU compositing black blob) */
   pointer-events:auto;
   display:flex; flex-direction:column; gap:10px;
   animation:sc-toolbar-in 0.22s cubic-bezier(0.34,1.56,0.64,1) both;
