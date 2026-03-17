@@ -955,7 +955,7 @@ export function GmailWidget({ onClose }: { onClose: () => void }) {
             meaning the content never overflows → no scrollbar appears.
             Using a block container lets children grow to their natural height
             and triggers overflow-y:auto correctly. */}
-        <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: compact ? '6px 8px' : '10px 12px', overscrollBehavior: 'contain' }}>
+        <div onWheel={e => e.stopPropagation()} style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: compact ? '6px 8px' : '10px 12px', overscrollBehavior: 'contain' }}>
           {/* Inner wrapper: flex column that grows freely (flex-shrink:0 implicit on block children) */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {threadLoading ? (
@@ -988,7 +988,7 @@ export function GmailWidget({ onClose }: { onClose: () => void }) {
         ) : null}
 
         {replyTarget && (
-          <div style={{ flexShrink: 0, borderTop: '1px solid var(--border)', maxHeight: '45%', overflowY: 'auto', overscrollBehavior: 'contain' }}>
+          <div onWheel={e => e.stopPropagation()} style={{ flexShrink: 0, borderTop: '1px solid var(--border)', maxHeight: '45%', overflowY: 'auto', overscrollBehavior: 'contain' }}>
             <ComposeForm
               onSent={() => { setReplyTarget(null); }}
               initialTo={replyTarget.senderEmail}
@@ -1014,7 +1014,7 @@ export function GmailWidget({ onClose }: { onClose: () => void }) {
   if (isSplit) {
     const rightPanel = view === 'thread' ? renderThreadView()
       : view === 'compose' ? (
-        <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, overscrollBehavior: 'contain' }}>
+        <div onWheel={e => e.stopPropagation()} style={{ flex: 1, overflowY: 'auto', minHeight: 0, overscrollBehavior: 'contain' }}>
           <ComposeForm
             onSent={() => setView('inbox')}
             initialTo={replyTarget?.senderEmail}
@@ -1053,7 +1053,7 @@ export function GmailWidget({ onClose }: { onClose: () => void }) {
         {/* Split body */}
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           {/* Left: thread list */}
-          <div ref={listRef} onScroll={handleScroll} style={{ width: '40%', borderRight: '1px solid var(--border)', overflowY: 'auto', minHeight: 0, overscrollBehavior: 'contain' }}>
+          <div ref={listRef} onScroll={handleScroll} onWheel={e => e.stopPropagation()} style={{ width: '40%', borderRight: '1px solid var(--border)', overflowY: 'auto', minHeight: 0, overscrollBehavior: 'contain' }}>
             {view === 'search' ? (
               <div style={{ padding: '8px 12px' }}>
                 <input
@@ -1152,7 +1152,7 @@ export function GmailWidget({ onClose }: { onClose: () => void }) {
               style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 0 }}>←</button>
             <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>New Message</span>
           </div>
-          <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, overscrollBehavior: 'contain' }}>
+          <div onWheel={e => e.stopPropagation()} style={{ flex: 1, overflowY: 'auto', minHeight: 0, overscrollBehavior: 'contain' }}>
             <ComposeForm
               onSent={() => { setView('inbox'); setReplyTarget(null); }}
               initialTo={replyTarget?.senderEmail}
@@ -1166,7 +1166,7 @@ export function GmailWidget({ onClose }: { onClose: () => void }) {
 
       {/* ── Scrollable content: inbox / labels / search ── */}
       {view !== 'thread' && view !== 'compose' && (
-        <div ref={listRef} onScroll={handleScroll} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0, overscrollBehavior: 'contain' }}>
+        <div ref={listRef} onScroll={handleScroll} onWheel={e => e.stopPropagation()} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0, overscrollBehavior: 'contain' }}>
 
           {/* Inbox */}
           {view === 'inbox' && renderThreadList(threads, loadingThreads)}
