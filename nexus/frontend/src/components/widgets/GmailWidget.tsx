@@ -412,19 +412,19 @@ function MessageCard({ message, defaultExpanded, onReply }: MessageCardProps) {
           {initials(message.senderName || message.senderEmail)}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>
-            {message.senderName}
-            <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>
-              &lt;{message.senderEmail}&gt;
-            </span>
+          <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {message.senderName || message.senderEmail}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {message.senderEmail}
           </div>
           {!expanded && (
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
               {message.bodyPlain.slice(0, 80)}
             </div>
           )}
         </div>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, fontFamily: 'Space Mono, monospace' }}>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, fontFamily: 'Space Mono, monospace', marginLeft: 8 }}>
           {formatDate(message.date)}
         </span>
       </div>
@@ -949,18 +949,26 @@ export function GmailWidget({ onClose }: { onClose: () => void }) {
           )}
         </div>
 
-        {/* Messages — this is the ONE scrollable zone */}
-        <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: compact ? '6px 8px' : '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {threadLoading ? (
-            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', fontSize: 12 }}>Loading…</div>
-          ) : openThread?.messages.map((msg, i) => (
-            <MessageCard
-              key={msg.messageId}
-              message={msg}
-              defaultExpanded={i === (openThread.messages.length - 1)}
-              onReply={handleReply}
-            />
-          ))}
+        {/* Messages — block scroll container.
+            IMPORTANT: must NOT be a flex column. In a flex column, children
+            have flex-shrink:1 by default and shrink to fit the container,
+            meaning the content never overflows → no scrollbar appears.
+            Using a block container lets children grow to their natural height
+            and triggers overflow-y:auto correctly. */}
+        <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: compact ? '6px 8px' : '10px 12px' }}>
+          {/* Inner wrapper: flex column that grows freely (flex-shrink:0 implicit on block children) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {threadLoading ? (
+              <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', fontSize: 12 }}>Loading…</div>
+            ) : openThread?.messages.map((msg, i) => (
+              <MessageCard
+                key={msg.messageId}
+                message={msg}
+                defaultExpanded={i === (openThread.messages.length - 1)}
+                onReply={handleReply}
+              />
+            ))}
+          </div>
         </div>
 
         {/* Reply bar */}
