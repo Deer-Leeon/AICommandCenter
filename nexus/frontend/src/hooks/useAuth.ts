@@ -92,19 +92,25 @@ export function useAuth() {
     }
 
     if (window.electronAPI?.isElectron) {
+      // RFC 8252 loopback flow:
+      // 1. Spin up a local HTTP server and get the port
+      // 2. Use http://localhost:PORT/auth/callback as the redirect URI
+      // 3. Open the auth URL in the system browser (account chooser + Touch ID)
+      // 4. Browser redirects to localhost → server grabs the PKCE code → IPC
+      const port = await window.electronAPI.startOAuthServer();
+      const redirectTo = `http://localhost:${port}/auth/callback`;
+
       const { data } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: getAuthRedirectUrl(),
+          redirectTo,
           queryParams: { prompt: 'select_account' },
           skipBrowserRedirect: true,
         },
       });
       if (data?.url) {
         setAwaitingBrowser(true);
-        // Open a popup BrowserWindow — main process intercepts the callback
-        // before it loads and delivers the PKCE code via onDeepLink.
-        await window.electronAPI.openOAuthWindow(data.url);
+        await window.electronAPI.openExternalUrl(data.url);
         return 'browser-opened';
       }
     } else {

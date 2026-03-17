@@ -44,8 +44,8 @@ function AwaitingBrowserScreen({ onCancel }: { onCancel: () => void }) {
           Complete sign-in in your browser{dots}
         </div>
         <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, maxWidth: 280 }}>
-          A sign-in window opened — pick your account there.<br />
-          This window will update automatically when done.
+          Pick your account in the browser that just opened.<br />
+          NEXUS will sign you in automatically when done.
         </div>
       </div>
 
@@ -234,7 +234,7 @@ export default function LoginPage() {
           Continue with Google
           {IS_ELECTRON && (
             <span style={{ fontSize: 10, color: '#888', fontWeight: 400, marginLeft: 2 }}>
-              (opens sign-in window)
+              (opens your browser)
             </span>
           )}
         </button>

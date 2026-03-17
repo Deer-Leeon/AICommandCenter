@@ -22,14 +22,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-/** Returns the OAuth redirect URL for the current context. */
+/**
+ * Returns the OAuth redirect URL for the current context.
+ *
+ * Electron: pass an explicit redirectTo computed from the loopback port
+ * (see useAuth.ts signInWithGoogle) — this function is NOT called for Electron.
+ */
 export function getAuthRedirectUrl(): string {
-  // Electron: OAuth runs in a popup BrowserWindow. The main process intercepts
-  // the redirect to this URL before the page loads, extracts the PKCE code, and
-  // delivers it to the main window via IPC — the page never actually loads.
-  if (typeof window !== 'undefined' && window.electronAPI?.isElectron) {
-    return 'https://nexus.lj-buchmiller.com/auth/callback';
-  }
   // Chrome extension
   if (typeof chrome !== 'undefined' && chrome?.runtime?.id) {
     return `chrome-extension://${chrome.runtime.id}/index.extension.html`;

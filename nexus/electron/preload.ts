@@ -41,12 +41,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ── External URL (opens in system browser) ──────────────────────────────────
   openExternalUrl: (url: string) => ipcRenderer.invoke('open-external-url', url),
 
-  // ── OAuth popup window ───────────────────────────────────────────────────────
-  // Opens a child BrowserWindow for Google OAuth. Main process intercepts the
-  // callback redirect and sends the PKCE code back via 'deep-link' IPC event.
-  openOAuthWindow: (url: string) => ipcRenderer.invoke('open-oauth-window', url),
+  // ── RFC 8252 loopback OAuth ──────────────────────────────────────────────────
+  // Starts a local HTTP server and returns the port. The renderer constructs the
+  // OAuth redirect URI as http://localhost:PORT/auth/callback, generates the auth
+  // URL via Supabase, and opens it in the system browser. When the browser is
+  // redirected back to localhost, the server extracts the PKCE code and forwards
+  // it to the main window via the 'deep-link' IPC event.
+  startOAuthServer: (): Promise<number> => ipcRenderer.invoke('start-oauth-server'),
 
-  // ── OAuth cancelled (popup closed without completing auth) ───────────────────
+  // ── OAuth cancelled ──────────────────────────────────────────────────────────
   onOAuthCancelled: (callback: () => void) => {
     ipcRenderer.on('oauth-cancelled', () => callback());
   },

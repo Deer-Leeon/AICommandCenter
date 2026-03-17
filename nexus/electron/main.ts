@@ -8,6 +8,7 @@ import {
   nativeTheme,
 } from 'electron';
 import * as path from 'path';
+import * as http from 'http';
 import Store from 'electron-store';
 import { buildMenu } from './menu';
 import { setupTray } from './tray';
@@ -271,82 +272,84 @@ ipcMain.handle('open-external-url', (_, url: string) => {
   shell.openExternal(url);
 });
 
-// Open a popup BrowserWindow for Google OAuth.
-// We intercept the callback redirect BEFORE the page loads, extract the PKCE
-// code, forward it to the main window as a synthetic deep-link event, then
-// close the popup. This keeps the code_verifier in the main window's localStorage
-// and lets Supabase complete the PKCE exchange there — no custom protocol needed.
-ipcMain.handle('open-oauth-window', async (_, authUrl: string) => {
-  const CALLBACK_ORIGIN = 'https://nexus.lj-buchmiller.com';
+// ── RFC 8252 loopback OAuth server ────────────────────────────────────────────
+// Google blocks sign-in inside embedded webviews. Instead we:
+//   1. Spin up a temporary local HTTP server on port 54321 (falls back to any
+//      free port if 54321 is occupied).
+//   2. Use http://localhost:PORT/auth/callback as the OAuth redirect URI.
+//   3. The renderer opens the Google auth URL in the system browser.
+//   4. After the user signs in, the browser is redirected to localhost — our
+//      server receives the PKCE code, sends it to the renderer via IPC, and
+//      shows a "you can close this tab" page.
+//
+// Supabase redirect URL whitelist requirement:
+//   Add  http://localhost:54321/auth/callback  to your Supabase project's
+//   Authentication → URL Configuration → Redirect URLs.
+//   (If port 54321 is unavailable, also add http://localhost:*/auth/callback)
 
-  const authWin = new BrowserWindow({
-    width: 500,
-    height: 680,
-    title: 'Sign in to NEXUS',
-    parent: mainWindow ?? undefined,
-    modal: false,
-    autoHideMenuBar: true,
-    titleBarStyle: 'default',
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      // Isolated session so Google never sees the main window's cookies
-      partition: 'persist:nexus-oauth',
-    },
+function tryBindPort(port: number): Promise<http.Server | null> {
+  return new Promise(resolve => {
+    const s = http.createServer();
+    s.once('error', () => resolve(null));
+    s.listen(port, '127.0.0.1', () => resolve(s));
   });
+}
 
-  // Appear as Chrome on macOS so Google doesn't block the embedded webview
-  authWin.webContents.setUserAgent(
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) ' +
-    'AppleWebKit/537.36 (KHTML, like Gecko) ' +
-    'Chrome/124.0.0.0 Safari/537.36'
-  );
-
-  let codeDelivered = false;
-
-  function deliverCode(url: string) {
-    if (codeDelivered) return;
-    try {
-      const parsed = new URL(url);
-      const code = parsed.searchParams.get('code');
-      if (code && mainWindow && !mainWindow.isDestroyed()) {
-        codeDelivered = true;
-        mainWindow.webContents.send('deep-link', `nexus://auth/callback?code=${code}`);
-        mainWindow.show();
-        mainWindow.focus();
-      }
-    } catch {
-      // Malformed URL — ignore
-    }
-    if (!authWin.isDestroyed()) authWin.close();
+ipcMain.handle('start-oauth-server', async (): Promise<number> => {
+  // Try preferred fixed port first so the user only needs one Supabase entry
+  let server = await tryBindPort(54321);
+  if (!server) {
+    // Fall back to an OS-assigned free port
+    server = await new Promise(resolve => {
+      const s = http.createServer();
+      s.listen(0, '127.0.0.1', () => resolve(s));
+    });
   }
 
-  // Intercept user/script-initiated navigations to our callback origin
-  authWin.webContents.on('will-navigate', (event, url) => {
-    if (url.startsWith(CALLBACK_ORIGIN)) {
-      event.preventDefault();
-      deliverCode(url);
-    }
-  });
+  const { port } = server.address() as { port: number };
 
-  // Intercept HTTP-level redirects (Supabase typically does a 302 → callback)
-  authWin.webContents.on('will-redirect', (event, url) => {
-    if (url.startsWith(CALLBACK_ORIGIN)) {
-      event.preventDefault();
-      deliverCode(url);
-    }
-  });
+  // Auto-close after 10 minutes in case the user abandons the flow
+  const closeTimer = setTimeout(() => server!.close(), 10 * 60 * 1000);
 
-  // If the user closes the popup without completing auth, cancel the waiting state
-  authWin.on('closed', () => {
-    if (!codeDelivered && mainWindow && !mainWindow.isDestroyed()) {
+  server.on('request', (req, res) => {
+    const reqUrl = new URL(req.url ?? '/', `http://localhost:${port}`);
+    const code   = reqUrl.searchParams.get('code');
+    const error  = reqUrl.searchParams.get('error');
+
+    // Respond with a polished "you can close this tab" page
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(`<!doctype html><html><head><title>NEXUS</title>
+<style>
+  body{font-family:system-ui,sans-serif;background:#0a0a0f;color:#e8e8f0;
+       display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
+  .card{text-align:center;max-width:340px}
+  .icon{font-size:52px;margin-bottom:16px}
+  h1{font-size:20px;margin:0 0 8px;font-weight:700}
+  p{color:#7a7a90;font-size:14px;line-height:1.5}
+</style></head><body>
+<div class="card">
+  <div class="icon">${code ? '✅' : '❌'}</div>
+  <h1>${code ? 'You\'re signed in to NEXUS' : 'Sign-in failed'}</h1>
+  <p>${code
+    ? 'Return to the NEXUS app. This tab will close automatically.'
+    : `Error: ${error ?? 'Something went wrong. Please try again.'}`}</p>
+</div>
+<script>setTimeout(()=>window.close(),1800)</script>
+</body></html>`);
+
+    clearTimeout(closeTimer);
+    server!.close();
+
+    if (code && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('deep-link', `nexus://auth/callback?code=${code}`);
+      mainWindow.show();
+      mainWindow.focus();
+    } else if (!code && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('oauth-cancelled');
     }
   });
 
-  authWin.loadURL(authUrl).catch(() => {
-    if (!authWin.isDestroyed()) authWin.close();
-  });
+  return port;
 });
 
 // Auto-update trigger from renderer
