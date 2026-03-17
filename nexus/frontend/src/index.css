@@ -164,6 +164,8 @@ body {
      handles its own scroll internally and the overscroll conflicts with
      the card-tap animation feel. */
   overscroll-behavior: none;
+  /* Momentum scrolling on iOS for elements with overflow: scroll/auto */
+  -webkit-overflow-scrolling: touch;
   /* Ensure the Capacitor WebView never shows a white background flash */
   background: var(--bg);
 }

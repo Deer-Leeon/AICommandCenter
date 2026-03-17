@@ -1,49 +1,93 @@
 import UIKit
 import Capacitor
+import WebKit
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
 
-    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        // Configure the WKWebView once Capacitor has finished building its view hierarchy.
+        // A short async hop lets the run-loop finish the initial VC setup first.
+        DispatchQueue.main.async {
+            self.configureNativeChrome()
+        }
         return true
     }
 
-    func applicationWillResignActive(_ application: UIApplication) {
-        // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
-        // Use this method to pause ongoing tasks, disable timers, and invalidate graphics rendering callbacks. Games should use this method to pause the game.
-    }
-
-    func applicationDidEnterBackground(_ application: UIApplication) {
-        // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information to restore your application to its current state in case it is terminated later.
-        // If your application supports background execution, this method is called instead of applicationWillTerminate: when the user quits.
-    }
-
-    func applicationWillEnterForeground(_ application: UIApplication) {
-        // Called as part of the transition from the background to the active state; here you can undo many of the changes made on entering the background.
-    }
-
+    // Called every time the app enters the foreground — re-apply settings in
+    // case a new view controller was presented while backgrounded.
     func applicationDidBecomeActive(_ application: UIApplication) {
-        // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
+        configureNativeChrome()
     }
 
-    func applicationWillTerminate(_ application: UIApplication) {
-        // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
+    // ── Main configuration entry-point ────────────────────────────────────────
+
+    private func configureNativeChrome() {
+        guard let root = window?.rootViewController else { return }
+        enforceFullScreen(root)
+        configureWebViews(in: root.view)
     }
 
-    func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
-        // Called when the app was launched with a url. Feel free to add additional processing here,
-        // but if you want the App API to support tracking app url opens, make sure to keep this call
+    // ── Full-screen enforcement ───────────────────────────────────────────────
+    // Prevents iOS 13+ automatic `.pageSheet` style from making any VC
+    // swipeable-to-dismiss. Walks the entire VC hierarchy.
+
+    private func enforceFullScreen(_ vc: UIViewController) {
+        vc.modalPresentationStyle = .fullScreen
+        vc.children.forEach { enforceFullScreen($0) }
+        if let presented = vc.presentedViewController {
+            enforceFullScreen(presented)
+        }
+    }
+
+    // ── WKWebView configuration ───────────────────────────────────────────────
+    // Walk the full view hierarchy and apply config to every WKWebView found.
+    // Capacitor embeds the WKWebView several layers deep inside CAPBridgeViewController.
+
+    private func configureWebViews(in view: UIView) {
+        if let wv = view as? WKWebView {
+            applyWebViewSettings(wv)
+        }
+        view.subviews.forEach { configureWebViews(in: $0) }
+    }
+
+    private func applyWebViewSettings(_ wv: WKWebView) {
+        // Disable tap-and-hold link preview → removes "Open in Safari" callout
+        wv.allowsLinkPreview = false
+
+        // Disable swipe-left/right back-forward navigation
+        wv.allowsBackForwardNavigationGestures = false
+
+        // Kill scroll bounce — the spring-back effect can look like a sheet dismiss
+        wv.scrollView.bounces = false
+        wv.scrollView.alwaysBounceVertical = false
+        wv.scrollView.alwaysBounceHorizontal = false
+
+        // Overscroll indicator is a web-app implementation detail, not native
+        wv.scrollView.showsVerticalScrollIndicator = false
+        wv.scrollView.showsHorizontalScrollIndicator = false
+
+        // Lock content inset — Capacitor's `contentInset: 'always'` handles
+        // safe areas; auto-adjustment would add an unwanted top gap.
+        wv.scrollView.contentInsetAdjustmentBehavior = .never
+    }
+
+    // ── Deep-link / URL handling (required by Capacitor) ─────────────────────
+
+    func application(_ app: UIApplication,
+                     open url: URL,
+                     options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
         return ApplicationDelegateProxy.shared.application(app, open: url, options: options)
     }
 
-    func application(_ application: UIApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
-        // Called when the app was launched with an activity, including Universal Links.
-        // Feel free to add additional processing here, but if you want the App API to support
-        // tracking app url opens, make sure to keep this call
-        return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
+    func application(_ application: UIApplication,
+                     continue userActivity: NSUserActivity,
+                     restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
+        return ApplicationDelegateProxy.shared.application(application,
+                                                           continue: userActivity,
+                                                           restorationHandler: restorationHandler)
     }
-
 }

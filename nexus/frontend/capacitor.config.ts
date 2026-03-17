@@ -1,13 +1,22 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.nexus.app',
+  appId: 'com.ljbuchmiller.nexus',
   appName: 'NEXUS',
   webDir: 'dist',
   server: {
     // Uncomment + set to your Mac's local IP for live-reload dev:
     // url: 'http://192.168.x.x:5173',
     // cleartext: true,
+
+    // Restrict in-WebView navigation to NEXUS domains only.
+    // All other URLs (OAuth, external links) are intercepted and routed
+    // through the @capacitor/browser plugin (SFSafariViewController) instead.
+    allowNavigation: [
+      'nexus-api.lj-buchmiller.com',
+      'nexus.lj-buchmiller.com',
+      '*.supabase.co',
+    ],
   },
   ios: {
     contentInset: 'always',

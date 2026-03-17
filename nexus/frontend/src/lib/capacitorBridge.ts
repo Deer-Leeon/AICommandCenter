@@ -41,7 +41,11 @@ export const openInAppBrowser = async (url: string) => {
   if (native()) {
     await Browser.open({
       url,
-      presentationStyle: 'popover',
+      // 'fullScreen' fills the entire screen — no swipe-down-to-dismiss sheet,
+      // no visible card shadow. The SFSafariViewController toolbar (done button
+      // + safari icon) is still shown at the bottom; this is required by Apple
+      // and cannot be removed from SFSafariViewController.
+      presentationStyle: 'fullscreen',
       toolbarColor: '#0a0a0f',
     });
   } else {
