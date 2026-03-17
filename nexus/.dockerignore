@@ -1,33 +1,31 @@
-# Exclude everything that Dockerfile.backend doesn't need.
-# This dramatically reduces the Docker build context sent to Railway on every deploy.
+# Shared .dockerignore for both Dockerfile.backend and Dockerfile.frontend.
+# Excludes heavy/generated artifacts that neither service needs,
+# but keeps frontend source files so Dockerfile.frontend can build them.
 
-# Frontend — not needed for the backend build
-frontend/
+# ── Never needed by either service ──────────────────────────────────────────
 
-# Electron — not needed
-electron/
-
-# Node modules everywhere (never commit these)
+# Node modules (reinstalled inside Docker)
 **/node_modules/
 
-# Build outputs
+# Built outputs (rebuilt inside Docker)
 **/dist/
-backend/dist/
+
+# Electron desktop app — not part of any Railway service
+electron/
+
+# iOS Xcode project — not part of any Railway service
+frontend/ios/
+
+# Capacitor generated assets
+frontend/resources/
 
 # Environment / secrets
 .env
 *.local
 tokens.json
 
-# Editor / OS
+# Editor / OS / Git
 .DS_Store
 .cursor/
 *.log
-
-# Git
 .git/
-.gitignore
-
-# Docs / misc
-*.md
-RELEASE_CHECKLIST.md
