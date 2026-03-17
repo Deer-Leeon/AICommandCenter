@@ -217,13 +217,6 @@ const COUNTRY_FLAGS: Record<string, string> = {
 };
 const flagFor = (c: string) => COUNTRY_FLAGS[c] ?? '🏁';
 
-// ── Format date ───────────────────────────────────────────────────────────────
-
-function fmtDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
 function fmtSessionDay(dateStr: string): string {
   // dateStr may already be a full ISO string — don't re-append 'T'
   const d = dateStr.includes('T') ? new Date(dateStr) : new Date(dateStr + 'T12:00:00Z');
@@ -335,7 +328,7 @@ function NowTab({
   const nextTarget = status?.nextSession ?? status?.nextRace;
   const countdown = useCountdown(
     nextTarget ? ('date' in nextTarget ? nextTarget.date : status?.nextRace?.date ?? null) : null,
-    mode === 'slim'
+    mode === 'slim' ? 'short' : false
   );
   const countdownToGP = useCountdown(status?.nextRace?.date ?? null, 'medium');
   const showGPCountdown = status?.nextSession && status.nextSession.type !== 'race' && status.nextRace;

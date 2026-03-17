@@ -53,12 +53,6 @@ interface ConvertResult {
   toDST: boolean;
 }
 
-interface LiveClock {
-  time: string;
-  date: string;
-  isDST: boolean;
-}
-
 type LayoutMode = 'micro' | 'slim' | 'compact' | 'standard' | 'expanded';
 
 // ── Persistence ───────────────────────────────────────────────────────────────
@@ -469,7 +463,6 @@ function TimePicker({ time, date, isManual, onChange, compact, inline }: TimePic
         outline: 'none', cursor: 'text',
         flex: inline ? 1 : undefined,
         width: inline ? undefined : '100%', boxSizing: 'border-box',
-        // @ts-expect-error vendor prefix
         WebkitAppearance: 'none', appearance: 'none',
       }}
       onFocus={e => (e.currentTarget.style.borderColor = 'rgba(124,106,255,0.5)')}
@@ -520,87 +513,6 @@ function TimePicker({ time, date, isManual, onChange, compact, inline }: TimePic
           >›</button>
         </div>
       )}
-    </div>
-  );
-}
-
-// ── Offset pill ───────────────────────────────────────────────────────────────
-
-function OffsetPill({ diff, dayDiff }: { diff: string; dayDiff: number }) {
-  const isSame = diff === '0 hours' || diff === '0h';
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-      {dayDiff !== 0 && (
-        <span style={{
-          fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 10,
-          background: dayDiff > 0 ? 'rgba(61,232,176,0.15)' : 'rgba(245,158,11,0.15)',
-          color: dayDiff > 0 ? 'var(--teal)' : 'var(--color-warning)',
-          border: `1px solid ${dayDiff > 0 ? 'rgba(61,232,176,0.3)' : 'rgba(245,158,11,0.3)'}`,
-        }}>
-          {dayDiff > 0 ? `+${dayDiff}d` : `${dayDiff}d`}
-        </span>
-      )}
-      <span style={{
-        fontSize: 13, fontWeight: 700, padding: '4px 10px', borderRadius: 12,
-        background: isSame ? 'var(--surface3)' : 'var(--accent-dim)',
-        color: isSame ? 'var(--text-muted)' : 'var(--accent)',
-        border: `1px solid ${isSame ? 'var(--border)' : 'rgba(124,106,255,0.3)'}`,
-        whiteSpace: 'nowrap', fontFamily: "'Space Mono', monospace",
-      }}>
-        {isSame ? '= same' : diff}
-      </span>
-    </div>
-  );
-}
-
-// ── FavChip ───────────────────────────────────────────────────────────────────
-
-function FavChip({
-  fav, isActive, onSelect, onRemove,
-}: {
-  fav: FavPair;
-  isActive: boolean;
-  onSelect: () => void;
-  onRemove: () => void;
-}) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <div
-      style={{
-        display: 'flex', alignItems: 'center',
-        background: isActive ? 'rgba(124,106,255,0.15)' : 'var(--surface2)',
-        border: `1px solid ${isActive ? 'rgba(124,106,255,0.4)' : 'var(--border)'}`,
-        borderRadius: 8, overflow: 'hidden', transition: 'all 0.1s',
-      }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      <button
-        onClick={onSelect}
-        style={{
-          background: 'none', border: 'none', cursor: 'pointer',
-          padding: '3px 8px', fontSize: 11,
-          color: isActive ? 'var(--accent)' : 'var(--text-muted)',
-          fontFamily: 'inherit', whiteSpace: 'nowrap',
-        }}
-      >
-        {fav.from.flag} {fav.from.name} ⇄ {fav.to.flag} {fav.to.name}
-      </button>
-      {/* Remove button — slides in on hover */}
-      <button
-        onClick={e => { e.stopPropagation(); onRemove(); }}
-        title="Remove favorite"
-        style={{
-          background: 'none', border: 'none', cursor: 'pointer',
-          padding: hovered ? '3px 6px 3px 0' : '3px 0',
-          fontSize: 10, color: 'var(--text-faint)',
-          width: hovered ? 18 : 0, overflow: 'hidden',
-          transition: 'width 0.15s, padding 0.15s, color 0.1s',
-          lineHeight: 1, display: 'flex', alignItems: 'center',
-        }}
-        onMouseEnter={e => (e.currentTarget.style.color = '#ef4444')}
-        onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-faint)')}
-      >✕</button>
     </div>
   );
 }
@@ -1166,7 +1078,7 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
         )}
 
         {/* Favorites dropdown trigger — all non-micro modes */}
-        {favorites.length > 0 && mode !== 'micro' && (
+        {favorites.length > 0 && (
           <button
             ref={favBtnRef}
             onClick={() => setShowFavDropdown(v => !v)}

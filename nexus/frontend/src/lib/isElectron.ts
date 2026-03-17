@@ -14,7 +14,7 @@ export function isElectron(): boolean {
  * The platform string when running in Electron, null otherwise.
  * Useful for mac-specific UI (e.g. hiding custom window controls on macOS).
  */
-export function electronPlatform(): NodeJS.Platform | null {
+export function electronPlatform(): string | null {
   if (!isElectron()) return null;
   return window.electronAPI!.platform;
 }

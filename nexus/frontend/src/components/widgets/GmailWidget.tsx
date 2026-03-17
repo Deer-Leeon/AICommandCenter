@@ -1,5 +1,5 @@
 import {
-  useState, useEffect, useRef, useCallback, useMemo,
+  useState, useEffect, useRef, useCallback,
   type KeyboardEvent, type CSSProperties,
 } from 'react';
 import { apiFetch } from '../../lib/api';
@@ -648,7 +648,7 @@ function NeedsAuthPrompt() {
 
 // ── Main widget ───────────────────────────────────────────────────────────────
 
-export function GmailWidget({ onClose }: { onClose: () => void }) {
+export function GmailWidget({ onClose: _onClose }: { onClose: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [height, setHeight] = useState(0);

@@ -3,8 +3,6 @@ import { useStore } from '../store/useStore';
 import type { AIResponse } from '../types';
 import { apiFetch } from '../lib/api';
 
-// Model name — fetched once from /api/ai/config and cached (used for display only)
-let ollamaModel = 'llama3.2:3b';
 
 export function useAI() {
   const {
@@ -34,13 +32,7 @@ export function useAI() {
       setLastAIResponse(null);
 
       try {
-        if (!modelFetched.current) {
-          try {
-            const cfg = await apiFetch('/api/ai/config').then((r) => r.json()) as { model?: string };
-            if (cfg.model) ollamaModel = cfg.model;
-          } catch { /* keep default */ }
-          modelFetched.current = true;
-        }
+        modelFetched.current = true;
 
         const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
         const activeSlackChannel = localStorage.getItem('nexus-slack-channel') ?? '';

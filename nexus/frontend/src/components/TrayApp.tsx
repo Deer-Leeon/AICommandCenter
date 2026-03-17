@@ -12,7 +12,7 @@
  *  • "Open NEXUS" button
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../hooks/useAuth';
 
