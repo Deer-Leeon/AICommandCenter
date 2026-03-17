@@ -110,20 +110,27 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
 
   // Dynamically import node-apn only when APNs is configured to avoid
   // startup errors on environments without the .p8 key file present.
-  let apn: typeof import('node-apn');
+  // node-apn is CommonJS — the dynamic import resolves to the module directly
+  // (no .default wrapper). Cast via any to avoid TS interop complaints.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let apn: any;
   try {
     apn = await import('node-apn');
   } catch {
-    // node-apn not installed — run: npm install node-apn in backend/
     return;
   }
 
-  const provider = new apn.default.Provider({
+  const ApnProvider     = apn.Provider     ?? apn.default?.Provider;
+  const ApnNotification = apn.Notification ?? apn.default?.Notification;
+
+  if (!ApnProvider || !ApnNotification) return;
+
+  const provider = new ApnProvider({
     token: { key: keyPath, keyId, teamId },
     production: process.env.NODE_ENV === 'production',
   });
 
-  const note = new apn.default.Notification();
+  const note = new ApnNotification();
   note.expiry    = Math.floor(Date.now() / 1000) + 3600;
   note.badge     = payload.badge ?? 0;
   note.sound     = 'default';
