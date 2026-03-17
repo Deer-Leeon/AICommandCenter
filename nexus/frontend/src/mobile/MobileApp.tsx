@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMobileCardOrder } from './useMobileCardOrder';
 import { MobileCardStack } from './MobileCardStack';
 import { MobileBottomBar } from './MobileBottomBar';
@@ -6,6 +6,10 @@ import { MobileSearchOverlay } from './MobileSearchOverlay';
 import { MobileLayoutEditor } from './MobileLayoutEditor';
 import { SettingsModal } from '../components/SettingsModal';
 import { useStore } from '../store/useStore';
+import { useAuth } from '../hooks/useAuth';
+import { isCapacitor } from '../lib/isCapacitor';
+import { registerPushNotifications, onKeyboardShow, onKeyboardHide } from '../lib/capacitorBridge';
+import { apiFetch } from '../lib/api';
 import type { WidgetType } from '../types';
 
 const BOTTOM_BAR_H = 56;
@@ -15,7 +19,31 @@ export default function MobileApp() {
   const [showLayoutEditor, setShowLayoutEditor] = useState(false);
   const [showSearch, setShowSearch]     = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const { pages, activePage, setActivePage } = useStore();
+  const { user } = useAuth();
+
+  // ── Capacitor: push notifications + keyboard avoidance ──────────────────
+  useEffect(() => {
+    if (!isCapacitor()) return;
+
+    // Request push permission on first authenticated launch; send token to backend
+    if (user) {
+      registerPushNotifications().then(async (token) => {
+        if (!token) return;
+        try {
+          await apiFetch('/api/push/register', {
+            method: 'POST',
+            body: JSON.stringify({ token, platform: 'ios' }),
+          });
+        } catch { /* non-fatal */ }
+      });
+    }
+
+    // Shift card content up when keyboard appears so focused inputs stay visible
+    onKeyboardShow((height) => setKeyboardHeight(height));
+    onKeyboardHide(() => setKeyboardHeight(0));
+  }, [user]);
 
   function handleLayoutSave(newOrder: WidgetType[], _newActiveIdx: number) {
     setOrder(newOrder);
@@ -92,7 +120,14 @@ export default function MobileApp() {
       )}
 
       {/* ── Card stack ───────────────────────────────────────────────────── */}
-      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0, padding: '4px 0 4px' }}>
+      {/* paddingBottom shifts cards up when the iOS keyboard is open so
+          focused inputs inside cards are never hidden behind the keyboard */}
+      <div style={{
+        flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column',
+        minHeight: 0, padding: '4px 0 4px',
+        paddingBottom: keyboardHeight > 0 ? keyboardHeight : undefined,
+        transition: 'padding-bottom 0.25s ease',
+      }}>
         <MobileCardStack order={order} />
       </div>
 

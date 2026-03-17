@@ -28,9 +28,14 @@ import PrivacyPage from './pages/PrivacyPage';
 import { isMobileDevice } from './mobile/useMobileDetect';
 import { TrayApp } from './components/TrayApp';
 import { isElectron } from './lib/isElectron';
+import { isCapacitor } from './lib/isCapacitor';
+import { onAppUrlOpen, closeInAppBrowser, hideSplashScreen, setStatusBarDark } from './lib/capacitorBridge';
+import { supabase } from './lib/supabase';
 
 // Detect once at module load time (viewport/UA won't change mid-session)
-const IS_MOBILE = isMobileDevice();
+const IS_CAPACITOR = isCapacitor();
+// Capacitor is always on a mobile device; also check UA/screen for PWA mobile
+const IS_MOBILE = isMobileDevice() || IS_CAPACITOR;
 
 /**
  * In Chrome extension context:
@@ -55,6 +60,8 @@ const IS_EXTENSION =
 const IS_ELECTRON = isElectron();
 
 // HashRouter for: extension pages, Electron (file:// origin)
+// Capacitor uses its own scheme (capacitor://localhost) where the History API
+// works normally, so BrowserRouter is fine there.
 const AppRouter = IS_EXTENSION || IS_ELECTRON ? HashRouter : BrowserRouter;
 
 // ── Service Worker registration (web only) ────────────────────────────────────
@@ -114,6 +121,51 @@ function Root() {
       }
     });
   // Register once on mount — dependencies are stable
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Capacitor: handle deep links from Safari View Controller ─────────────
+  // After Google / Spotify OAuth completes in the in-app browser, iOS fires
+  // the nexus:// custom scheme back into the app via appUrlOpen.
+  //
+  //   nexus://auth/callback?code=…    → PKCE code exchange → session set
+  //   nexus://auth/callback?google_calendar_connected=true → service connected
+  //   nexus://spotify/callback?…      → Spotify token stored
+  useEffect(() => {
+    if (!IS_CAPACITOR) return;
+
+    // Initialise native chrome — status bar + splash screen
+    setStatusBarDark();
+    hideSplashScreen();
+
+    onAppUrlOpen(async (url: string) => {
+      // Always close the Safari View Controller first so the app is in foreground
+      await closeInAppBrowser();
+
+      let parsed: URL;
+      try { parsed = new URL(url); } catch { return; }
+
+      // ── PKCE sign-in code exchange ──────────────────────────────────────
+      const code = parsed.searchParams.get('code');
+      if (code) {
+        await supabase.auth.exchangeCodeForSession(code);
+        return;
+      }
+
+      // ── Service connection callbacks ────────────────────────────────────
+      const p = parsed.searchParams;
+      const anySuccess =
+        p.get('google_calendar_connected') === 'true' ||
+        p.get('google_tasks_connected')    === 'true' ||
+        p.get('google_docs_connected')     === 'true' ||
+        p.get('google_drive_connected')    === 'true' ||
+        p.get('google_gmail_connected')    === 'true' ||
+        p.get('google_connected')          === 'true' ||
+        p.get('spotify_connected')         === 'true' ||
+        p.get('slack_connected')           === 'true';
+      if (anySuccess) handleServicesComplete();
+    });
+  // Register once on mount
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -160,6 +160,12 @@ body {
   font-family: 'DM Sans', sans-serif;
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
+  /* Prevent iOS rubber-band overscroll on the root — the mobile card stack
+     handles its own scroll internally and the overscroll conflicts with
+     the card-tap animation feel. */
+  overscroll-behavior: none;
+  /* Ensure the Capacitor WebView never shows a white background flash */
+  background: var(--bg);
 }
 
 /* Noise texture overlay */

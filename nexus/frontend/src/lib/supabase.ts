@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { isCapacitor } from './isCapacitor';
 
 const supabaseUrl =
   import.meta.env.VITE_SUPABASE_URL ||
@@ -23,15 +24,17 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 });
 
 /**
- * Returns the OAuth redirect URL for the current context.
- *
- * Electron: pass an explicit redirectTo computed from the loopback port
- * (see useAuth.ts signInWithGoogle) — this function is NOT called for Electron.
+ * Returns the OAuth redirect URL for the current context:
+ *   - Chrome extension → chrome-extension://<id>/index.extension.html
+ *   - Capacitor / Electron → nexus://auth/callback  (custom scheme, intercepted natively)
+ *   - Web → https://<origin>/auth/callback
  */
 export function getAuthRedirectUrl(): string {
-  // Chrome extension
   if (typeof chrome !== 'undefined' && chrome?.runtime?.id) {
     return `chrome-extension://${chrome.runtime.id}/index.extension.html`;
+  }
+  if (isCapacitor()) {
+    return 'nexus://auth/callback';
   }
   const origin =
     window.location.protocol === 'http:' && window.location.hostname !== 'localhost'

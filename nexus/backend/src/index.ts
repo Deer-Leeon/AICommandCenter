@@ -42,6 +42,7 @@ import { sharedCanvasRouter } from './routes/sharedCanvas.js';
 import { attachCanvasWS }     from './lib/canvasWS.js';
 import { bibleRouter }        from './routes/bible.js';
 import { gmailRouter }        from './routes/gmail.js';
+import { pushRouter }         from './routes/push.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -51,6 +52,10 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:4173',
   'https://nexus.lj-buchmiller.com',
+  // Capacitor iOS WebView origin — requests come from this scheme
+  'capacitor://localhost',
+  'ionic://localhost',
+  'http://localhost',          // Capacitor live-reload dev server
   process.env.FRONTEND_URL,
   process.env.PRODUCTION_URL,
 ].filter((o): o is string => Boolean(o));
@@ -110,6 +115,7 @@ app.use('/api/shared-photo',  sharedPhotoRouter);
 app.use('/api/shared-canvas', sharedCanvasRouter);
 app.use('/api/bible',         bibleRouter);
 app.use('/api/gmail',         gmailRouter);
+app.use('/api/push',          pushRouter);
 
 app.get('/', (_req, res) => {
   res.json({ name: 'NEXUS API', version: '1.0.0', status: 'running' });

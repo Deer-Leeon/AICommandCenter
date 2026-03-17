@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase, getAuthRedirectUrl } from '../lib/supabase';
+import { isCapacitor } from '../lib/isCapacitor';
+import { openInAppBrowser } from '../lib/capacitorBridge';
 import type { User, Session } from '@supabase/supabase-js';
 
 function readCachedUser(): User | null {
@@ -49,21 +51,35 @@ export function useAuth() {
   }, []);
 
   /**
-   * Standard PKCE OAuth flow — works identically for web and Electron.
+   * Google PKCE OAuth — platform-aware:
    *
-   * The main window navigates to Google, authenticates, then returns to
-   * nexus.lj-buchmiller.com/auth/callback?code=… Supabase's detectSessionInUrl
-   * automatically finds the code and exchanges it using the verifier already
-   * stored in localStorage (same origin, same window — so it's always present).
+   * Capacitor (iOS): open the OAuth URL in Safari View Controller so that
+   *   Google's 2FA, biometrics, and saved passwords all work correctly.
+   *   `skipBrowserRedirect: true` gets the URL without navigating the WebView;
+   *   the PKCE verifier is stored in localStorage so the code exchange works
+   *   when appUrlOpen fires with nexus://auth/callback?code=…
    *
-   * This avoids system-browser / loopback-server complexity and matches the
-   * approach that worked before.
+   * Web / Electron: standard PKCE flow — navigate the current window to Google,
+   *   which redirects back to /auth/callback.
    */
   const signInWithGoogle = async (): Promise<void> => {
     if (window.location.protocol === 'http:' && window.location.hostname !== 'localhost') {
       window.location.replace(
         `https://${window.location.host}${window.location.pathname}${window.location.search}`,
       );
+      return;
+    }
+
+    if (isCapacitor()) {
+      const { data } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: 'nexus://auth/callback',
+          skipBrowserRedirect: true,
+          queryParams: { prompt: 'select_account' },
+        },
+      });
+      if (data.url) await openInAppBrowser(data.url);
       return;
     }
 

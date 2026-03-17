@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, CSSProperties } from 'react';
 import type { WidgetType } from '../types';
 import { WIDGET_CONFIGS } from '../types';
 import { MobileCardContent } from './cards/MobileCardRegistry';
+import { hapticImpact, hapticSelection } from '../lib/capacitorBridge';
 
 // ── Layout constants ──────────────────────────────────────────────────────────
 const SIDE_W         = 30;   // px width of each side panel (half of original)
@@ -142,7 +143,8 @@ export function MobileCardStack({ order }: Props) {
       };
     });
 
-    try { navigator.vibrate?.(7); } catch { /* iOS ignores */ }
+    try { navigator.vibrate?.(7); } catch { /* not supported on iOS */ }
+    hapticImpact('light'); // native iOS haptic on card snap
     // Note: we intentionally do NOT call onOrderChange here.
     // Syncing back to the parent would trigger a full slotMap rebuild,
     // moving every card back to the interleaved positions.
@@ -154,7 +156,7 @@ export function MobileCardStack({ order }: Props) {
   return (
     <div
       ref={containerRef}
-      style={{ position: 'relative', flex: 1, overflow: 'hidden', touchAction: 'pan-y' }}
+      style={{ position: 'relative', flex: 1, overflow: 'hidden', touchAction: 'pan-y', overscrollBehavior: 'none' }}
     >
       {/* Ambient glow behind active card */}
       {ready && (
@@ -253,9 +255,13 @@ export function MobileCardStack({ order }: Props) {
                   opacity: 0.65,
                 }} />
 
-                {/* Tap to swap */}
+                {/* Tap to swap — hapticSelection fires the iOS "tick" on touch */}
                 <div
-                  onPointerDown={e => { e.stopPropagation(); swapWithActive(widgetType); }}
+                  onPointerDown={e => {
+                    e.stopPropagation();
+                    hapticSelection();
+                    swapWithActive(widgetType);
+                  }}
                   style={{ position: 'absolute', inset: 0, zIndex: 10 }}
                 />
 
