@@ -26,6 +26,9 @@ interface ElectronAPI {
   // ── Dock badge ────────────────────────────────────────────────────────────
   setDockBadge: (count: number | null) => void;
 
+  // ── External URL ─────────────────────────────────────────────────────────
+  openExternalUrl: (url: string) => Promise<void>;
+
   // ── Window controls ───────────────────────────────────────────────────────
   minimizeWindow: () => void;
   maximizeWindow: () => void;

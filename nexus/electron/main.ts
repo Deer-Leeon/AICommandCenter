@@ -266,6 +266,11 @@ ipcMain.on('open-main-window', () => {
 ipcMain.on('new-page', () => mainWindow?.webContents.send('new-page'));
 ipcMain.on('start-pomodoro', () => mainWindow?.webContents.send('start-pomodoro'));
 
+// Open a URL in the system default browser (Safari / Chrome / etc.)
+ipcMain.handle('open-external-url', (_, url: string) => {
+  shell.openExternal(url);
+});
+
 // Auto-update trigger from renderer
 ipcMain.on('check-for-updates', () => {
   // setupUpdater handles this via autoUpdater

@@ -38,6 +38,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.send('set-dock-badge', count);
   },
 
+  // ── External URL (opens in system browser) ──────────────────────────────────
+  openExternalUrl: (url: string) => ipcRenderer.invoke('open-external-url', url),
+
   // ── Window controls ─────────────────────────────────────────────────────────
   minimizeWindow: () => ipcRenderer.send('window-minimize'),
   maximizeWindow: () => ipcRenderer.send('window-maximize'),
