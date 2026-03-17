@@ -1,30 +1,34 @@
 /**
  * Global SSE connection registry.
  *
- * Stores one active Response object per authenticated user.
+ * Supports MULTIPLE simultaneous connections per user (e.g. browser + desktop app
+ * logged in with the same account). Every connection receives broadcasts.
+ *
  * broadcastToUser / broadcastToConnection are the two primitives all
- * shared-widget phases will use to deliver server-push events.
+ * shared-widget phases use to deliver server-push events.
  */
 import type { Response } from 'express';
 import { supabase } from './supabase.js';
 
-// ── In-memory registry ─────────────────────────────────────────────────────
-// Map<userId, Response>
-const registry = new Map<string, Response>();
+// ── In-memory registry ──────────────────────────────────────────────────────
+// Map<userId, Set<Response>> — multiple open connections per user
+const registry = new Map<string, Set<Response>>();
 
 export function registerSSE(userId: string, res: Response): void {
-  // If the user already has a stale connection, close it first
-  const existing = registry.get(userId);
-  if (existing) {
-    try { existing.end(); } catch { /* already closed */ }
+  if (!registry.has(userId)) {
+    registry.set(userId, new Set());
   }
-  registry.set(userId, res);
+  registry.get(userId)!.add(res);
 }
 
 export function unregisterSSE(userId: string, res: Response): void {
-  // Only remove if the stored response is the same object (guards against
-  // a race where a new connection registered before the old one cleaned up)
-  if (registry.get(userId) === res) {
+  const connections = registry.get(userId);
+  if (!connections) return;
+
+  connections.delete(res);
+
+  // Only mark the user offline when every connection is gone
+  if (connections.size === 0) {
     registry.delete(userId);
     void supabase
       .from('presence')
@@ -32,24 +36,34 @@ export function unregisterSSE(userId: string, res: Response): void {
   }
 }
 
-/** Deliver an event to one user if they have an open SSE connection.
+/**
+ * Deliver an event to ALL open connections for a user.
  *
- *  We intentionally omit the `event:` line and send a plain `data:` frame.
- *  This ensures every event — connection, chess, todo, or any future widget —
- *  is received by the single `EventSource.onmessage` handler on the client
- *  without needing to maintain a hardcoded list of named event types.
+ * We intentionally omit the `event:` line and send a plain `data:` frame so
+ * every event is received by the single `EventSource.onmessage` handler on the
+ * client without needing a hardcoded list of named event types.
  */
 export function broadcastToUser(
   userId: string,
   event: { type: string; [key: string]: unknown },
 ): void {
-  const res = registry.get(userId);
-  if (!res) return;
-  try {
-    res.write(`data: ${JSON.stringify(event)}\n\n`);
-  } catch {
-    registry.delete(userId);
+  const connections = registry.get(userId);
+  if (!connections || connections.size === 0) return;
+
+  const data = `data: ${JSON.stringify(event)}\n\n`;
+  const dead: Response[] = [];
+
+  for (const res of connections) {
+    try {
+      res.write(data);
+    } catch {
+      dead.push(res);
+    }
   }
+
+  // Prune broken connections
+  for (const res of dead) connections.delete(res);
+  if (connections.size === 0) registry.delete(userId);
 }
 
 /** Deliver an event to both users of a connection (fire-and-forget). */
@@ -67,7 +81,8 @@ export async function broadcastToConnection(
   broadcastToUser(data.user_id_b, event);
 }
 
-/** Check if a user currently has an open SSE connection. */
+/** Check if a user currently has at least one open SSE connection. */
 export function isUserConnected(userId: string): boolean {
-  return registry.has(userId);
+  const connections = registry.get(userId);
+  return !!connections && connections.size > 0;
 }

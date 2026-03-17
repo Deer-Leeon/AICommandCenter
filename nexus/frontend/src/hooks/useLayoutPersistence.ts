@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useStore, layoutCacheKeyV3, makeStarterPages } from '../store/useStore';
 import { apiFetch } from '../lib/api';
+import { nexusSSE } from '../lib/nexusSSE';
 import type { WidgetType, GridSpan, Page, PagesLayout } from '../types';
 
 // ── Legacy v2 shape (for migration) ──────────────────────────────────────────
@@ -162,7 +163,13 @@ export function useLayoutPersistence(userId?: string) {
       apiFetch('/api/layout', {
         method: 'PUT',
         body: JSON.stringify({ grid: payload }),
-      }).catch(() => {});
+      })
+        .then(() => {
+          // Mark clean so an incoming layout:update from our own save doesn't
+          // prevent other sessions' changes from applying afterwards.
+          localModifiedRef.current = false;
+        })
+        .catch(() => {});
     }, 800);
 
     return () => {
@@ -171,4 +178,45 @@ export function useLayoutPersistence(userId?: string) {
   // pages and activePage are the source of truth for all grid changes
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pages, activePage, userId]);
+
+  // ── Real-time cross-session sync ──────────────────────────────────────────
+  // When another session (e.g. the browser while the desktop app is open, or
+  // vice versa) saves a layout change, the backend broadcasts layout:update to
+  // all connections for this user. We refetch and apply the new layout unless
+  // local edits are in flight (which would overwrite server state anyway).
+  useEffect(() => {
+    if (!userId) return;
+
+    return nexusSSE.subscribe((event) => {
+      if (event.type !== 'layout:update') return;
+      if (localModifiedRef.current) return; // local edit in flight — skip
+
+      apiFetch('/api/layout')
+        .then((r) => r.json())
+        .then(({ grid: raw }: { grid: unknown }) => {
+          if (localModifiedRef.current) return; // another edit landed while fetching
+
+          let resolved: PagesLayout | null = null;
+
+          if (raw && typeof raw === 'object') {
+            const payload = raw as Record<string, unknown>;
+            if (payload.v === 3) {
+              const v3 = payload as unknown as PagesLayout;
+              if (Array.isArray(v3.pages) && v3.pages.length > 0) resolved = v3;
+            } else if (payload.v === 2) {
+              const localCache = readCachedLayoutV3(userId);
+              resolved = migrateV2toV3(payload as unknown as LayoutV2, localCache?.pages);
+            }
+          }
+
+          if (resolved) {
+            writeCachedLayoutV3(userId, resolved);
+            setPages(resolved.pages, resolved.activePage || resolved.pages[0].id);
+          }
+        })
+        .catch(() => {});
+    });
+  // userId is the only meaningful dependency — the callback always reads current refs
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 }

@@ -1,6 +1,7 @@
 import { Router, type Response } from 'express';
 import { requireAuth, type AuthRequest } from '../middleware/auth.js';
 import { supabase } from '../lib/supabase.js';
+import { broadcastToUser } from '../lib/sseRegistry.js';
 
 export const layoutRouter = Router();
 
@@ -38,6 +39,10 @@ layoutRouter.put('/', requireAuth, async (req: AuthRequest, res: Response) => {
     res.status(500).json({ error: error.message });
     return;
   }
+
+  // Notify all other sessions (browser, desktop app) that the layout changed
+  // so they can refetch and stay in sync without a manual reload.
+  broadcastToUser(req.user!.id, { type: 'layout:update' });
 
   res.json({ success: true });
 });
