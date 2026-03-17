@@ -849,26 +849,26 @@ export function GmailWidget({ onClose }: { onClose: () => void }) {
   // ── Unread badge ─────────────────────────────────────────────────────────
   const badgeLabel = unreadCount > 99 ? '99+' : unreadCount.toString();
 
-  // ── Micro mode ───────────────────────────────────────────────────────────
+  // ── Micro mode (1×1) ─────────────────────────────────────────────────────
   if (isMicro) {
     const topThread = threads.find(t => t.unread) ?? threads[0];
     return (
-      <div ref={containerRef} style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 8, gap: 4 }}>
+      <div ref={containerRef} style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 6, gap: 3, overflow: 'hidden' }}>
         {unreadCount > 0 ? (
           <>
-            <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent)', fontFamily: 'Space Mono, monospace', lineHeight: 1 }}>
+            <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--accent)', fontFamily: 'Space Mono, monospace', lineHeight: 1 }}>
               {badgeLabel}
             </div>
-            <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>unread</div>
+            <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>unread</div>
             {topThread && (
-              <div style={{ fontSize: 9, color: 'var(--text-muted)', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
-                {topThread.senderName}: {topThread.subject}
+              <div style={{ fontSize: 9, color: 'var(--text-faint)', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%', lineHeight: 1.3 }}>
+                {topThread.senderName}
               </div>
             )}
           </>
         ) : (
           <>
-            <span style={{ fontSize: 22 }}>✉️</span>
+            <span style={{ fontSize: 20 }}>✉️</span>
             <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>Inbox zero</div>
           </>
         )}
@@ -918,32 +918,41 @@ export function GmailWidget({ onClose }: { onClose: () => void }) {
   }
 
   // ── Thread reading view ──────────────────────────────────────────────────
+  // NOTE: must be rendered as a direct flex child (flex:1, minHeight:0) so
+  // the inner messages panel can scroll correctly. Never nest inside a
+  // scrollable container — height:'100%' inside overflow:auto resolves to
+  // scroll-content height, not viewport height, breaking inner scroll.
   function renderThreadView() {
+    const compact = width < 300;
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderBottom: '1px solid var(--border)' }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: compact ? '8px 10px' : '10px 12px',
+          borderBottom: '1px solid var(--border)', flexShrink: 0,
+        }}>
           <button
             onClick={() => setView(prevView)}
-            style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: 20, lineHeight: 1, padding: 0 }}
+            style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 0, flexShrink: 0 }}
           >←</button>
-          <div style={{ flex: 1, fontWeight: 700, fontSize: 13, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ flex: 1, fontWeight: 700, fontSize: compact ? 11 : 13, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
             {openThread?.messages[0]?.subject || '…'}
           </div>
-          {openThread && (
-            <div style={{ display: 'flex', gap: 6 }}>
+          {openThread && !compact && (
+            <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
               <button onClick={() => handleAction('archive', openThread.id)} title="Archive"
-                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 14 }}>📥</button>
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 13 }}>📥</button>
               <button onClick={() => handleAction('delete', openThread.id)} title="Delete"
-                style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer', fontSize: 14 }}>🗑</button>
+                style={{ background: 'none', border: 'none', color: 'var(--color-danger)', cursor: 'pointer', fontSize: 13 }}>🗑</button>
             </div>
           )}
         </div>
 
-        {/* Messages */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* Messages — this is the ONE scrollable zone */}
+        <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: compact ? '6px 8px' : '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {threadLoading ? (
-            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Loading…</div>
+            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', fontSize: 12 }}>Loading…</div>
           ) : openThread?.messages.map((msg, i) => (
             <MessageCard
               key={msg.messageId}
@@ -955,23 +964,23 @@ export function GmailWidget({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Reply bar */}
-        {!replyTarget && openThread?.messages.length && (
-          <div style={{ padding: '8px 12px', borderTop: '1px solid var(--border)' }}>
+        {!replyTarget && openThread?.messages.length ? (
+          <div style={{ flexShrink: 0, padding: '8px 12px', borderTop: '1px solid var(--border)' }}>
             <button
               onClick={() => handleReply(openThread.messages[openThread.messages.length - 1])}
               style={{
-                width: '100%', padding: '8px 14px', background: 'var(--surface2)',
+                width: '100%', padding: '7px 12px', background: 'var(--surface2)',
                 border: '1px solid var(--border)', borderRadius: 8,
-                textAlign: 'left', color: 'var(--text-muted)', fontSize: 13, cursor: 'pointer',
+                textAlign: 'left', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer',
               }}
             >
               ↩ Reply…
             </button>
           </div>
-        )}
+        ) : null}
 
         {replyTarget && (
-          <div style={{ borderTop: '1px solid var(--border)' }}>
+          <div style={{ flexShrink: 0, borderTop: '1px solid var(--border)', maxHeight: '45%', overflowY: 'auto' }}>
             <ComposeForm
               onSent={() => { setReplyTarget(null); }}
               initialTo={replyTarget.senderEmail}
@@ -997,7 +1006,7 @@ export function GmailWidget({ onClose }: { onClose: () => void }) {
   if (isSplit) {
     const rightPanel = view === 'thread' ? renderThreadView()
       : view === 'compose' ? (
-        <div style={{ height: '100%', overflowY: 'auto' }}>
+        <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
           <ComposeForm
             onSent={() => setView('inbox')}
             initialTo={replyTarget?.senderEmail}
@@ -1007,7 +1016,7 @@ export function GmailWidget({ onClose }: { onClose: () => void }) {
           />
         </div>
       ) : (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', fontSize: 13 }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
           Select an email to read
         </div>
       );
@@ -1036,7 +1045,7 @@ export function GmailWidget({ onClose }: { onClose: () => void }) {
         {/* Split body */}
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           {/* Left: thread list */}
-          <div ref={listRef} onScroll={handleScroll} style={{ width: '40%', borderRight: '1px solid var(--border)', overflowY: 'auto' }}>
+          <div ref={listRef} onScroll={handleScroll} style={{ width: '40%', borderRight: '1px solid var(--border)', overflowY: 'auto', minHeight: 0 }}>
             {view === 'search' ? (
               <div style={{ padding: '8px 12px' }}>
                 <input
@@ -1068,8 +1077,9 @@ export function GmailWidget({ onClose }: { onClose: () => void }) {
             ) : null}
             {renderThreadList(view === 'search' ? searchResults : threads, view === 'search' ? searchLoading : loadingThreads)}
           </div>
-          {/* Right: reading/compose pane */}
-          <div style={{ flex: 1, overflowY: 'auto' }}>
+          {/* Right: reading/compose pane — flex column so thread view
+              can constrain height and scroll its messages panel */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
             {rightPanel}
           </div>
         </div>
@@ -1078,106 +1088,63 @@ export function GmailWidget({ onClose }: { onClose: () => void }) {
   }
 
   // ── Standard (non-split) layout ──────────────────────────────────────────
+  // Thread + Compose are direct flex children so height is properly
+  // constrained and their inner scroll panels work. The scrollable
+  // listRef div only wraps inbox / labels / search.
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-      {/* Tab bar (hidden in slim mode / thread/compose views) */}
+      {/* ── Tab bar ── hidden in slim mode and when thread/compose is open */}
       {view !== 'thread' && view !== 'compose' && !isSlim && (
-        <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border)', padding: '0 6px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border)', padding: '0 4px', flexShrink: 0 }}>
           {tabs.map(tab => (
             <button key={tab.id} onClick={() => setView(tab.id)}
               style={{
-                background: 'none', border: 'none', padding: '7px 10px', cursor: 'pointer',
+                background: 'none', border: 'none', padding: cols >= 2 ? '7px 10px' : '7px 8px', cursor: 'pointer',
                 fontSize: 11, color: view === tab.id ? 'var(--accent)' : 'var(--text-muted)',
                 borderBottom: view === tab.id ? '2px solid var(--accent)' : '2px solid transparent',
-                display: 'flex', alignItems: 'center', gap: 4,
+                display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0,
               }}>
               <span>{tab.icon}</span>
               {cols >= 2 && <span>{tab.label}</span>}
             </button>
           ))}
           {unreadCount > 0 && (
-            <div style={{ marginLeft: 'auto', marginRight: 6, background: 'var(--accent)', color: '#fff', borderRadius: 10, padding: '1px 7px', fontSize: 10, fontFamily: 'Space Mono, monospace' }}>
+            <div style={{ marginLeft: 'auto', marginRight: 6, background: 'var(--accent)', color: '#fff', borderRadius: 10, padding: '1px 6px', fontSize: 10, fontFamily: 'Space Mono, monospace', flexShrink: 0 }}>
               {badgeLabel}
             </div>
           )}
         </div>
       )}
 
-      {/* Main content area */}
-      <div ref={listRef} onScroll={handleScroll} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
-
-        {/* Inbox */}
-        {view === 'inbox' && renderThreadList(threads, loadingThreads)}
-
-        {/* Labels */}
-        {view === 'labels' && (
-          <div>
-            <div style={{ display: 'flex', overflowX: 'auto', gap: 6, padding: '8px 12px', scrollbarWidth: 'none' }}>
-              {labels.filter(l => ['INBOX','CATEGORY_SOCIAL','CATEGORY_PROMOTIONS','CATEGORY_UPDATES','STARRED','SENT','DRAFT'].includes(l.id) || l.type === 'user').map(l => (
-                <button key={l.id}
-                  onClick={() => { setActiveLabel(l.id); setView('inbox'); }}
-                  style={{
-                    flexShrink: 0, padding: '4px 12px', borderRadius: 20,
-                    border: `1px solid ${labelColor(l.id)}`,
-                    background: activeLabel === l.id ? `${labelColor(l.id)}22` : 'transparent',
-                    color: labelColor(l.id), fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap',
-                  }}>
-                  {labelDisplayName(l)}
-                  {l.unreadCount > 0 && <span style={{ marginLeft: 4, fontSize: 9 }}>{l.unreadCount}</span>}
-                </button>
-              ))}
-            </div>
-            {renderThreadList(threads, loadingThreads)}
-          </div>
-        )}
-
-        {/* Search */}
-        {view === 'search' && (
-          <div style={{ padding: '8px 12px' }}>
-            <input
-              autoFocus
-              placeholder="Search mail…"
-              value={searchQuery}
-              onChange={e => handleSearchChange(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && searchQuery) saveRecentSearch(searchQuery); }}
-              style={{ width: '100%', padding: '8px 12px', background: 'var(--surface3)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text)', fontSize: 13, outline: 'none', boxSizing: 'border-box', marginBottom: 6 }}
-            />
-            <div style={{ fontSize: 10, color: 'var(--text-faint)', marginBottom: 8 }}>
-              Tip: try from:, has:attachment, is:unread
-            </div>
-            {/* Recent searches */}
-            {!searchQuery && recentSearches.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-                {recentSearches.map(s => (
-                  <button key={s} onClick={() => { setSearchQuery(s); handleSearchChange(s); }}
-                    style={{ padding: '3px 10px', borderRadius: 20, background: 'var(--surface3)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer' }}>
-                    {s}
-                  </button>
-                ))}
+      {/* ── Slim-mode mini header (shows unread + quick compose) ── */}
+      {isSlim && view !== 'thread' && view !== 'compose' && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 10px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+          <span style={{ fontSize: 10, color: 'var(--text-faint)', fontFamily: 'Space Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Gmail</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {unreadCount > 0 && (
+              <div style={{ background: 'var(--accent)', color: '#fff', borderRadius: 10, padding: '1px 6px', fontSize: 9, fontFamily: 'Space Mono, monospace' }}>
+                {badgeLabel}
               </div>
             )}
-            {searchLoading && <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 12 }}>Searching…</div>}
-            {!searchLoading && searchQuery && searchResults.length === 0 && (
-              <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 12 }}>No results</div>
-            )}
-            {renderThreadList(searchResults, false)}
+            <button onClick={() => setView('compose')}
+              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0 }}>✏️</button>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Thread view */}
-        {view === 'thread' && (
-          <div style={{ height: '100%' }}>{renderThreadView()}</div>
-        )}
+      {/* ── Thread view — direct flex child, handles its own scroll ── */}
+      {view === 'thread' && renderThreadView()}
 
-        {/* Compose */}
-        {view === 'compose' && (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--border)' }}>
-              <button onClick={() => setView(prevView)}
-                style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: 18 }}>←</button>
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>New Message</span>
-            </div>
+      {/* ── Compose view — direct flex child ── */}
+      {view === 'compose' && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+            <button onClick={() => setView(prevView)}
+              style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 0 }}>←</button>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>New Message</span>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
             <ComposeForm
               onSent={() => { setView('inbox'); setReplyTarget(null); }}
               initialTo={replyTarget?.senderEmail}
@@ -1186,8 +1153,71 @@ export function GmailWidget({ onClose }: { onClose: () => void }) {
               threadId={replyTarget?.threadId}
             />
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* ── Scrollable content: inbox / labels / search ── */}
+      {view !== 'thread' && view !== 'compose' && (
+        <div ref={listRef} onScroll={handleScroll} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
+
+          {/* Inbox */}
+          {view === 'inbox' && renderThreadList(threads, loadingThreads)}
+
+          {/* Labels */}
+          {view === 'labels' && (
+            <div>
+              <div style={{ display: 'flex', overflowX: 'auto', gap: 6, padding: '8px 10px', scrollbarWidth: 'none', flexWrap: 'wrap' }}>
+                {labels.filter(l => ['INBOX','CATEGORY_SOCIAL','CATEGORY_PROMOTIONS','CATEGORY_UPDATES','STARRED','SENT','DRAFT'].includes(l.id) || l.type === 'user').map(l => (
+                  <button key={l.id}
+                    onClick={() => { setActiveLabel(l.id); setView('inbox'); }}
+                    style={{
+                      flexShrink: 0, padding: '3px 10px', borderRadius: 20,
+                      border: `1px solid ${labelColor(l.id)}`,
+                      background: activeLabel === l.id ? `${labelColor(l.id)}22` : 'transparent',
+                      color: labelColor(l.id), fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap',
+                    }}>
+                    {labelDisplayName(l)}
+                    {l.unreadCount > 0 && <span style={{ marginLeft: 4, fontSize: 9 }}>{l.unreadCount}</span>}
+                  </button>
+                ))}
+              </div>
+              {renderThreadList(threads, loadingThreads)}
+            </div>
+          )}
+
+          {/* Search */}
+          {view === 'search' && (
+            <div style={{ padding: '8px 10px' }}>
+              <input
+                autoFocus
+                placeholder="Search mail…"
+                value={searchQuery}
+                onChange={e => handleSearchChange(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && searchQuery) saveRecentSearch(searchQuery); }}
+                style={{ width: '100%', padding: '7px 10px', background: 'var(--surface3)', border: '1px solid var(--border)', borderRadius: 10, color: 'var(--text)', fontSize: 12, outline: 'none', boxSizing: 'border-box', marginBottom: 4 }}
+              />
+              <div style={{ fontSize: 10, color: 'var(--text-faint)', marginBottom: 6 }}>
+                Tip: from:, has:attachment, is:unread
+              </div>
+              {!searchQuery && recentSearches.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
+                  {recentSearches.map(s => (
+                    <button key={s} onClick={() => { setSearchQuery(s); handleSearchChange(s); }}
+                      style={{ padding: '2px 8px', borderRadius: 20, background: 'var(--surface3)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: 10, cursor: 'pointer' }}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {searchLoading && <div style={{ textAlign: 'center', padding: 16, color: 'var(--text-muted)', fontSize: 12 }}>Searching…</div>}
+              {!searchLoading && searchQuery && searchResults.length === 0 && (
+                <div style={{ textAlign: 'center', padding: 16, color: 'var(--text-muted)', fontSize: 12 }}>No results</div>
+              )}
+              {renderThreadList(searchResults, false)}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
