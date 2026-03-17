@@ -45,6 +45,14 @@ const store = new Store<{ windowBounds: WindowBounds }>({
 let pendingDeepLink: string | null = null;
 let mainWindow: BrowserWindow | null = null;
 
+// ── OAuth loopback server ─────────────────────────────────────────────────────
+// Only one server at a time. We always use the same fixed port (54321) so the
+// URL never changes and Supabase's whitelist entry stays stable.
+// Tracking the instance lets us close a leftover server from a previous
+// sign-in attempt before starting a fresh one.
+let activeOAuthServer: http.Server | null = null;
+const OAUTH_PORT = 54321;
+
 // ── Protocol registration ─────────────────────────────────────────────────────
 
 // Must be called before app is ready on macOS
@@ -287,33 +295,49 @@ ipcMain.handle('open-external-url', (_, url: string) => {
 //   Authentication → URL Configuration → Redirect URLs.
 //   (If port 54321 is unavailable, also add http://localhost:*/auth/callback)
 
-function tryBindPort(port: number): Promise<http.Server | null> {
-  return new Promise(resolve => {
-    const s = http.createServer();
-    s.once('error', () => resolve(null));
-    s.listen(port, '127.0.0.1', () => resolve(s));
-  });
-}
-
 ipcMain.handle('start-oauth-server', async (): Promise<number> => {
-  // Try preferred fixed port first so the user only needs one Supabase entry
-  const preferred = await tryBindPort(54321);
-  const server: http.Server = preferred ?? await new Promise<http.Server>(resolve => {
+  // Close any leftover server from a previous attempt so port 54321 is always
+  // free. This handles the case where the user clicked "Sign in" but the
+  // browser redirected to the wrong URL — the server stayed alive on 54321
+  // and the next attempt would have fallen back to a random (un-whitelisted) port.
+  if (activeOAuthServer?.listening) {
+    await new Promise<void>(resolve => activeOAuthServer!.close(() => resolve()));
+    activeOAuthServer = null;
+  }
+
+  const server = await new Promise<http.Server>((resolve, reject) => {
     const s = http.createServer();
-    s.listen(0, '127.0.0.1', () => resolve(s));
+    s.once('error', reject);
+    s.listen(OAUTH_PORT, '127.0.0.1', () => resolve(s));
   });
 
-  const { port } = server.address() as { port: number };
+  activeOAuthServer = server;
 
-  // Auto-close after 10 minutes in case the user abandons the flow
-  const closeTimer = setTimeout(() => server.close(), 10 * 60 * 1000);
+  // Auto-close after 5 minutes if the user abandons the flow
+  const closeTimer = setTimeout(() => {
+    server.close();
+    activeOAuthServer = null;
+  }, 5 * 60 * 1000);
+
+  function finish(code: string | null, error: string | null) {
+    clearTimeout(closeTimer);
+    server.close();
+    activeOAuthServer = null;
+
+    if (code && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('deep-link', `nexus://auth/callback?code=${code}`);
+      mainWindow.show();
+      mainWindow.focus();
+    } else if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('oauth-cancelled');
+    }
+  }
 
   server.on('request', (req, res) => {
-    const reqUrl = new URL(req.url ?? '/', `http://localhost:${port}`);
+    const reqUrl = new URL(req.url ?? '/', `http://localhost:${OAUTH_PORT}`);
     const code   = reqUrl.searchParams.get('code');
     const error  = reqUrl.searchParams.get('error');
 
-    // Respond with a polished "you can close this tab" page
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(`<!doctype html><html><head><title>NEXUS</title>
 <style>
@@ -326,27 +350,18 @@ ipcMain.handle('start-oauth-server', async (): Promise<number> => {
 </style></head><body>
 <div class="card">
   <div class="icon">${code ? '✅' : '❌'}</div>
-  <h1>${code ? 'You\'re signed in to NEXUS' : 'Sign-in failed'}</h1>
+  <h1>${code ? "You're signed in to NEXUS" : 'Sign-in failed'}</h1>
   <p>${code
-    ? 'Return to the NEXUS app. This tab will close automatically.'
+    ? 'Return to the NEXUS app — this tab will close automatically.'
     : `Error: ${error ?? 'Something went wrong. Please try again.'}`}</p>
 </div>
 <script>setTimeout(()=>window.close(),1800)</script>
 </body></html>`);
 
-    clearTimeout(closeTimer);
-    server!.close();
-
-    if (code && mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('deep-link', `nexus://auth/callback?code=${code}`);
-      mainWindow.show();
-      mainWindow.focus();
-    } else if (!code && mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('oauth-cancelled');
-    }
+    finish(code, error);
   });
 
-  return port;
+  return OAUTH_PORT;
 });
 
 // Auto-update trigger from renderer
