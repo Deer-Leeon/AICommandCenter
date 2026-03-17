@@ -37,14 +37,14 @@ function DraggableChip({ config, isOpen, pulse }: { config: WidgetConfig; isOpen
         opacity: isDragging ? 0.35 : 1,
         background: 'transparent',
         border: '1px solid transparent',
-        // Horizontal layout never changes — sidebar overflow:hidden clips the text.
         padding: '5px 8px',
-        gap: '9px',
-        // Vertical spacing collapses to nothing when sidebar is closed
+        gap: isOpen ? '9px' : '0px',
+        justifyContent: isOpen ? 'flex-start' : 'center',
         marginBottom: isOpen ? '1px' : '0px',
-        transition: 'background 0.15s, border-color 0.15s, margin-bottom 0.22s ease',
+        transition: 'background 0.15s, border-color 0.15s, margin-bottom 0.22s ease, gap 0.22s ease',
         animation: animating ? 'nexusChipPulse 0.45s ease' : 'none',
         transformOrigin: 'center',
+        overflow: 'hidden',
       }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLElement).style.background = 'var(--surface2)';
@@ -55,7 +55,7 @@ function DraggableChip({ config, isOpen, pulse }: { config: WidgetConfig; isOpen
         (e.currentTarget as HTMLElement).style.borderColor = 'transparent';
       }}
     >
-      {/* Icon pill — never moves */}
+      {/* Icon pill — centers itself when sidebar is collapsed */}
       <div
         className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0"
         style={{ background: config.accentColor + '18', fontSize: '13px' }}
@@ -63,19 +63,22 @@ function DraggableChip({ config, isOpen, pulse }: { config: WidgetConfig; isOpen
         {config.icon}
       </div>
 
-      {/* Label — only opacity changes; sidebar width clips it */}
+      {/* Label — collapses to zero width when closed so it never displaces the icon */}
       <span
         style={{
           fontWeight: 500,
           fontSize: '12px',
           color: 'var(--text-muted)',
           opacity: isOpen ? 1 : 0,
-          whiteSpace: 'nowrap',
+          maxWidth: isOpen ? '160px' : '0px',
           overflow: 'hidden',
+          whiteSpace: 'nowrap',
           letterSpacing: '0.01em',
           flexShrink: 0,
           pointerEvents: 'none',
-          transition: isOpen ? 'opacity 0.18s ease 0.12s' : 'opacity 0.08s ease',
+          transition: isOpen
+            ? 'opacity 0.18s ease 0.12s, max-width 0.22s ease'
+            : 'opacity 0.08s ease, max-width 0.22s ease 0.06s',
         }}
       >
         {config.label}
@@ -198,7 +201,8 @@ function UserBlock({ isOpen, onOpenSettings }: { isOpen: boolean; onOpenSettings
             border: 'none',
             padding: 0,
             cursor: 'pointer',
-            gap: '8px',
+            gap: isOpen ? '8px' : '0px',
+            justifyContent: isOpen ? 'flex-start' : 'center',
           }}
         >
           {avatarEl}
@@ -293,8 +297,9 @@ export function Sidebar({ isOpen, onToggle, onOpenSettings, onOpenConnections, l
         overflow: 'visible',
       }}
     >
-      {/* Inner clipping wrapper for the chips list */}
-      <div className="flex flex-col flex-1" style={{ overflow: 'hidden' }}>
+      {/* Inner clipping wrapper for the chips list — min-h-0 prevents flex from
+          ignoring the height constraint, which would push UserBlock off-screen */}
+      <div className="flex flex-col flex-1 min-h-0" style={{ overflow: 'hidden' }}>
         {/* Header */}
         <div className="flex items-center px-3 pt-4 pb-3" style={{ minHeight: '52px', position: 'relative', zIndex: 1 }}>
           <div
@@ -321,7 +326,7 @@ export function Sidebar({ isOpen, onToggle, onOpenSettings, onOpenConnections, l
         </div>
 
         {/* Layout mode instructions OR widget chips */}
-        <div style={{ flex: 1, overflow: 'hidden' }}>
+        <div style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
           {layoutMode ? (
             /* ── Layout instructions ── */
             <div
