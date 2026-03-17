@@ -156,11 +156,11 @@ function Root() {
           <Route path="/tray" element={<TrayApp />} />
         )}
 
-        {/* /auth/callback is only needed on the web — in the extension, Supabase
-            tokens are delivered in the hash of the main index.html URL and
-            detectSessionInUrl handles them without a dedicated callback page.
-            In Electron, deep links via nexus:// are forwarded by main.ts. */}
-        {!IS_EXTENSION && !IS_ELECTRON && (
+        {/* /auth/callback handles Google OAuth PKCE code exchange.
+            Used by web and Electron (the main window navigates to Google and
+            returns here). Excluded from Chrome extension where tokens arrive
+            in the hash fragment and detectSessionInUrl handles them. */}
+        {!IS_EXTENSION && (
           <Route path="/auth/callback" element={<AuthCallback />} />
         )}
 
