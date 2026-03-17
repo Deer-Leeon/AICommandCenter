@@ -78,7 +78,10 @@ export function useAuth() {
 
   const signOut = async () => {
     localStorage.removeItem('nexus_onboarding_done');
-    await supabase.auth.signOut();
+    // 'local' scope clears only THIS session's tokens without invalidating
+    // the refresh token on the server — other open sessions (e.g. the
+    // Electron app while Chrome is open, or vice-versa) stay logged in.
+    await supabase.auth.signOut({ scope: 'local' });
   };
 
   return { user, session, loading, signInWithGoogle, signOut };
