@@ -40,9 +40,9 @@ layoutRouter.put('/', requireAuth, async (req: AuthRequest, res: Response) => {
     return;
   }
 
-  // Notify all other sessions (browser, desktop app) that the layout changed
-  // so they can refetch and stay in sync without a manual reload.
-  broadcastToUser(req.user!.id, { type: 'layout:update' });
+  // Push the full layout to all other sessions so they can apply it
+  // immediately — no extra GET round-trip needed on the receiving end.
+  broadcastToUser(req.user!.id, { type: 'layout:update', grid });
 
   res.json({ success: true });
 });

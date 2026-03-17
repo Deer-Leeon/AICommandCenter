@@ -165,12 +165,12 @@ export function useLayoutPersistence(userId?: string) {
         body: JSON.stringify({ grid: payload }),
       })
         .then(() => {
-          // Mark clean so an incoming layout:update from our own save doesn't
-          // prevent other sessions' changes from applying afterwards.
+          // Mark clean so subsequent remote changes from other sessions apply
+          // cleanly instead of being blocked by a stale localModified flag.
           localModifiedRef.current = false;
         })
         .catch(() => {});
-    }, 800);
+    }, 150); // 150ms — fast enough for instant feel, slow enough to batch drags
 
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -180,10 +180,8 @@ export function useLayoutPersistence(userId?: string) {
   }, [pages, activePage, userId]);
 
   // ── Real-time cross-session sync ──────────────────────────────────────────
-  // When another session (e.g. the browser while the desktop app is open, or
-  // vice versa) saves a layout change, the backend broadcasts layout:update to
-  // all connections for this user. We refetch and apply the new layout unless
-  // local edits are in flight (which would overwrite server state anyway).
+  // The backend embeds the full layout payload in the layout:update event so
+  // we can apply it immediately — no extra GET round-trip, ~0ms perceived lag.
   useEffect(() => {
     if (!userId) return;
 
@@ -191,32 +189,24 @@ export function useLayoutPersistence(userId?: string) {
       if (event.type !== 'layout:update') return;
       if (localModifiedRef.current) return; // local edit in flight — skip
 
-      apiFetch('/api/layout')
-        .then((r) => r.json())
-        .then(({ grid: raw }: { grid: unknown }) => {
-          if (localModifiedRef.current) return; // another edit landed while fetching
+      const raw = event.grid as Record<string, unknown> | undefined;
+      if (!raw) return;
 
-          let resolved: PagesLayout | null = null;
+      let resolved: PagesLayout | null = null;
 
-          if (raw && typeof raw === 'object') {
-            const payload = raw as Record<string, unknown>;
-            if (payload.v === 3) {
-              const v3 = payload as unknown as PagesLayout;
-              if (Array.isArray(v3.pages) && v3.pages.length > 0) resolved = v3;
-            } else if (payload.v === 2) {
-              const localCache = readCachedLayoutV3(userId);
-              resolved = migrateV2toV3(payload as unknown as LayoutV2, localCache?.pages);
-            }
-          }
+      if (raw.v === 3) {
+        const v3 = raw as unknown as PagesLayout;
+        if (Array.isArray(v3.pages) && v3.pages.length > 0) resolved = v3;
+      } else if (raw.v === 2) {
+        const localCache = readCachedLayoutV3(userId);
+        resolved = migrateV2toV3(raw as unknown as LayoutV2, localCache?.pages);
+      }
 
-          if (resolved) {
-            writeCachedLayoutV3(userId, resolved);
-            setPages(resolved.pages, resolved.activePage || resolved.pages[0].id);
-          }
-        })
-        .catch(() => {});
+      if (resolved) {
+        writeCachedLayoutV3(userId, resolved);
+        setPages(resolved.pages, resolved.activePage || resolved.pages[0].id);
+      }
     });
-  // userId is the only meaningful dependency — the callback always reads current refs
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 }
