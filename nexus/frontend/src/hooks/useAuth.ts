@@ -45,9 +45,10 @@ export function useAuth() {
     }
     document.addEventListener('visibilitychange', handleVisibility);
 
-    // Electron: listen for nexus://auth/callback deep links from the system browser
+    // Electron: receive the PKCE code forwarded by the OAuth popup window
     if (window.electronAPI?.isElectron && !deepLinkRegistered.current) {
       deepLinkRegistered.current = true;
+
       window.electronAPI.onDeepLink(async (url: string) => {
         if (!url.startsWith('nexus://auth/callback')) return;
         try {
@@ -61,6 +62,11 @@ export function useAuth() {
         } finally {
           setAwaitingBrowser(false);
         }
+      });
+
+      // User closed the popup without signing in
+      window.electronAPI.onOAuthCancelled(() => {
+        setAwaitingBrowser(false);
       });
     }
 
@@ -89,14 +95,16 @@ export function useAuth() {
       const { data } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: getAuthRedirectUrl(),       // nexus://auth/callback
+          redirectTo: getAuthRedirectUrl(),
           queryParams: { prompt: 'select_account' },
-          skipBrowserRedirect: true,              // Don't navigate Electron window
+          skipBrowserRedirect: true,
         },
       });
       if (data?.url) {
-        await window.electronAPI.openExternalUrl(data.url);
         setAwaitingBrowser(true);
+        // Open a popup BrowserWindow — main process intercepts the callback
+        // before it loads and delivers the PKCE code via onDeepLink.
+        await window.electronAPI.openOAuthWindow(data.url);
         return 'browser-opened';
       }
     } else {

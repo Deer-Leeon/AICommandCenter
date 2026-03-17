@@ -41,6 +41,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ── External URL (opens in system browser) ──────────────────────────────────
   openExternalUrl: (url: string) => ipcRenderer.invoke('open-external-url', url),
 
+  // ── OAuth popup window ───────────────────────────────────────────────────────
+  // Opens a child BrowserWindow for Google OAuth. Main process intercepts the
+  // callback redirect and sends the PKCE code back via 'deep-link' IPC event.
+  openOAuthWindow: (url: string) => ipcRenderer.invoke('open-oauth-window', url),
+
+  // ── OAuth cancelled (popup closed without completing auth) ───────────────────
+  onOAuthCancelled: (callback: () => void) => {
+    ipcRenderer.on('oauth-cancelled', () => callback());
+  },
+
   // ── Window controls ─────────────────────────────────────────────────────────
   minimizeWindow: () => ipcRenderer.send('window-minimize'),
   maximizeWindow: () => ipcRenderer.send('window-maximize'),

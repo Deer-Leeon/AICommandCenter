@@ -44,8 +44,8 @@ function AwaitingBrowserScreen({ onCancel }: { onCancel: () => void }) {
           Complete sign-in in your browser{dots}
         </div>
         <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, maxWidth: 280 }}>
-          Google opened in your default browser.<br />
-          Use Touch ID, Face ID or your password there.
+          A sign-in window opened — pick your account there.<br />
+          This window will update automatically when done.
         </div>
       </div>
 
@@ -234,7 +234,7 @@ export default function LoginPage() {
           Continue with Google
           {IS_ELECTRON && (
             <span style={{ fontSize: 10, color: '#888', fontWeight: 400, marginLeft: 2 }}>
-              (opens browser)
+              (opens sign-in window)
             </span>
           )}
         </button>

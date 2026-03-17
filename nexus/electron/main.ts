@@ -271,6 +271,84 @@ ipcMain.handle('open-external-url', (_, url: string) => {
   shell.openExternal(url);
 });
 
+// Open a popup BrowserWindow for Google OAuth.
+// We intercept the callback redirect BEFORE the page loads, extract the PKCE
+// code, forward it to the main window as a synthetic deep-link event, then
+// close the popup. This keeps the code_verifier in the main window's localStorage
+// and lets Supabase complete the PKCE exchange there — no custom protocol needed.
+ipcMain.handle('open-oauth-window', async (_, authUrl: string) => {
+  const CALLBACK_ORIGIN = 'https://nexus.lj-buchmiller.com';
+
+  const authWin = new BrowserWindow({
+    width: 500,
+    height: 680,
+    title: 'Sign in to NEXUS',
+    parent: mainWindow ?? undefined,
+    modal: false,
+    autoHideMenuBar: true,
+    titleBarStyle: 'default',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      // Isolated session so Google never sees the main window's cookies
+      partition: 'persist:nexus-oauth',
+    },
+  });
+
+  // Appear as Chrome on macOS so Google doesn't block the embedded webview
+  authWin.webContents.setUserAgent(
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) ' +
+    'AppleWebKit/537.36 (KHTML, like Gecko) ' +
+    'Chrome/124.0.0.0 Safari/537.36'
+  );
+
+  let codeDelivered = false;
+
+  function deliverCode(url: string) {
+    if (codeDelivered) return;
+    try {
+      const parsed = new URL(url);
+      const code = parsed.searchParams.get('code');
+      if (code && mainWindow && !mainWindow.isDestroyed()) {
+        codeDelivered = true;
+        mainWindow.webContents.send('deep-link', `nexus://auth/callback?code=${code}`);
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    } catch {
+      // Malformed URL — ignore
+    }
+    if (!authWin.isDestroyed()) authWin.close();
+  }
+
+  // Intercept user/script-initiated navigations to our callback origin
+  authWin.webContents.on('will-navigate', (event, url) => {
+    if (url.startsWith(CALLBACK_ORIGIN)) {
+      event.preventDefault();
+      deliverCode(url);
+    }
+  });
+
+  // Intercept HTTP-level redirects (Supabase typically does a 302 → callback)
+  authWin.webContents.on('will-redirect', (event, url) => {
+    if (url.startsWith(CALLBACK_ORIGIN)) {
+      event.preventDefault();
+      deliverCode(url);
+    }
+  });
+
+  // If the user closes the popup without completing auth, cancel the waiting state
+  authWin.on('closed', () => {
+    if (!codeDelivered && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('oauth-cancelled');
+    }
+  });
+
+  authWin.loadURL(authUrl).catch(() => {
+    if (!authWin.isDestroyed()) authWin.close();
+  });
+});
+
 // Auto-update trigger from renderer
 ipcMain.on('check-for-updates', () => {
   // setupUpdater handles this via autoUpdater

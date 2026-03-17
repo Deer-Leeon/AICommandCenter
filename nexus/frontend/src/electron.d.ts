@@ -29,6 +29,12 @@ interface ElectronAPI {
   // ── External URL ─────────────────────────────────────────────────────────
   openExternalUrl: (url: string) => Promise<void>;
 
+  // ── OAuth popup window ───────────────────────────────────────────────────
+  /** Opens a child window for Google OAuth; main process delivers the PKCE code back via onDeepLink. */
+  openOAuthWindow: (url: string) => Promise<void>;
+  /** Fires when the OAuth popup is closed without completing sign-in. */
+  onOAuthCancelled: (callback: () => void) => void;
+
   // ── Window controls ───────────────────────────────────────────────────────
   minimizeWindow: () => void;
   maximizeWindow: () => void;
