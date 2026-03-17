@@ -297,19 +297,16 @@ function tryBindPort(port: number): Promise<http.Server | null> {
 
 ipcMain.handle('start-oauth-server', async (): Promise<number> => {
   // Try preferred fixed port first so the user only needs one Supabase entry
-  let server = await tryBindPort(54321);
-  if (!server) {
-    // Fall back to an OS-assigned free port
-    server = await new Promise(resolve => {
-      const s = http.createServer();
-      s.listen(0, '127.0.0.1', () => resolve(s));
-    });
-  }
+  const preferred = await tryBindPort(54321);
+  const server: http.Server = preferred ?? await new Promise<http.Server>(resolve => {
+    const s = http.createServer();
+    s.listen(0, '127.0.0.1', () => resolve(s));
+  });
 
   const { port } = server.address() as { port: number };
 
   // Auto-close after 10 minutes in case the user abandons the flow
-  const closeTimer = setTimeout(() => server!.close(), 10 * 60 * 1000);
+  const closeTimer = setTimeout(() => server.close(), 10 * 60 * 1000);
 
   server.on('request', (req, res) => {
     const reqUrl = new URL(req.url ?? '/', `http://localhost:${port}`);
