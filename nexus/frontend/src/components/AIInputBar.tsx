@@ -262,10 +262,28 @@ export function AIInputBar() {
     }
 
     // Default: search
-    const base       = SEARCH_URLS[settings.searchEngine] ?? SEARCH_URLS.google;
-    const searchUrl  = base + encodeURIComponent(trimmed);
     setInput('');
     setShowDropdown(false);
+
+    // In the Chrome extension context, delegate to chrome.search.query so the
+    // search uses whatever engine the user configured in Chrome settings —
+    // rather than always hardcoding Google. Only applies to the "google" mode;
+    // explicit engine selections (Bing, DuckDuckGo, Perplexity) always use URLs.
+    if (
+      settings.searchEngine === 'google' &&
+      typeof chrome !== 'undefined' &&
+      typeof chrome.search?.query === 'function'
+    ) {
+      chrome.search.query({
+        text: trimmed,
+        disposition: settings.openNewTab ? 'NEW_TAB' : 'CURRENT_TAB',
+      });
+      return;
+    }
+
+    // Explicit engine override or non-extension fallback (web / Electron / iOS)
+    const base      = SEARCH_URLS[settings.searchEngine] ?? SEARCH_URLS.google;
+    const searchUrl = base + encodeURIComponent(trimmed);
     if (settings.openNewTab) window.open(searchUrl, '_blank');
     else window.location.href = searchUrl;
   }

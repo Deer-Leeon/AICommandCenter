@@ -15,6 +15,6 @@
     "48":  "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "permissions": ["alarms"],
+  "permissions": ["alarms", "search"],
   "host_permissions": ["https://nexus.lj-buchmiller.com/*"]
 }
