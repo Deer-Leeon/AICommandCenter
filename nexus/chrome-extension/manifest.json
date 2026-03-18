@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "NEXUS New Tab",
-  "version": "1.1.0",
-  "description": "Turn every new tab into your command center — live sports, stocks, AI assistant, calendar, tasks, and Spotify. All in one place.",
+  "version": "1.1.1",
+  "description": "Replace your new tab page with NEXUS — a personal dashboard with widgets for calendar, weather, stocks, music, tasks, and more.",
   "chrome_url_overrides": {
     "newtab": "newtab.html"
   },
@@ -15,6 +15,10 @@
     "48":  "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "permissions": ["alarms", "search"],
-  "host_permissions": ["https://nexus.lj-buchmiller.com/*"]
+  "permissions": [
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://nexus.lj-buchmiller.com/*"
+  ]
 }

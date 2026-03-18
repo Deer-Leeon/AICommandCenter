@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "build:ext": "tsc --noEmit && vite build --config vite.extension.config.ts",
+    "build:extension": "tsc --noEmit && vite build --config vite.extension.config.ts && node scripts/clean-extension-build.js",
     "preview": "vite preview",
     "build:ios": "tsc && vite build && npx cap sync ios",
     "open:ios": "npx cap open ios",
