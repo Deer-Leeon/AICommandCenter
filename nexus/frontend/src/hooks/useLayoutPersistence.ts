@@ -94,6 +94,10 @@ export function useLayoutPersistence(userId?: string) {
     if (cached && cached.pages.length > 0) {
       setPages(cached.pages, cached.activePage || cached.pages[0].id);
       loadedRef.current = true;
+      // Mark layout as loaded immediately from cache so the reveal overlay
+      // doesn't block on the network. The API call still runs and updates
+      // the layout in the background, but we don't wait for it.
+      useStore.getState().setLayoutLoaded(true);
     } else {
       useStore.setState({
         pages: [], activePage: '', grid: {}, gridSpans: {},

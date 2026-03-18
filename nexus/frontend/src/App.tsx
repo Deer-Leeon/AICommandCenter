@@ -33,7 +33,7 @@ import { WIDGET_CONFIGS, type WidgetType } from './types';
 import { prefetchConnections } from './hooks/useConnections';
 import { prefetchProfile } from './hooks/useProfile';
 
-const REVEAL_TIMEOUT = 1_200;
+const REVEAL_TIMEOUT = 200;
 
 export default function App() {
   const {

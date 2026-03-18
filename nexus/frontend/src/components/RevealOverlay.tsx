@@ -30,7 +30,7 @@ export function RevealOverlay() {
   // Start the finishReveal timer when the wave animation begins.
   useEffect(() => {
     if (!revealing) return;
-    timerRef.current = setTimeout(finishReveal, 630);
+    timerRef.current = setTimeout(finishReveal, 300);
     return () => {
       if (timerRef.current !== null) clearTimeout(timerRef.current);
     };
