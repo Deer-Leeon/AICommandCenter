@@ -1687,6 +1687,28 @@ export function SettingsModal({ onClose, initialTab }: SettingsModalProps) {
                 <span className="font-medium">{item.label}</span>
               </button>
             ))}
+
+            {/* Privacy policy link — pinned at bottom of sidebar */}
+            <div style={{ marginTop: 'auto', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+              <a
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'block',
+                  padding: '6px 12px',
+                  fontSize: '11px',
+                  color: 'var(--text-faint)',
+                  textDecoration: 'none',
+                  borderRadius: 6,
+                  transition: 'color 0.15s',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text-faint)'; }}
+              >
+                Privacy Policy
+              </a>
+            </div>
           </div>
 
           {/* Right content — all panels mount immediately so API calls fire
