@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -47,6 +47,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeDragId, setActiveDragId] = useState<WidgetType | null>(null);
   const [gridRef, setGridRef] = useState<HTMLElement | null>(null);
+  const handleGridRef = useCallback((el: HTMLElement | null) => setGridRef(el), []);
   const [pendingDrop, setPendingDrop] = useState<{ widgetId: WidgetType; row: number; col: number; slotKey: string } | null>(null);
   const [showLayoutEditor, setShowLayoutEditor] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -225,7 +226,7 @@ export default function App() {
         <div className="flex flex-col flex-1 overflow-hidden min-w-0">
           <div
             className="flex-1 relative"
-            ref={(el) => setGridRef(el)}
+            ref={handleGridRef}
             style={{ containerType: 'size', overflow: 'clip', isolation: 'isolate' }}
           >
             {/* Page content — keyed on activePage so widgets unmount/remount on switch.
