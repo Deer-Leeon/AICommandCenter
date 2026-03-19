@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useMobileCardOrder } from './useMobileCardOrder';
 import { MobileCardStack } from './MobileCardStack';
 import { MobileBottomBar } from './MobileBottomBar';
 import { MobileSearchOverlay } from './MobileSearchOverlay';
 import { MobileLayoutEditor } from './MobileLayoutEditor';
+import { MobileCardContent } from './cards/MobileCardRegistry';
 import { SettingsModal } from '../components/SettingsModal';
 import { useStore } from '../store/useStore';
 import { useAuth } from '../hooks/useAuth';
@@ -20,8 +21,25 @@ export default function MobileApp() {
   const [showSearch, setShowSearch]     = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fsVisible, setFsVisible]       = useState(false); // drives enter/exit CSS animation
+  const [activeWidget, setActiveWidget] = useState<WidgetType>(order[0]);
   const { pages, activePage, setActivePage } = useStore();
   const { user } = useAuth();
+
+  const handleActiveWidgetChange = useCallback((w: WidgetType) => {
+    setActiveWidget(w);
+  }, []);
+
+  const enterFullscreen = useCallback(() => {
+    setIsFullscreen(true);
+    requestAnimationFrame(() => setFsVisible(true));
+  }, []);
+
+  const exitFullscreen = useCallback(() => {
+    setFsVisible(false);
+    setTimeout(() => setIsFullscreen(false), 380);
+  }, []);
 
   // ── Capacitor: push notifications + keyboard avoidance ──────────────────
   useEffect(() => {
@@ -59,83 +77,157 @@ export default function MobileApp() {
         overflow: 'hidden',
       }}
     >
-      {/* ── Top bar ──────────────────────────────────────────────────────── */}
+      {/* ── Top bar (slides off top in fullscreen) ───────────────────────── */}
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '8px 14px 4px', flexShrink: 0, zIndex: 150,
+        flexShrink: 0, overflow: 'hidden',
+        transform: isFullscreen ? 'translateY(-100%)' : 'translateY(0)',
+        opacity: isFullscreen ? 0 : 1,
+        transition: 'transform 0.38s cubic-bezier(0.25,0.46,0.45,0.94), opacity 0.3s ease',
+        pointerEvents: isFullscreen ? 'none' : undefined,
       }}>
         <div style={{
-          fontFamily: 'var(--font-mono)', fontSize: 12,
-          color: 'var(--accent)', letterSpacing: '0.18em', fontWeight: 700,
-          textShadow: '0 0 12px rgba(var(--accent-rgb),0.4)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '8px 14px 4px', zIndex: 150,
         }}>
-          NEXUS
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: 12,
+            color: 'var(--accent)', letterSpacing: '0.18em', fontWeight: 700,
+            textShadow: '0 0 12px rgba(var(--accent-rgb),0.4)',
+          }}>
+            NEXUS
+          </div>
+
+          <button
+            onClick={() => setShowLayoutEditor(true)}
+            style={{
+              background: 'rgba(var(--accent-rgb),0.1)',
+              border: '1px solid rgba(var(--accent-rgb),0.25)',
+              borderRadius: 10, padding: '6px 12px',
+              display: 'flex', alignItems: 'center', gap: 6,
+              cursor: 'pointer', minHeight: 36,
+            }}
+          >
+            <span style={{ fontSize: 14 }}>⊞</span>
+            <span style={{ fontSize: 11, color: 'var(--accent)', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
+              Layout
+            </span>
+          </button>
         </div>
 
-        <button
-          onClick={() => setShowLayoutEditor(true)}
-          style={{
-            background: 'rgba(var(--accent-rgb),0.1)',
-            border: '1px solid rgba(var(--accent-rgb),0.25)',
-            borderRadius: 10, padding: '6px 12px',
-            display: 'flex', alignItems: 'center', gap: 6,
-            cursor: 'pointer', minHeight: 36,
-          }}
-        >
-          <span style={{ fontSize: 14 }}>⊞</span>
-          <span style={{ fontSize: 11, color: 'var(--accent)', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
-            Layout
-          </span>
-        </button>
+        {/* ── Page selector ─────────────────────────────────────────────── */}
+        {pages.length > 1 && (
+          <div style={{
+            display: 'flex', overflowX: 'auto', gap: 6,
+            padding: '0 14px 6px', scrollbarWidth: 'none',
+          }}>
+            {pages.map((page) => {
+              const isActive = page.id === activePage;
+              return (
+                <button
+                  key={page.id}
+                  onClick={() => setActivePage(page.id)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 5,
+                    padding: '5px 12px', borderRadius: 20, whiteSpace: 'nowrap',
+                    border: isActive ? '1px solid rgba(var(--accent-rgb),0.5)' : '1px solid var(--border)',
+                    background: isActive ? 'rgba(var(--accent-rgb),0.12)' : 'var(--surface)',
+                    color: isActive ? 'var(--accent)' : 'var(--text-muted)',
+                    fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: isActive ? 700 : 400,
+                    cursor: 'pointer', flexShrink: 0,
+                  }}
+                >
+                  <span style={{ fontSize: 14 }}>{page.emoji}</span>
+                  {page.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* ── Page selector ───────────────────────────────────────────────── */}
-      {pages.length > 1 && (
-        <div style={{
-          display: 'flex', overflowX: 'auto', gap: 6,
-          padding: '0 14px 6px', scrollbarWidth: 'none', flexShrink: 0,
-        }}>
-          {pages.map((page) => {
-            const isActive = page.id === activePage;
-            return (
-              <button
-                key={page.id}
-                onClick={() => setActivePage(page.id)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  padding: '5px 12px', borderRadius: 20, whiteSpace: 'nowrap',
-                  border: isActive ? '1px solid rgba(var(--accent-rgb),0.5)' : '1px solid var(--border)',
-                  background: isActive ? 'rgba(var(--accent-rgb),0.12)' : 'var(--surface)',
-                  color: isActive ? 'var(--accent)' : 'var(--text-muted)',
-                  fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: isActive ? 700 : 400,
-                  cursor: 'pointer', flexShrink: 0,
-                }}
-              >
-                <span style={{ fontSize: 14 }}>{page.emoji}</span>
-                {page.name}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
       {/* ── Card stack ───────────────────────────────────────────────────── */}
-      {/* paddingBottom shifts cards up when the iOS keyboard is open so
-          focused inputs inside cards are never hidden behind the keyboard */}
       <div style={{
         flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column',
         minHeight: 0, padding: '4px 0 4px',
         paddingBottom: keyboardHeight > 0 ? keyboardHeight : undefined,
         transition: 'padding-bottom 0.25s ease',
       }}>
-        <MobileCardStack order={order} />
+        <MobileCardStack
+          order={order}
+          onActiveWidgetChange={handleActiveWidgetChange}
+        />
       </div>
 
-      {/* ── Bottom bar ───────────────────────────────────────────────────── */}
-      <MobileBottomBar
-        onOpenSearch={() => setShowSearch(true)}
-        onOpenSettings={() => setShowSettings(true)}
-      />
+      {/* ── Bottom bar (slides off bottom in fullscreen) ──────────────────── */}
+      <div style={{
+        flexShrink: 0,
+        transform: isFullscreen ? 'translateY(100%)' : 'translateY(0)',
+        opacity: isFullscreen ? 0 : 1,
+        transition: 'transform 0.38s cubic-bezier(0.25,0.46,0.45,0.94), opacity 0.3s ease',
+        pointerEvents: isFullscreen ? 'none' : undefined,
+      }}>
+        <MobileBottomBar
+          onOpenSearch={() => setShowSearch(true)}
+          onOpenSettings={() => setShowSettings(true)}
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={isFullscreen ? exitFullscreen : enterFullscreen}
+        />
+      </div>
+
+      {/* ── Fullscreen widget overlay ─────────────────────────────────────── */}
+      {isFullscreen && activeWidget && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 400,
+            background: 'var(--bg)',
+            display: 'flex', flexDirection: 'column',
+            // Entry: scale up from 90% + fade; Exit: scale down + fade
+            transform: fsVisible ? 'scale(1)' : 'scale(0.92)',
+            opacity: fsVisible ? 1 : 0,
+            transition: 'transform 0.38s cubic-bezier(0.25,0.46,0.45,0.94), opacity 0.32s ease',
+            borderRadius: fsVisible ? 0 : 22,
+          }}
+        >
+          {/* Widget fills the entire overlay */}
+          <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+            <MobileCardContent widgetType={activeWidget} />
+          </div>
+
+          {/* Floating restore button — bottom-right corner */}
+          <button
+            onPointerDown={exitFullscreen}
+            style={{
+              position: 'absolute',
+              bottom: `calc(20px + env(safe-area-inset-bottom))`,
+              right: 18,
+              width: 46, height: 46,
+              borderRadius: 23,
+              background: 'rgba(0,0,0,0.55)',
+              backdropFilter: 'blur(14px)',
+              WebkitBackdropFilter: 'blur(14px)',
+              border: '1px solid rgba(255,255,255,0.16)',
+              color: 'rgba(255,255,255,0.85)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer',
+              touchAction: 'manipulation',
+              WebkitTapHighlightColor: 'transparent',
+              // Delay appearance so it doesn't flash during entry animation
+              opacity: fsVisible ? 1 : 0,
+              transition: 'opacity 0.3s ease 0.2s',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+            }}
+            aria-label="Exit fullscreen"
+          >
+            {/* Collapse arrows SVG */}
+            <svg width="18" height="18" viewBox="0 0 17 17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 1v5H1M6 6L1.5 1.5" />
+              <path d="M11 1v5h5M11 6l4.5-4.5" />
+              <path d="M6 16v-5H1M6 11l-4.5 4.5" />
+              <path d="M11 16v-5h5M11 11l4.5 4.5" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       {/* ── Overlays ─────────────────────────────────────────────────────── */}
       {showLayoutEditor && (

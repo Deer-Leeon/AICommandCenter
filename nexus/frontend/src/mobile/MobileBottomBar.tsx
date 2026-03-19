@@ -1,14 +1,39 @@
 import { useState, useEffect } from 'react';
 import { useTodos } from '../hooks/useTodos';
 
+// ── SVG icons for fullscreen toggle ──────────────────────────────────────────
+function ExpandIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 17 17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 6V1h5M1 1l4.5 4.5" />
+      <path d="M16 6V1h-5M16 1l-4.5 4.5" />
+      <path d="M1 11v5h5M1 16l4.5-4.5" />
+      <path d="M16 11v5h-5M16 16l-4.5-4.5" />
+    </svg>
+  );
+}
+
+function CollapseIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 17 17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 1v5H1M6 6L1.5 1.5" />
+      <path d="M11 1v5h5M11 6l4.5-4.5" />
+      <path d="M6 16v-5H1M6 11l-4.5 4.5" />
+      <path d="M11 16v-5h5M11 11l4.5 4.5" />
+    </svg>
+  );
+}
+
 interface Props {
   onOpenSearch: () => void;
   onOpenSettings: () => void;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
 }
 
 type Sheet = 'quickadd' | null;
 
-export function MobileBottomBar({ onOpenSearch, onOpenSettings }: Props) {
+export function MobileBottomBar({ onOpenSearch, onOpenSettings, isFullscreen, onToggleFullscreen }: Props) {
   const [sheet, setSheet] = useState<Sheet>(null);
 
   return (
@@ -24,6 +49,22 @@ export function MobileBottomBar({ onOpenSearch, onOpenSettings }: Props) {
       }}>
         <BarBtn icon="🔍" label="Search" onClick={onOpenSearch} />
         <BarBtn icon="＋" label="Add" onClick={() => setSheet('quickadd')} />
+        {/* Fullscreen toggle */}
+        <button
+          onClick={onToggleFullscreen}
+          style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+            background: 'none', border: 'none', cursor: 'pointer',
+            minWidth: 44, minHeight: 44, padding: '4px 16px',
+            justifyContent: 'center', color: 'var(--text-muted)',
+            touchAction: 'manipulation',
+          }}
+        >
+          {isFullscreen ? <CollapseIcon /> : <ExpandIcon />}
+          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
+            {isFullscreen ? 'Restore' : 'Focus'}
+          </span>
+        </button>
         <BarBtn icon="⚙️" label="Settings" onClick={onOpenSettings} />
       </div>
 

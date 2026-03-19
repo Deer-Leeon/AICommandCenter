@@ -93,9 +93,10 @@ function getSlotStyle(slotIdx: number, w: number, h: number): CSSProperties {
 // ── Component ─────────────────────────────────────────────────────────────────
 interface Props {
   order: WidgetType[];
+  onActiveWidgetChange?: (widget: WidgetType) => void;
 }
 
-export function MobileCardStack({ order }: Props) {
+export function MobileCardStack({ order, onActiveWidgetChange }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [sz, setSz] = useState({ w: 0, h: 0 });
 
@@ -128,6 +129,12 @@ export function MobileCardStack({ order }: Props) {
     [slotMap],
   );
 
+  // Notify parent of the current active widget whenever slotMap changes
+  useEffect(() => {
+    const active = getActiveWidget();
+    if (active) onActiveWidgetChange?.(active);
+  }, [slotMap, getActiveWidget, onActiveWidgetChange]);
+
   const swapWithActive = useCallback((targetWidget: WidgetType) => {
     const activeWidget = getActiveWidget();
     if (!activeWidget || activeWidget === targetWidget) return;
@@ -136,11 +143,13 @@ export function MobileCardStack({ order }: Props) {
     setSlotMap(prev => {
       const targetPos = prev[targetWidget];
       if (targetPos == null) return prev;
-      return {
+      const next = {
         ...prev,
         [activeWidget]: targetPos,
         [targetWidget]: ACTIVE_SLOT,
       };
+      onActiveWidgetChange?.(targetWidget);
+      return next;
     });
 
     try { navigator.vibrate?.(7); } catch { /* not supported on iOS */ }
@@ -148,7 +157,7 @@ export function MobileCardStack({ order }: Props) {
     // Note: we intentionally do NOT call onOrderChange here.
     // Syncing back to the parent would trigger a full slotMap rebuild,
     // moving every card back to the interleaved positions.
-  }, [getActiveWidget]);
+  }, [getActiveWidget, onActiveWidgetChange]);
 
 
   const ready = sz.w > 0 && sz.h > 0;
