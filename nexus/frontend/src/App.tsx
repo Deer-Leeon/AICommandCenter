@@ -307,6 +307,9 @@ export default function App() {
           <StatusBar
             onLayoutClick={() => setShowLayoutEditor(o => !o)}
             isLayoutMode={showLayoutEditor}
+            isSidebarOpen={sidebarOpen}
+            onSidebarToggle={() => setSidebarOpen(o => !o)}
+            onOpenSettings={() => { setSettingsInitialTab('account'); setShowSettings(true); }}
           />
         </div>
       </div>

@@ -3,8 +3,6 @@ import { useDraggable } from '@dnd-kit/core';
 import { WIDGET_CONFIGS, type WidgetConfig } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useProfileContext } from '../contexts/ProfileContext';
-import { PresenceDot } from './PresenceDot';
-
 interface SidebarProps {
   isOpen: boolean;
   onToggle: () => void;
@@ -393,19 +391,6 @@ export function Sidebar({ isOpen, onToggle, onOpenSettings, onOpenConnections, l
           )}
         </div>
       </div>
-
-      {/* Presence dot — shows connected partner's online status; only when a connection exists */}
-      {onOpenConnections && (
-        <div
-          style={{
-            display:        'flex',
-            justifyContent: isOpen ? 'flex-start' : 'center',
-            padding:        '0 16px 6px',
-          }}
-        >
-          <PresenceDot onOpenConnections={onOpenConnections} />
-        </div>
-      )}
 
       {/* User block — outside the clipped wrapper so popup can overflow upward */}
       <UserBlock isOpen={isOpen} onOpenSettings={onOpenSettings} />
