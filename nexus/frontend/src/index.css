@@ -207,7 +207,7 @@ body,
 body {
   background-color: var(--bg);
   color: var(--text);
-  font-family: 'Space Mono', 'Courier New', Courier, monospace;
+  font-family: 'DM Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
   /* Prevent iOS rubber-band overscroll on the root — the mobile card stack
