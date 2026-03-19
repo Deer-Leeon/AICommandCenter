@@ -16,7 +16,7 @@ import type { WidgetType } from '../types';
 const BOTTOM_BAR_H = 56;
 
 export default function MobileApp() {
-  const { order, setOrder, lastAutoReorder } = useMobileCardOrder();
+  const { order, setOrder } = useMobileCardOrder();
   const [showLayoutEditor, setShowLayoutEditor] = useState(false);
   const [showSearch, setShowSearch]     = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -267,29 +267,7 @@ export default function MobileApp() {
         </div>
       )}
 
-      {/* Auto-reorder toast */}
-      {lastAutoReorder && (
-        <div style={{
-          position: 'fixed',
-          bottom: `calc(${BOTTOM_BAR_H}px + 12px + env(safe-area-inset-bottom))`,
-          left: '50%', transform: 'translateX(-50%)',
-          background: 'var(--bar-bg)', backdropFilter: 'blur(8px)',
-          border: '1px solid var(--border)', borderRadius: 20,
-          padding: '8px 16px', fontSize: 13, color: 'var(--text)',
-          whiteSpace: 'nowrap', zIndex: 300,
-          boxShadow: '0 4px 16px var(--side-shadow)',
-          animation: 'mobileFadeToast 0.3s ease both',
-        }}>
-          {lastAutoReorder}
-        </div>
-      )}
-
       <style>{`
-        @keyframes mobileFadeToast {
-          from { opacity: 0; transform: translateX(-50%) translateY(8px); }
-          to   { opacity: 1; transform: translateX(-50%) translateY(0); }
-        }
-
         /* ── Dark theme (default) ── */
         .nexus-mobile {
           --bg:           #0a0a0f;
