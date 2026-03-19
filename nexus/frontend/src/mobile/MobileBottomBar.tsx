@@ -1,7 +1,37 @@
 import { useState, useEffect } from 'react';
 import { useTodos } from '../hooks/useTodos';
 
-// ── SVG icons for fullscreen toggle ──────────────────────────────────────────
+// ── SVG icon set ──────────────────────────────────────────────────────────────
+
+function SearchIcon() {
+  return (
+    <svg width="19" height="19" viewBox="0 0 19 19" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8.5" cy="8.5" r="5.5" />
+      <line x1="13" y1="13" x2="17.5" y2="17.5" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg width="19" height="19" viewBox="0 0 19 19" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
+      <line x1="9.5" y1="2" x2="9.5" y2="17" />
+      <line x1="2" y1="9.5" x2="17" y2="9.5" />
+    </svg>
+  );
+}
+
+function SlidersIcon() {
+  return (
+    <svg width="19" height="19" viewBox="0 0 19 19" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round">
+      <line x1="1.5" y1="5.5" x2="17.5" y2="5.5" />
+      <circle cx="6" cy="5.5" r="2.2" fill="currentColor" stroke="none" />
+      <line x1="1.5" y1="13.5" x2="17.5" y2="13.5" />
+      <circle cx="13" cy="13.5" r="2.2" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 function ExpandIcon() {
   return (
     <svg width="17" height="17" viewBox="0 0 17 17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -24,6 +54,86 @@ function CollapseIcon() {
   );
 }
 
+// ── Pill button ───────────────────────────────────────────────────────────────
+
+type BtnVariant = 'default' | 'accent' | 'active';
+
+function PillBtn({
+  icon, label, onClick, variant = 'default',
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick?: () => void;
+  variant?: BtnVariant;
+}) {
+  const [pressed, setPressed] = useState(false);
+
+  const isAccent = variant === 'accent';
+  const isActive = variant === 'active';
+
+  return (
+    <button
+      onClick={onClick}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerLeave={() => setPressed(false)}
+      style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
+        background: 'none', border: 'none', cursor: 'pointer',
+        padding: '6px 10px',
+        touchAction: 'manipulation',
+        WebkitTapHighlightColor: 'transparent',
+        flex: 1,
+      }}
+    >
+      {/* Icon pill */}
+      <div style={{
+        width: 46, height: 34,
+        borderRadius: 11,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: isAccent
+          ? 'linear-gradient(135deg, rgba(var(--accent-rgb),0.28) 0%, rgba(var(--accent-rgb),0.16) 100%)'
+          : isActive
+          ? 'rgba(var(--accent-rgb),0.12)'
+          : pressed
+          ? 'rgba(255,255,255,0.08)'
+          : 'rgba(255,255,255,0.04)',
+        border: isAccent
+          ? '1px solid rgba(var(--accent-rgb),0.4)'
+          : isActive
+          ? '1px solid rgba(var(--accent-rgb),0.25)'
+          : '1px solid rgba(255,255,255,0.07)',
+        color: isAccent || isActive ? 'var(--accent)' : 'var(--text-muted)',
+        transform: pressed ? 'scale(0.88)' : 'scale(1)',
+        transition: 'transform 0.13s cubic-bezier(0.25,0.46,0.45,0.94), background 0.15s ease, border-color 0.15s ease',
+        boxShadow: isAccent
+          ? '0 0 14px rgba(var(--accent-rgb),0.18), inset 0 1px 0 rgba(255,255,255,0.08)'
+          : isActive
+          ? '0 0 8px rgba(var(--accent-rgb),0.1)'
+          : 'none',
+      }}>
+        {icon}
+      </div>
+
+      {/* Label */}
+      <span style={{
+        fontSize: 9,
+        fontFamily: 'var(--font-mono)',
+        letterSpacing: '0.07em',
+        textTransform: 'uppercase',
+        color: isAccent || isActive ? 'var(--accent)' : 'var(--text-faint)',
+        fontWeight: isAccent || isActive ? 700 : 400,
+        transition: 'color 0.15s ease',
+        lineHeight: 1,
+      }}>
+        {label}
+      </span>
+    </button>
+  );
+}
+
+// ── Props ─────────────────────────────────────────────────────────────────────
+
 interface Props {
   onOpenSearch: () => void;
   onOpenSettings: () => void;
@@ -33,59 +143,49 @@ interface Props {
 
 type Sheet = 'quickadd' | null;
 
+// ── Bottom bar ────────────────────────────────────────────────────────────────
+
 export function MobileBottomBar({ onOpenSearch, onOpenSettings, isFullscreen, onToggleFullscreen }: Props) {
   const [sheet, setSheet] = useState<Sheet>(null);
 
   return (
     <>
       <div style={{
-        height: 56, flexShrink: 0,
+        height: 62, flexShrink: 0,
         background: 'var(--bar-bg)',
-        backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
-        borderTop: '1px solid var(--border)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-around',
-        paddingBottom: 'env(safe-area-inset-bottom)',
+        backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)',
         position: 'relative', zIndex: 200,
+        display: 'flex', flexDirection: 'column',
+        paddingBottom: 'env(safe-area-inset-bottom)',
       }}>
-        <BarBtn icon="🔍" label="Search" onClick={onOpenSearch} />
-        <BarBtn icon="＋" label="Add" onClick={() => setSheet('quickadd')} />
-        <BarBtn icon="⚙️" label="Settings" onClick={onOpenSettings} />
-        {/* Fullscreen toggle — rightmost button */}
-        <button
-          onClick={onToggleFullscreen}
-          style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-            background: 'none', border: 'none', cursor: 'pointer',
-            minWidth: 44, minHeight: 44, padding: '4px 16px',
-            justifyContent: 'center', color: 'var(--text-muted)',
-            touchAction: 'manipulation',
-          }}
-        >
-          {isFullscreen ? <CollapseIcon /> : <ExpandIcon />}
-          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
-            {isFullscreen ? 'Restore' : 'Focus'}
-          </span>
-        </button>
+        {/* Gradient top border line */}
+        <div style={{
+          height: 1, flexShrink: 0,
+          background: 'linear-gradient(90deg, transparent 0%, rgba(var(--accent-rgb),0.35) 35%, rgba(var(--accent-rgb),0.35) 65%, transparent 100%)',
+        }} />
+
+        {/* Buttons row */}
+        <div style={{
+          flex: 1,
+          display: 'flex', alignItems: 'center',
+          padding: '0 4px',
+        }}>
+          <PillBtn icon={<SearchIcon />}  label="Search"   onClick={onOpenSearch} />
+          <PillBtn icon={<PlusIcon />}    label="Add"      onClick={() => setSheet('quickadd')} variant="accent" />
+          <PillBtn icon={<SlidersIcon />} label="Settings" onClick={onOpenSettings} />
+          <PillBtn
+            icon={isFullscreen ? <CollapseIcon /> : <ExpandIcon />}
+            label={isFullscreen ? 'Restore' : 'Focus'}
+            onClick={onToggleFullscreen}
+            variant={isFullscreen ? 'active' : 'default'}
+          />
+        </div>
       </div>
 
       {sheet === 'quickadd' && (
         <QuickAddSheet onClose={() => setSheet(null)} />
       )}
     </>
-  );
-}
-
-function BarBtn({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
-  return (
-    <button onClick={onClick} style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-      background: 'none', border: 'none', cursor: 'pointer',
-      minWidth: 44, minHeight: 44, padding: '4px 16px',
-      justifyContent: 'center',
-    }}>
-      <span style={{ fontSize: 20 }}>{icon}</span>
-      <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>{label}</span>
-    </button>
   );
 }
 
@@ -138,9 +238,9 @@ function QuickAddSheet({ onClose }: QuickAddSheetProps) {
               Quick Add
             </div>
             {[
-              { icon: '✅', label: 'Add task', action: () => setMode('task') },
-              { icon: '🍅', label: 'Start focus session', action: () => { /* open pomodoro */ dismiss(); } },
-              { icon: '📝', label: 'New note', action: () => { /* handled via notes card */ dismiss(); } },
+              { icon: '✅', label: 'Add task',          action: () => setMode('task') },
+              { icon: '🍅', label: 'Start focus session', action: () => { dismiss(); } },
+              { icon: '📝', label: 'New note',           action: () => { dismiss(); } },
             ].map(item => (
               <button key={item.label} onClick={item.action} style={{
                 display: 'flex', alignItems: 'center', gap: 14,
