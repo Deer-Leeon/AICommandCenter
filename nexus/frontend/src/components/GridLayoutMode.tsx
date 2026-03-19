@@ -900,75 +900,130 @@ export function GridLayoutMode({ onClose: _onClose }: { onClose: () => void }) {
             top = centerY - BAR_H / 2;
           }
 
-          // 20% threshold prevents the oscillation that happens when cursor hovers
-          // near a column boundary.  committed mutates in place via closure —
-          // no extra React state needed.
-          const SNAP_THRESH = 0.2;
+          // ── Snap threshold ──────────────────────────────────────────────────
+          // Cursor must cross 50% of a column width past a boundary before snapping.
+          // This creates a dead-zone that prevents back-and-forth oscillation.
+          // We use the column pitch (cellW + GAP) as our unit throughout.
+          const SNAP_THRESH = 0.5;
 
+          // ── Resize handles (left / right) ───────────────────────────────────
+          // Uses pointer capture so events are guaranteed even when the cursor
+          // moves off the handle or outside the window during a fast drag.
           const startBarResize = (side: 'left' | 'right', e: React.PointerEvent) => {
             e.preventDefault();
             e.stopPropagation();
+
+            const handle = e.currentTarget as HTMLElement;
+            handle.setPointerCapture(e.pointerId);
+
             const startColStart = cfg.colStart;
             const startColSpan  = cfg.colSpan;
             const startPosition = cfg.position;
             const rightEdge     = startColStart + startColSpan;
+
+            // committed tracks the last-snapped boundary (right edge or left edge)
             let committed = side === 'right' ? rightEdge : startColStart;
+            // anchor is the column position of the cursor at pointerdown — used to
+            // compute delta-based snapping for perfectly predictable behaviour.
+            const containerEl0 = containerRef.current;
+            if (!containerEl0) return;
+            const cr0    = containerEl0.getBoundingClientRect();
+            const anchor = (e.clientX - cr0.left - PAD) / (cellW + GAP);
 
             const onMove = (ev: PointerEvent) => {
               const containerEl = containerRef.current;
               if (!containerEl) return;
               const cr   = containerEl.getBoundingClientRect();
               const colF = (ev.clientX - cr.left - PAD) / (cellW + GAP);
+              // delta relative to the anchor — how far we've moved in column units
+              const delta = colF - anchor;
 
               if (side === 'right') {
-                while (colF > committed + SNAP_THRESH       && committed < COLS)            committed++;
-                while (colF < committed - 1 - SNAP_THRESH   && committed > startColStart + 1) committed--;
-                setSearchBarConfig({ position: startPosition, colStart: startColStart, colSpan: committed - startColStart });
+                // desired new right edge = original right edge + how far cursor moved
+                const desired = rightEdge + delta;
+                while (desired > committed + SNAP_THRESH && committed < COLS) committed++;
+                while (desired < committed - SNAP_THRESH && committed > startColStart + 1) committed--;
+                setSearchBarConfig({ position: startPosition, colStart: startColStart, colSpan: Math.max(1, committed - startColStart) });
               } else {
-                while (colF < committed - SNAP_THRESH         && committed > 0)            committed--;
-                while (colF > committed + 1 + SNAP_THRESH     && committed < rightEdge - 1) committed++;
+                // desired new left edge = original left edge + how far cursor moved
+                const desired = startColStart + delta;
+                while (desired < committed - SNAP_THRESH && committed > 0) committed--;
+                while (desired > committed + SNAP_THRESH && committed < rightEdge - 1) committed++;
                 setSearchBarConfig({ position: startPosition, colStart: committed, colSpan: Math.max(1, rightEdge - committed) });
               }
             };
+
             const onUp = () => {
-              window.removeEventListener('pointermove', onMove);
-              window.removeEventListener('pointerup', onUp);
+              handle.removeEventListener('pointermove', onMove);
+              handle.removeEventListener('pointerup', onUp);
             };
-            window.addEventListener('pointermove', onMove);
-            window.addEventListener('pointerup', onUp);
+            handle.addEventListener('pointermove', onMove);
+            handle.addEventListener('pointerup', onUp);
           };
 
-          // Drag the bar body → horizontal repositioning (colStart, keeping colSpan)
+          // ── Bar body drag → horizontal reposition + vertical position snap ──
+          // Axis is locked after the cursor travels DIR_PX pixels.
+          //   Horizontal axis → changes colStart (keeps colSpan)
+          //   Vertical axis   → snaps position to top / middle / bottom
+          const DIR_PX = 6;
           const startIndicatorDrag = (e: React.PointerEvent) => {
             e.preventDefault();
             e.stopPropagation();
+
+            const body = e.currentTarget as HTMLElement;
+            body.setPointerCapture(e.pointerId);
+
             const startColStart = cfg.colStart;
             const startColSpan  = cfg.colSpan;
             const startPosition = cfg.position;
             const startX = e.clientX;
-            const containerEl = containerRef.current;
-            if (!containerEl) return;
-            const cr0       = containerEl.getBoundingClientRect();
-            const startColF = (startX - cr0.left - PAD) / (cellW + GAP);
+            const startY = e.clientY;
+
+            const containerEl0 = containerRef.current;
+            if (!containerEl0) return;
+            const cr0         = containerEl0.getBoundingClientRect();
+            const startColF   = (startX - cr0.left - PAD) / (cellW + GAP);
+            // cursor offset within bar in column units — keeps bar under cursor
             const offsetWithinBar = startColF - startColStart;
+
+            let axis: 'h' | 'v' | null = null;
             let committed = startColStart;
 
             const onMove = (ev: PointerEvent) => {
-              const containerEl2 = containerRef.current;
-              if (!containerEl2) return;
-              const cr   = containerEl2.getBoundingClientRect();
-              const colF = (ev.clientX - cr.left - PAD) / (cellW + GAP);
-              const target = colF - offsetWithinBar;
-              while (target > committed + SNAP_THRESH && committed < COLS - startColSpan) committed++;
-              while (target < committed - SNAP_THRESH && committed > 0)                   committed--;
-              setSearchBarConfig({ position: startPosition, colStart: committed, colSpan: startColSpan });
+              const dx = ev.clientX - startX;
+              const dy = ev.clientY - startY;
+
+              if (axis === null) {
+                if (Math.abs(dx) > DIR_PX || Math.abs(dy) > DIR_PX)
+                  axis = Math.abs(dx) >= Math.abs(dy) ? 'h' : 'v';
+                return;
+              }
+
+              const containerEl = containerRef.current;
+              if (!containerEl) return;
+              const cr = containerEl.getBoundingClientRect();
+
+              if (axis === 'h') {
+                const colF   = (ev.clientX - cr.left - PAD) / (cellW + GAP);
+                const target = colF - offsetWithinBar;
+                while (target > committed + SNAP_THRESH && committed < COLS - startColSpan) committed++;
+                while (target < committed - SNAP_THRESH && committed > 0) committed--;
+                setSearchBarConfig({ position: startPosition, colStart: committed, colSpan: startColSpan });
+              } else {
+                // Vertical: snap to top / middle / bottom based on cursor fraction
+                const pct = (ev.clientY - cr.top) / cr.height;
+                const pos: 'top' | 'middle' | 'bottom' =
+                  pct < 0.33 ? 'top' : pct > 0.67 ? 'bottom' : 'middle';
+                setSearchBarConfig({ position: pos, colStart: startColStart, colSpan: startColSpan });
+              }
             };
+
             const onUp = () => {
-              window.removeEventListener('pointermove', onMove);
-              window.removeEventListener('pointerup', onUp);
+              body.removeEventListener('pointermove', onMove);
+              body.removeEventListener('pointerup', onUp);
             };
-            window.addEventListener('pointermove', onMove);
-            window.addEventListener('pointerup', onUp);
+            body.addEventListener('pointermove', onMove);
+            body.addEventListener('pointerup', onUp);
           };
 
           const HANDLE_W = 18;
