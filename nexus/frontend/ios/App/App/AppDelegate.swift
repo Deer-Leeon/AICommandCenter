@@ -73,6 +73,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Lock content inset — Capacitor's `contentInset: 'always'` handles
         // safe areas; auto-adjustment would add an unwanted top gap.
         wv.scrollView.contentInsetAdjustmentBehavior = .never
+
+        // Prevent pinch-to-zoom at the WKWebView layer.
+        // iOS ignores user-scalable=no in Safari (browser) since iOS 10, but
+        // inside a native WKWebView we can lock the zoom scale directly so
+        // the viewport meta tag alone is not the only line of defence.
+        wv.scrollView.minimumZoomScale = 1.0
+        wv.scrollView.maximumZoomScale = 1.0
     }
 
     // ── Deep-link / URL handling (required by Capacitor) ─────────────────────
