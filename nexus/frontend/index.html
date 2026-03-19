@@ -53,7 +53,7 @@
       body{
         background:var(--bg);
         color:var(--text);
-        font-family:'Space Mono',ui-monospace,monospace;
+        font-family:'DM Sans','Segoe UI',system-ui,-apple-system,sans-serif;
         -webkit-font-smoothing:antialiased;
         -moz-osx-font-smoothing:grayscale;
       }
@@ -68,13 +68,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!--
-      font-display=optional: browser uses the font only if it loads within a very short
-      window (~100 ms). No visible swap after first paint — eliminates FOUT entirely.
-      On repeat visits the font is served from service worker cache so it always loads
-      within that window.
+      font-display=swap: browser always applies the web font once it loads, falling back
+      to system fonts in the meantime. This guarantees DM Sans / Space Mono render
+      identically on every OS and browser — no more Windows/Mac font mismatch.
     -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Serif+Display:ital@0;1&display=optional"
+      href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Serif+Display:ital@0;1&display=swap"
       rel="stylesheet"
     />
 

@@ -15,8 +15,8 @@ export default {
         teal: '#3de8b0',
       },
       fontFamily: {
-        mono: ['"Space Mono"', 'monospace'],
-        sans: ['"DM Sans"', 'sans-serif'],
+        mono: ['"Space Mono"', '"Courier New"', 'Courier', 'monospace'],
+        sans: ['"DM Sans"', '"Segoe UI"', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
       },
       animation: {
         'pulse-glow': 'pulseGlow 2s ease-in-out',

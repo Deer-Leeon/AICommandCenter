@@ -30,6 +30,10 @@
   --text: #e8e8f0;
   --text-muted: #7a7a90;
   --text-faint: #3a3a50;
+  /* Font stacks — used by components via var(--font-mono) / var(--font-sans).
+     Fallbacks chosen so Windows renders cleanly during the font-swap window. */
+  --font-sans:  'DM Sans', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono:  'Space Mono', 'Courier New', Courier, monospace;
 
   /* ── Borders ──────────────────────────────────────────────────────────────── */
   --border: rgba(255, 255, 255, 0.06);
@@ -203,7 +207,7 @@ body,
 body {
   background-color: var(--bg);
   color: var(--text);
-  font-family: 'DM Sans', sans-serif;
+  font-family: 'DM Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
   /* Prevent iOS rubber-band overscroll on the root — the mobile card stack
