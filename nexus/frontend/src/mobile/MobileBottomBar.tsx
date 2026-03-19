@@ -49,7 +49,8 @@ export function MobileBottomBar({ onOpenSearch, onOpenSettings, isFullscreen, on
       }}>
         <BarBtn icon="🔍" label="Search" onClick={onOpenSearch} />
         <BarBtn icon="＋" label="Add" onClick={() => setSheet('quickadd')} />
-        {/* Fullscreen toggle */}
+        <BarBtn icon="⚙️" label="Settings" onClick={onOpenSettings} />
+        {/* Fullscreen toggle — rightmost button */}
         <button
           onClick={onToggleFullscreen}
           style={{
@@ -65,7 +66,6 @@ export function MobileBottomBar({ onOpenSearch, onOpenSettings, isFullscreen, on
             {isFullscreen ? 'Restore' : 'Focus'}
           </span>
         </button>
-        <BarBtn icon="⚙️" label="Settings" onClick={onOpenSettings} />
       </div>
 
       {sheet === 'quickadd' && (
