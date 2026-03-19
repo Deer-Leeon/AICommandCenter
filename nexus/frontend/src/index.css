@@ -30,10 +30,10 @@
   --text: #e8e8f0;
   --text-muted: #7a7a90;
   --text-faint: #3a3a50;
-  /* Font stacks — used by components via var(--font-mono) / var(--font-sans).
-     Fallbacks chosen so Windows renders cleanly during the font-swap window. */
-  --font-mono:  'Space Mono', 'Courier New', Courier, monospace;
+  /* Font stacks — DM Sans is used everywhere for a consistent professional look.
+     Space Mono is kept only as a named variable if ever needed for code/terminal contexts. */
   --font-sans:  'DM Sans', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono:  'DM Sans', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 
   /* ── Borders ──────────────────────────────────────────────────────────────── */
   --border: rgba(255, 255, 255, 0.06);
@@ -274,7 +274,7 @@ html[data-theme="light"] body::after  { opacity: 0.6; }
 ───────────────────────────────────────────────────────────────────────────── */
 
 .font-mono {
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-sans);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -619,7 +619,7 @@ html[data-theme="dark"] input[type="time"] {
   background: transparent;
   border: none;
   color: var(--text-muted);
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-sans);
   font-size: 9px;
   padding: 2px 4px;
   cursor: pointer;
@@ -643,7 +643,7 @@ html[data-theme="dark"] input[type="time"] {
 }
 
 .bv-label {
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-sans);
   font-size: 9px;
   letter-spacing: 0.12em;
   color: var(--text-muted);
@@ -691,7 +691,7 @@ html[data-theme="dark"] input[type="time"] {
 }
 .bv-ref-dash { color: var(--text-faint); font-size: 11px; flex-shrink: 0; }
 .bv-ref-text {
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-sans);
   font-size: 10px;
   color: var(--text-muted);
   letter-spacing: 0.02em;
@@ -700,7 +700,7 @@ html[data-theme="dark"] input[type="time"] {
   text-overflow: ellipsis;
 }
 .bv-tr-badge {
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-sans);
   font-size: 8px;
   padding: 1px 4px;
   border-radius: 3px;
@@ -777,7 +777,7 @@ html[data-theme="dark"] input[type="time"] {
   justify-content: center;
   color: var(--text-muted);
   font-size: 12px;
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-sans);
   gap: 4px;
   padding: 20px;
   text-align: center;
@@ -807,7 +807,7 @@ html[data-theme="dark"] input[type="time"] {
   gap: 4px;
 }
 .bv-saved-ref {
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 700;
   color: var(--text);
@@ -833,7 +833,7 @@ html[data-theme="dark"] input[type="time"] {
   line-height: 1.5;
 }
 .bv-saved-date {
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-sans);
   font-size: 9px;
   color: var(--text-faint);
 }
@@ -1017,7 +1017,7 @@ html[data-theme="dark"] input[type="time"] {
   font-weight: 700;
 }
 .tray-pomo-time {
-  font-family: 'Space Mono', monospace;
+  font-family: var(--font-sans);
   font-size: 28px;
   font-weight: 700;
   line-height: 1;

@@ -38,7 +38,7 @@ export default function PrivacyPage() {
         {/* Header */}
         <div style={{ marginBottom: 48 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-            <span style={{ fontSize: 22, fontWeight: 700, color: 'var(--teal, #3de8b0)', fontFamily: "'Space Mono', monospace", letterSpacing: '-0.5px' }}>NEXUS</span>
+            <span style={{ fontSize: 22, fontWeight: 700, color: 'var(--teal, #3de8b0)', fontFamily: 'var(--font-sans)', letterSpacing: '-0.5px' }}>NEXUS</span>
           </div>
           <h1 style={{ fontSize: 34, fontWeight: 700, margin: '0 0 8px', color: 'var(--text, #e8e8f0)' }}>Privacy Policy</h1>
           <p style={{ color: 'var(--text-muted, #7a7a90)', fontSize: 14, margin: 0 }}>Last updated: March 2026</p>

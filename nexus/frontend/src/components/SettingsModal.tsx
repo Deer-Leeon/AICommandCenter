@@ -1332,7 +1332,7 @@ function GatekeeperFix() {
         padding: '8px 12px',
       }}
     >
-      <code style={{ flex: 1, fontSize: '12px', fontFamily: 'Space Mono, monospace', color: 'var(--text)', userSelect: 'all' }}>
+      <code style={{ flex: 1, fontSize: '12px', fontFamily: 'var(--font-sans)', color: 'var(--text)', userSelect: 'all' }}>
         {cmd}
       </code>
       <button
@@ -1346,7 +1346,7 @@ function GatekeeperFix() {
           fontSize: '11px',
           color: copied ? 'var(--accent)' : 'var(--text-muted)',
           cursor: 'pointer',
-          fontFamily: 'Space Mono, monospace',
+          fontFamily: 'var(--font-sans)',
           transition: 'all 0.15s',
         }}
       >
@@ -1397,7 +1397,7 @@ function DesktopAppPanel() {
       {/* Download buttons */}
       <div>
         <div
-          style={{ fontSize: '11px', fontFamily: 'Space Mono, monospace', letterSpacing: '0.1em',
+          style={{ fontSize: '11px', fontFamily: 'var(--font-sans)', letterSpacing: '0.1em',
             textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '10px' }}
         >
           Download
@@ -1463,7 +1463,7 @@ function DesktopAppPanel() {
       {/* Installation steps */}
       <div>
         <div
-          style={{ fontSize: '11px', fontFamily: 'Space Mono, monospace', letterSpacing: '0.1em',
+          style={{ fontSize: '11px', fontFamily: 'var(--font-sans)', letterSpacing: '0.1em',
             textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '10px' }}
         >
           How to Install
@@ -1481,7 +1481,7 @@ function DesktopAppPanel() {
                   width: '22px', height: '22px', borderRadius: '50%', flexShrink: 0,
                   background: 'rgba(var(--accent-rgb),0.15)', color: 'var(--accent)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '11px', fontWeight: 700, fontFamily: 'Space Mono, monospace',
+                  fontSize: '11px', fontWeight: 700, fontFamily: 'var(--font-sans)',
                 }}
               >
                 {n}
@@ -1523,7 +1523,7 @@ function DesktopAppPanel() {
       {/* Features list */}
       <div>
         <div
-          style={{ fontSize: '11px', fontFamily: 'Space Mono, monospace', letterSpacing: '0.1em',
+          style={{ fontSize: '11px', fontFamily: 'var(--font-sans)', letterSpacing: '0.1em',
             textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '10px' }}
         >
           Desktop Features

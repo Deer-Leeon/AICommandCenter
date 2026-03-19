@@ -614,7 +614,7 @@ export function PomodoroWidget({ onClose: _onClose }: { onClose: () => void }) {
           textAnchor="middle"
           dominantBaseline="central"
           fill="var(--text)"
-          fontFamily="'Space Mono', monospace"
+          fontFamily="var(--font-sans)"
           fontWeight="700"
           fontSize={timeFontSize}
           style={{ letterSpacing: '-0.02em', userSelect: 'none' }}
@@ -629,7 +629,7 @@ export function PomodoroWidget({ onClose: _onClose }: { onClose: () => void }) {
             textAnchor="middle"
             dominantBaseline="hanging"
             fill={colors.textColor}
-            fontFamily="'Space Mono', monospace"
+            fontFamily="var(--font-sans)"
             fontWeight="700"
             fontSize={labelFontSize}
             style={{ letterSpacing: '0.12em', userSelect: 'none', textTransform: 'uppercase' }}
@@ -973,7 +973,7 @@ export function PomodoroWidget({ onClose: _onClose }: { onClose: () => void }) {
           <div style={{
             color:      'var(--text-faint)',
             fontSize:   uiFs - 1,
-            fontFamily: "'Space Mono', monospace",
+            fontFamily: 'var(--font-sans)',
             textAlign:  'center',
             flexShrink: 0,
             position:   'relative',

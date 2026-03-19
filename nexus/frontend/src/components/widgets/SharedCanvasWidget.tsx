@@ -323,7 +323,7 @@ const STYLES = `
   position:absolute; inset:0;
   display:flex; align-items:center; justify-content:center;
   pointer-events:none; z-index:2;
-  font-size:13px; color:#c8c8c8; font-family:'Space Mono',monospace;
+  font-size:13px; color:#c8c8c8; font-family:var(--font-sans);
   text-align:center; padding:24px; line-height:1.5;
 }
 .sc-dissolved {

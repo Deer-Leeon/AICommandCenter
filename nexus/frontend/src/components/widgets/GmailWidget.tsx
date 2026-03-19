@@ -273,7 +273,7 @@ function ThreadRow({ thread, onOpen, onAction, compact = false }: ThreadRowProps
           width: compact ? 30 : 36, height: compact ? 30 : 36, borderRadius: '50%',
           background: color, color: '#fff', display: 'flex', alignItems: 'center',
           justifyContent: 'center', fontSize: compact ? 10 : 12, fontWeight: 700,
-          flexShrink: 0, fontFamily: 'Space Mono, monospace',
+          flexShrink: 0, fontFamily: 'var(--font-sans)',
         }}>
           {initials(thread.senderName || thread.senderEmail)}
         </div>
@@ -288,7 +288,7 @@ function ThreadRow({ thread, onOpen, onAction, compact = false }: ThreadRowProps
           }}>
             {thread.senderName || thread.senderEmail}
             {thread.messageCount > 1 && (
-              <span style={{ fontSize: 10, fontFamily: 'Space Mono, monospace', color: 'var(--text-muted)', marginLeft: 4 }}>
+              <span style={{ fontSize: 10, fontFamily: 'var(--font-sans)', color: 'var(--text-muted)', marginLeft: 4 }}>
                 {thread.messageCount}
               </span>
             )}
@@ -322,7 +322,7 @@ function ThreadRow({ thread, onOpen, onAction, compact = false }: ThreadRowProps
 
         {/* Right column */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'Space Mono, monospace', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', whiteSpace: 'nowrap' }}>
             {formatDate(thread.date)}
           </span>
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -424,7 +424,7 @@ function MessageCard({ message, defaultExpanded, onReply }: MessageCardProps) {
             </div>
           )}
         </div>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, fontFamily: 'Space Mono, monospace', marginLeft: 8 }}>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, fontFamily: 'var(--font-sans)', marginLeft: 8 }}>
           {formatDate(message.date)}
         </span>
       </div>
@@ -471,7 +471,7 @@ function MessageCard({ message, defaultExpanded, onReply }: MessageCardProps) {
           ) : (
             <pre style={{
               whiteSpace: 'pre-wrap', fontSize: 13, color: 'var(--text)',
-              fontFamily: 'Space Mono, monospace', lineHeight: 1.6, margin: 0,
+              fontFamily: 'var(--font-sans)', lineHeight: 1.6, margin: 0,
             }}>
               {message.bodyPlain}
             </pre>
@@ -856,7 +856,7 @@ export function GmailWidget({ onClose: _onClose }: { onClose: () => void }) {
       <div ref={containerRef} style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 6, gap: 3, overflow: 'hidden' }}>
         {unreadCount > 0 ? (
           <>
-            <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--accent)', fontFamily: 'Space Mono, monospace', lineHeight: 1 }}>
+            <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--accent)', fontFamily: 'var(--font-sans)', lineHeight: 1 }}>
               {badgeLabel}
             </div>
             <div style={{ fontSize: 9, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>unread</div>
@@ -1045,7 +1045,7 @@ export function GmailWidget({ onClose: _onClose }: { onClose: () => void }) {
             </button>
           ))}
           {unreadCount > 0 && (
-            <div style={{ marginLeft: 'auto', marginRight: 8, background: 'var(--accent)', color: '#fff', borderRadius: 10, padding: '1px 7px', fontSize: 10, fontFamily: 'Space Mono, monospace' }}>
+            <div style={{ marginLeft: 'auto', marginRight: 8, background: 'var(--accent)', color: '#fff', borderRadius: 10, padding: '1px 7px', fontSize: 10, fontFamily: 'var(--font-sans)' }}>
               {badgeLabel}
             </div>
           )}
@@ -1118,7 +1118,7 @@ export function GmailWidget({ onClose: _onClose }: { onClose: () => void }) {
             </button>
           ))}
           {unreadCount > 0 && (
-            <div style={{ marginLeft: 'auto', marginRight: 6, background: 'var(--accent)', color: '#fff', borderRadius: 10, padding: '1px 6px', fontSize: 10, fontFamily: 'Space Mono, monospace', flexShrink: 0 }}>
+            <div style={{ marginLeft: 'auto', marginRight: 6, background: 'var(--accent)', color: '#fff', borderRadius: 10, padding: '1px 6px', fontSize: 10, fontFamily: 'var(--font-sans)', flexShrink: 0 }}>
               {badgeLabel}
             </div>
           )}
@@ -1128,10 +1128,10 @@ export function GmailWidget({ onClose: _onClose }: { onClose: () => void }) {
       {/* ── Slim-mode mini header (shows unread + quick compose) ── */}
       {isSlim && view !== 'thread' && view !== 'compose' && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 10px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-          <span style={{ fontSize: 10, color: 'var(--text-faint)', fontFamily: 'Space Mono, monospace', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Gmail</span>
+          <span style={{ fontSize: 10, color: 'var(--text-faint)', fontFamily: 'var(--font-sans)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Gmail</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {unreadCount > 0 && (
-              <div style={{ background: 'var(--accent)', color: '#fff', borderRadius: 10, padding: '1px 6px', fontSize: 9, fontFamily: 'Space Mono, monospace' }}>
+              <div style={{ background: 'var(--accent)', color: '#fff', borderRadius: 10, padding: '1px 6px', fontSize: 9, fontFamily: 'var(--font-sans)' }}>
                 {badgeLabel}
               </div>
             )}

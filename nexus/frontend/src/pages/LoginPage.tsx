@@ -108,7 +108,7 @@ export default function LoginPage() {
             <span style={{ fontSize: 22 }}>⚡</span>
           </div>
           <div style={{
-            fontFamily: 'Space Mono, monospace', fontSize: 22, fontWeight: 700,
+            fontFamily: 'var(--font-sans)', fontSize: 22, fontWeight: 700,
             letterSpacing: '0.18em', color: 'var(--text)', marginBottom: 4,
           }}>
             NEXUS

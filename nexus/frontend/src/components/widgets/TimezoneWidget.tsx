@@ -403,7 +403,7 @@ function ClockDisplay({ timezone, isResult, mode, showSeconds }: ClockDisplayPro
   return (
     <div style={{ textAlign: 'center' }}>
       <div style={{
-        fontFamily: "'Space Mono', monospace", fontWeight: 700,
+        fontFamily: 'var(--font-sans)', fontWeight: 700,
         fontSize: timeFontSize, color, lineHeight: 1.1,
         display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 1,
       }}>
@@ -456,7 +456,7 @@ function TimePicker({ time, date, isManual, onChange, compact, inline }: TimePic
       value={time}
       onChange={e => { if (e.target.value) onChange(e.target.value, date); }}
       style={{
-        fontFamily: "'Space Mono', monospace", fontWeight: 700,
+        fontFamily: 'var(--font-sans)', fontWeight: 700,
         fontSize: inline ? 12 : compact ? 14 : 17, color: 'var(--text)',
         background: 'var(--surface3)', border: '1px solid var(--border)',
         borderRadius: 8, padding: inline ? '3px 5px' : compact ? '3px 6px' : '4px 8px',
@@ -804,7 +804,7 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
                 <span style={{
                   fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10,
                   background: 'var(--accent-dim)', color: 'var(--accent)',
-                  fontFamily: "'Space Mono', monospace",
+                  fontFamily: 'var(--font-sans)',
                 }}>
                   {conversion.offsetDifference === '0 hours' ? '= same' : conversion.offsetDifference}
                 </span>
@@ -862,7 +862,7 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
                 {isManualTime && conversion ? (
                   <>
                     <div style={{
-                      fontFamily: "'Space Mono', monospace", fontWeight: 700,
+                      fontFamily: 'var(--font-sans)', fontWeight: 700,
                       fontSize: mode === 'compact' ? 30 : mode === 'standard' ? 36 : 42,
                       color: 'var(--text)', lineHeight: 1.1, textAlign: 'center',
                     }}>
@@ -987,7 +987,7 @@ export function TimezoneWidget({ onClose: _onClose }: { onClose: () => void }) {
                 {isManualTime && conversion ? (
                   <>
                     <div style={{
-                      fontFamily: "'Space Mono', monospace", fontWeight: 700,
+                      fontFamily: 'var(--font-sans)', fontWeight: 700,
                       fontSize: mode === 'compact' ? 30 : mode === 'standard' ? 36 : 42,
                       color: 'var(--accent)', lineHeight: 1.1, textAlign: 'center',
                     }}>
