@@ -265,17 +265,33 @@ function WidgetPickerPanel({
   );
 }
 
+// ── Launch widget preference ──────────────────────────────────────────────────
+const LAUNCH_WIDGET_KEY = 'nexus_mobile_launch_widget';
+
+function loadLaunchWidgetPref(): WidgetType | null {
+  try { return localStorage.getItem(LAUNCH_WIDGET_KEY) as WidgetType | null; } catch { return null; }
+}
+function saveLaunchWidgetPref(w: WidgetType) {
+  try { localStorage.setItem(LAUNCH_WIDGET_KEY, w); } catch { /* quota */ }
+}
+
 // ── Main editor ────────────────────────────────────────────────────────────────
 export function MobileLayoutEditor({ order, onConfirm, onClose }: Props) {
   const [slots, setSlots] = useState<(WidgetType | null)[]>(() => orderToSlots(order));
   const [visible, setVisible]       = useState(false);
   const [pickerSlot, setPickerSlot] = useState<number | null>(null);
 
+  // Which widget should open first on launch
+  const [launchWidget, setLaunchWidget] = useState<WidgetType | null>(loadLaunchWidgetPref);
+
   useEffect(() => { requestAnimationFrame(() => setVisible(true)); }, []);
 
   const dismiss = () => { setVisible(false); setTimeout(onClose, 300); };
 
   const usedWidgets = new Set(slots.filter(Boolean) as WidgetType[]);
+
+  // Filled widgets in layout order (used for the launch picker)
+  const currentWidgets = slotsToOrder(slots);
 
   function handleRemove(slotIdx: number) {
     setSlots(prev => { const next = [...prev]; next[slotIdx] = null; return next; });
@@ -290,6 +306,11 @@ export function MobileLayoutEditor({ order, onConfirm, onClose }: Props) {
   function handleConfirm() {
     const newOrder = slotsToOrder(slots);
     if (newOrder.length === 0) return;
+    // Persist the chosen launch widget; fall back to first if it was removed
+    const effectiveLaunch = launchWidget && newOrder.includes(launchWidget)
+      ? launchWidget
+      : newOrder[0];
+    saveLaunchWidgetPref(effectiveLaunch);
     onConfirm(newOrder, 0);
     dismiss();
   }
@@ -403,6 +424,54 @@ export function MobileLayoutEditor({ order, onConfirm, onClose }: Props) {
             onClose={() => setPickerSlot(null)}
           />
         )}
+      </div>
+
+      {/* ── Launch widget section ─────────────────────────────────────────────── */}
+      <div style={{
+        flexShrink: 0,
+        borderTop: '1px solid var(--border)',
+        padding: '12px 16px 14px',
+        background: 'var(--surface)',
+      }}>
+        <div style={{
+          fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)',
+          letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10,
+        }}>
+          Opens on launch
+        </div>
+        <div style={{
+          display: 'flex', gap: 7, overflowX: 'auto', paddingBottom: 2,
+          scrollbarWidth: 'none',
+        }}>
+          {currentWidgets.map(w => {
+            const cfg    = WIDGET_CONFIGS.find(c => c.id === w);
+            const accent = WIDGET_ACCENT[w] ?? 'var(--accent)';
+            const sel    = (launchWidget ?? currentWidgets[0]) === w;
+            return (
+              <button
+                key={w}
+                onPointerDown={() => setLaunchWidget(w)}
+                style={{
+                  flexShrink: 0,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '7px 13px',
+                  borderRadius: 99,
+                  background: sel ? `${accent}22` : 'var(--surface2)',
+                  border: `1.5px solid ${sel ? accent : 'var(--border)'}`,
+                  color: sel ? accent : 'var(--text-muted)',
+                  fontSize: 12, fontWeight: sel ? 700 : 400,
+                  cursor: 'pointer', touchAction: 'manipulation',
+                  transition: 'background 0.15s, border 0.15s, color 0.15s',
+                  boxShadow: sel ? `0 2px 10px ${accent}40` : 'none',
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+              >
+                <span style={{ fontSize: 15 }}>{cfg?.icon}</span>
+                <span>{cfg?.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

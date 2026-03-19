@@ -29,6 +29,17 @@ const WIDGET_ACCENT: Partial<Record<WidgetType, string>> = {
   links: '#7c6aff', obsidian: '#8b5cf6',
 };
 
+// ── Launch widget preference ──────────────────────────────────────────────────
+const LAUNCH_WIDGET_KEY = 'nexus_mobile_launch_widget';
+
+function loadLaunchWidget(order: WidgetType[]): WidgetType | null {
+  try {
+    const saved = localStorage.getItem(LAUNCH_WIDGET_KEY) as WidgetType | null;
+    if (saved && order.includes(saved)) return saved;
+  } catch { /* ignore */ }
+  return order[0] ?? null;
+}
+
 // ── Fixed home slots ──────────────────────────────────────────────────────────
 // 10 side positions — each widget has a permanent home here.
 // Interleaved left/right so both columns fill evenly.
@@ -95,8 +106,8 @@ export function MobileCardStack({ order, onActiveWidgetChange }: Props) {
   // homeMap: each widget's permanent side slot (never changes at runtime)
   const [homeMap, setHomeMap] = useState<HomeMap>(() => buildHomeMap(order));
 
-  // activeWidget: which widget is currently shown in the center slot
-  const [activeWidget, setActiveWidget] = useState<WidgetType | null>(() => order[0] ?? null);
+  // activeWidget: starts on the user's preferred launch widget (or order[0])
+  const [activeWidget, setActiveWidget] = useState<WidgetType | null>(() => loadLaunchWidget(order));
 
   const prevOrderKeyRef = useRef(order.slice(0, MAX_WIDGETS).join(','));
 
