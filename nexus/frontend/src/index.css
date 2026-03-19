@@ -79,8 +79,12 @@
 /* ─────────────────────────────────────────────────────────────────────────────
    LIGHT MODE  — premium productivity tool aesthetic (Linear / Vercel / Notion)
 ───────────────────────────────────────────────────────────────────────────── */
+/* Light palette — applied when the OS prefers light AND the user hasn't
+   explicitly forced dark via data-theme="dark".  The same block is repeated
+   below without the media-query so [data-theme="light"] forces light even
+   on a dark-OS machine. */
 @media (prefers-color-scheme: light) {
-  :root {
+  html:not([data-theme="dark"]) {
     /* Base palette */
     --bg: #f0f0f8;
     --surface: #ffffff;
@@ -140,6 +144,48 @@
   }
 }
 
+/* Force light regardless of OS when the user chose "light" explicitly. */
+html[data-theme="light"] {
+  --bg: #f0f0f8;
+  --surface: #ffffff;
+  --surface2: #ebebf5;
+  --surface3: #dfdff0;
+  --accent: #5f48e0;
+  --accent-dim: rgba(95, 72, 224, 0.1);
+  --accent-rgb: 95, 72, 224;
+  --accent-purple: #5f48e0;
+  --accent-teal: #0d9488;
+  --teal: #0d9488;
+  --teal-dim: rgba(13, 148, 136, 0.12);
+  --teal-rgb: 13, 148, 136;
+  --text: #0f0f1a;
+  --text-muted: #58587a;
+  --text-faint: #9090b4;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-hover: rgba(0, 0, 0, 0.18);
+  --shadow-widget: 0 1px 3px rgba(0, 0, 0, 0.07), 0 4px 16px rgba(0, 0, 0, 0.05);
+  --shadow-widget-hover: 0 2px 8px rgba(0, 0, 0, 0.1), 0 8px 24px rgba(0, 0, 0, 0.07);
+  --shadow-popup: 0 4px 20px rgba(0, 0, 0, 0.12), 0 1px 4px rgba(0, 0, 0, 0.07);
+  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.16), 0 2px 8px rgba(0, 0, 0, 0.07);
+  --overlay-bg: rgba(228, 228, 244, 0.93);
+  --cell-bg: rgba(0, 0, 0, 0.03);
+  --cell-border: rgba(0, 0, 0, 0.09);
+  --cell-shine: rgba(255, 255, 255, 0.9);
+  --cell-bottom: rgba(0, 0, 0, 0.04);
+  --cell-hover-bg: rgba(0, 0, 0, 0.055);
+  --cell-hover-shine: rgba(255, 255, 255, 1);
+  --cell-icon: rgba(0, 0, 0, 0.18);
+  --row-bg: rgba(0, 0, 0, 0.025);
+  --row-bg-hover: rgba(0, 0, 0, 0.04);
+  --teal-btn-bg: rgba(13, 148, 136, 0.08);
+  --teal-btn-border: rgba(13, 148, 136, 0.28);
+  --teal-btn-hover-bg: rgba(13, 148, 136, 0.15);
+  --teal-btn-hover-border: rgba(13, 148, 136, 0.55);
+  --teal-btn-glow: 0 0 8px rgba(13, 148, 136, 0.06);
+  --teal-btn-hover-glow: 0 0 14px rgba(13, 148, 136, 0.13);
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    BASE STYLES
 ───────────────────────────────────────────────────────────────────────────── */
@@ -196,9 +242,11 @@ body::after {
 }
 
 @media (prefers-color-scheme: light) {
-  body::before { opacity: 0.12; }
-  body::after { opacity: 0.6; }
+  html:not([data-theme="dark"]) body::before { opacity: 0.12; }
+  html:not([data-theme="dark"]) body::after  { opacity: 0.6; }
 }
+html[data-theme="light"] body::before { opacity: 0.12; }
+html[data-theme="light"] body::after  { opacity: 0.6; }
 
 * { box-sizing: border-box; }
 
@@ -422,9 +470,12 @@ body::after {
 ───────────────────────────────────────────────────────────────────────────── */
 
 @media (prefers-color-scheme: light) {
-  .widget-title {
+  html:not([data-theme="dark"]) .widget-title {
     filter: brightness(0.68) saturate(1.2);
   }
+}
+html[data-theme="light"] .widget-title {
+  filter: brightness(0.68) saturate(1.2);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -437,10 +488,18 @@ input[type="time"] {
 }
 
 @media (prefers-color-scheme: light) {
-  input[type="date"],
-  input[type="time"] {
+  html:not([data-theme="dark"]) input[type="date"],
+  html:not([data-theme="dark"]) input[type="time"] {
     color-scheme: light;
   }
+}
+html[data-theme="light"] input[type="date"],
+html[data-theme="light"] input[type="time"] {
+  color-scheme: light;
+}
+html[data-theme="dark"] input[type="date"],
+html[data-theme="dark"] input[type="time"] {
+  color-scheme: dark;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────

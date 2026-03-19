@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../store/useStore';
+import { useTheme } from '../hooks/useTheme';
+import type { ThemeMode } from '../hooks/useTheme';
 import type { ServiceConnectionState } from '../types';
 
 const SERVICE_LABELS: Record<string, string> = {
@@ -33,6 +35,55 @@ function StatusDot({ state }: { state: ServiceConnectionState }) {
         boxShadow: state.connected ? `0 0 4px ${color}` : 'none',
       }}
     />
+  );
+}
+
+// ── Theme toggle ──────────────────────────────────────────────────────────────
+const THEME_OPTIONS: { value: ThemeMode; label: string; title: string }[] = [
+  { value: 'dark',  label: '☾',  title: 'Dark mode' },
+  { value: 'auto',  label: '◐',  title: 'Auto (follows system)' },
+  { value: 'light', label: '☀',  title: 'Light mode' },
+];
+
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme();
+  return (
+    <div
+      title="Color scheme"
+      style={{
+        display: 'flex',
+        border: '1px solid var(--border)',
+        borderRadius: 4,
+        overflow: 'hidden',
+      }}
+    >
+      {THEME_OPTIONS.map(({ value, label, title }) => {
+        const active = theme === value;
+        return (
+          <button
+            key={value}
+            onClick={() => setTheme(value)}
+            title={title}
+            style={{
+              padding: '0 7px',
+              height: 18,
+              fontSize: 11,
+              border: 'none',
+              borderLeft: value !== 'dark' ? '1px solid var(--border)' : 'none',
+              borderRadius: 0,
+              cursor: 'pointer',
+              fontFamily: 'var(--font-mono)',
+              background: active ? 'rgba(var(--accent-rgb),0.15)' : 'transparent',
+              color: active ? 'var(--accent)' : 'var(--text-muted)',
+              transition: 'background 0.12s, color 0.12s',
+              lineHeight: 1,
+            }}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -83,6 +134,7 @@ export function StatusBar({ onLayoutClick, isLayoutMode = false }: StatusBarProp
       </div>
 
       <div className="flex items-center gap-3">
+        <ThemeToggle />
         {onLayoutClick && (
           <button
             onClick={onLayoutClick}

@@ -8,12 +8,16 @@ import { MobileCardContent } from './cards/MobileCardRegistry';
 import { SettingsModal } from '../components/SettingsModal';
 import { useStore } from '../store/useStore';
 import { useAuth } from '../hooks/useAuth';
+import { useTheme } from '../hooks/useTheme';
 import { isCapacitor } from '../lib/isCapacitor';
 import { registerPushNotifications, onKeyboardShow, onKeyboardHide } from '../lib/capacitorBridge';
 import { apiFetch } from '../lib/api';
 import type { WidgetType } from '../types';
 
 export default function MobileApp() {
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme === 'light';
+
   const { order, setOrder } = useMobileCardOrder();
   const [showLayoutEditor, setShowLayoutEditor] = useState(false);
   const [showSearch, setShowSearch]     = useState(false);
@@ -300,30 +304,30 @@ export default function MobileApp() {
           --bar-bg:       rgba(17,17,24,0.85);
         }
 
-        /* ── Light theme override ── */
-        @media (prefers-color-scheme: light) {
-          .nexus-mobile {
-            --bg:           #f0f0f6;
-            --surface:      #ffffff;
-            --surface2:     #f5f5fb;
-            --surface3:     #ebebf4;
-            --accent:       #6355e8;
-            --accent-dim:   rgba(99,85,232,0.12);
-            --accent-rgb:   99,85,232;
-            --teal:         #10b981;
-            --teal-rgb:     16,185,129;
-            --text:         #111128;
-            --text-muted:   #6b6b88;
-            --text-faint:   #b0b0c8;
-            --border:       rgba(0,0,0,0.07);
-            --border-hover: rgba(0,0,0,0.14);
-            --card-border:  rgba(0,0,0,0.08);
-            --card-shadow:  rgba(0,0,0,0.14);
-            --side-shadow:  rgba(0,0,0,0.10);
-            --divider:      rgba(0,0,0,0.06);
-            --bar-bg:       rgba(248,248,253,0.88);
-          }
+        ${isLight ? `
+        /* ── Light theme override (driven by useTheme, not media query) ── */
+        .nexus-mobile {
+          --bg:           #f0f0f6;
+          --surface:      #ffffff;
+          --surface2:     #f5f5fb;
+          --surface3:     #ebebf4;
+          --accent:       #6355e8;
+          --accent-dim:   rgba(99,85,232,0.12);
+          --accent-rgb:   99,85,232;
+          --teal:         #10b981;
+          --teal-rgb:     16,185,129;
+          --text:         #111128;
+          --text-muted:   #6b6b88;
+          --text-faint:   #b0b0c8;
+          --border:       rgba(0,0,0,0.07);
+          --border-hover: rgba(0,0,0,0.14);
+          --card-border:  rgba(0,0,0,0.08);
+          --card-shadow:  rgba(0,0,0,0.14);
+          --side-shadow:  rgba(0,0,0,0.10);
+          --divider:      rgba(0,0,0,0.06);
+          --bar-bg:       rgba(248,248,253,0.88);
         }
+        ` : ''}
       `}</style>
     </div>
   );

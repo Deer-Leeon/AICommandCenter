@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTodos } from '../hooks/useTodos';
+import { useTheme } from '../hooks/useTheme';
+import type { ThemeMode } from '../hooks/useTheme';
 
 // ── SVG icon set ──────────────────────────────────────────────────────────────
 
@@ -51,6 +53,128 @@ function CollapseIcon() {
       <path d="M6 16v-5H1M6 11l-4.5 4.5" />
       <path d="M11 16v-5h5M11 11l4.5 4.5" />
     </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 17 17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 9.5A6 6 0 1 1 7.5 3a4.5 4.5 0 0 0 6.5 6.5z" fill="currentColor" stroke="none" opacity="0.25"/>
+      <path d="M14 9.5A6 6 0 1 1 7.5 3a4.5 4.5 0 0 0 6.5 6.5z" />
+    </svg>
+  );
+}
+
+function SunIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 17 17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8.5" cy="8.5" r="3" />
+      <line x1="8.5" y1="1"   x2="8.5" y2="2.5" />
+      <line x1="8.5" y1="14.5" x2="8.5" y2="16" />
+      <line x1="1"   y1="8.5" x2="2.5" y2="8.5" />
+      <line x1="14.5" y1="8.5" x2="16" y2="8.5" />
+      <line x1="3.3" y1="3.3"  x2="4.4" y2="4.4" />
+      <line x1="12.6" y1="12.6" x2="13.7" y2="13.7" />
+      <line x1="12.6" y1="4.4"  x2="13.7" y2="3.3" />
+      <line x1="3.3" y1="13.7"  x2="4.4" y2="12.6" />
+    </svg>
+  );
+}
+
+function AutoThemeIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 17 17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+      <circle cx="8.5" cy="8.5" r="6.5" />
+      <path d="M8.5 2v13" />
+      <path d="M2 8.5h6.5" />
+      <path d="M8.5 2a6.5 6.5 0 0 1 0 13" fill="currentColor" stroke="none" opacity="0.2"/>
+      <path d="M8.5 2a6.5 6.5 0 0 1 0 13" />
+    </svg>
+  );
+}
+
+// ── Theme picker sheet ────────────────────────────────────────────────────────
+
+interface ThemeSheetProps { onClose: () => void; }
+
+const THEME_CHOICES: { value: ThemeMode; icon: React.ReactNode; label: string; desc: string }[] = [
+  { value: 'dark',  icon: <MoonIcon />,       label: 'Dark',  desc: 'Always dark'      },
+  { value: 'light', icon: <SunIcon />,        label: 'Light', desc: 'Always light'     },
+  { value: 'auto',  icon: <AutoThemeIcon />,  label: 'Auto',  desc: 'Follow system'    },
+];
+
+function ThemeSheet({ onClose }: ThemeSheetProps) {
+  const { theme, setTheme } = useTheme();
+  const [slideIn, setSlideIn] = useState(false);
+  useEffect(() => { requestAnimationFrame(() => setSlideIn(true)); }, []);
+  const dismiss = () => { setSlideIn(false); setTimeout(onClose, 280); };
+
+  const handlePick = (v: ThemeMode) => {
+    setTheme(v);
+    dismiss();
+  };
+
+  return (
+    <>
+      <div onClick={dismiss} style={{
+        position: 'fixed', inset: 0, zIndex: 300,
+        background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)',
+      }} />
+      <div style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 301,
+        background: 'var(--surface2)',
+        borderRadius: '20px 20px 0 0',
+        border: '1px solid var(--border)',
+        transform: slideIn ? 'translateY(0)' : 'translateY(100%)',
+        transition: 'transform 0.28s cubic-bezier(0.25,0.46,0.45,0.94)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 4px' }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--border-hover)' }} />
+        </div>
+        <div style={{ padding: '4px 20px 24px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+            Appearance
+          </div>
+          {THEME_CHOICES.map(({ value, icon, label, desc }) => {
+            const active = theme === value;
+            return (
+              <button
+                key={value}
+                onClick={() => handlePick(value)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 14,
+                  padding: '14px 16px', borderRadius: 14,
+                  background: active ? 'rgba(var(--accent-rgb),0.1)' : 'var(--surface3)',
+                  border: active ? '1px solid rgba(var(--accent-rgb),0.35)' : '1px solid var(--border)',
+                  cursor: 'pointer', textAlign: 'left',
+                  transition: 'background 0.15s, border-color 0.15s',
+                }}
+              >
+                <span style={{ color: active ? 'var(--accent)' : 'var(--text-muted)', flexShrink: 0 }}>
+                  {icon}
+                </span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 16, color: active ? 'var(--accent)' : 'var(--text)', fontWeight: active ? 600 : 500 }}>{label}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{desc}</div>
+                </div>
+                {active && (
+                  <div style={{
+                    width: 18, height: 18, borderRadius: '50%',
+                    background: 'var(--accent)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}>
+                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="1,4 4,7 9,1" />
+                    </svg>
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -141,12 +265,16 @@ interface Props {
   onToggleFullscreen?: () => void;
 }
 
-type Sheet = 'quickadd' | null;
+type Sheet = 'quickadd' | 'theme' | null;
 
 // ── Bottom bar ────────────────────────────────────────────────────────────────
 
 export function MobileBottomBar({ onOpenSearch, onOpenSettings, isFullscreen, onToggleFullscreen }: Props) {
   const [sheet, setSheet] = useState<Sheet>(null);
+  const { theme } = useTheme();
+
+  const themeIcon = theme === 'dark' ? <MoonIcon /> : theme === 'light' ? <SunIcon /> : <AutoThemeIcon />;
+  const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : 'Auto';
 
   return (
     <>
@@ -173,6 +301,7 @@ export function MobileBottomBar({ onOpenSearch, onOpenSettings, isFullscreen, on
           <PillBtn icon={<SearchIcon />}  label="Search"   onClick={onOpenSearch} />
           <PillBtn icon={<PlusIcon />}    label="Add"      onClick={() => setSheet('quickadd')} variant="accent" />
           <PillBtn icon={<SlidersIcon />} label="Settings" onClick={onOpenSettings} />
+          <PillBtn icon={themeIcon}       label={themeLabel} onClick={() => setSheet('theme')} />
           <PillBtn
             icon={isFullscreen ? <CollapseIcon /> : <ExpandIcon />}
             label={isFullscreen ? 'Restore' : 'Focus'}
@@ -182,9 +311,8 @@ export function MobileBottomBar({ onOpenSearch, onOpenSettings, isFullscreen, on
         </div>
       </div>
 
-      {sheet === 'quickadd' && (
-        <QuickAddSheet onClose={() => setSheet(null)} />
-      )}
+      {sheet === 'quickadd' && <QuickAddSheet onClose={() => setSheet(null)} />}
+      {sheet === 'theme'    && <ThemeSheet    onClose={() => setSheet(null)} />}
     </>
   );
 }
