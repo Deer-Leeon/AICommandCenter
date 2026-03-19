@@ -165,3 +165,50 @@ currencyRouter.get('/list', requireAuth, (_req: AuthRequest, res) => {
   const currencies = MAJOR_CODES.map(code => ({ code, ...CURRENCY_META[code] }));
   res.json({ currencies, majorCodes: MAJOR_CODES });
 });
+
+// ── Historical rates (frankfurter.app — free, no API key, ECB data) ───────────
+//
+// frankfurter.app provides daily FX rates from 1999 to present for ~30 major
+// currencies. Weekend / holiday gaps are normal — the API only returns business
+// days. Results are cached for 4 hours to avoid hammering the free service.
+
+interface HistoryEntry { rates: Array<{ date: string; rate: number }>; ts: number; }
+const histCache = new Map<string, HistoryEntry>();
+const HIST_TTL  = 4 * 60 * 60 * 1000; // 4 hours
+
+// GET /api/currency/history?from=USD&to=EUR&days=30
+currencyRouter.get('/history', requireAuth, async (req: AuthRequest, res) => {
+  const from = ((req.query.from as string) || 'USD').toUpperCase();
+  const to   = ((req.query.to   as string) || 'EUR').toUpperCase();
+  const days = Math.min(365, Math.max(7, Number(req.query.days) || 30));
+
+  const key    = `${from}:${to}:${days}`;
+  const cached = histCache.get(key);
+  if (cached && Date.now() - cached.ts < HIST_TTL) {
+    return res.json({ from, to, days, rates: cached.rates });
+  }
+
+  try {
+    const now   = new Date();
+    const start = new Date(now.getTime() - days * 86_400_000);
+    const fmt   = (d: Date) => d.toISOString().slice(0, 10);
+
+    const apiRes = await fetch(
+      `https://api.frankfurter.app/${fmt(start)}..${fmt(now)}?from=${from}&to=${to}`,
+      { headers: { 'User-Agent': 'NEXUS-Dashboard/1.0' } },
+    );
+    if (!apiRes.ok) throw new Error(`frankfurter.app returned ${apiRes.status}`);
+
+    const d = await apiRes.json() as { rates: Record<string, Record<string, number>> };
+    const rates = Object.entries(d.rates)
+      .map(([date, rateObj]) => ({ date, rate: rateObj[to] ?? 0 }))
+      .filter(p => p.rate > 0)
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    histCache.set(key, { rates, ts: Date.now() });
+    return res.json({ from, to, days, rates });
+  } catch {
+    if (cached) return res.json({ from, to, days, rates: cached.rates, stale: true });
+    return res.status(503).json({ error: 'Unable to fetch historical rates' });
+  }
+});

@@ -590,6 +590,345 @@ function FeeRow({ label, value, red, small }: { label: string; value: string; re
   );
 }
 
+// ── Chart types & helpers ─────────────────────────────────────────────────────
+
+type ChartPeriod = 7 | 30 | 90 | 365;
+
+const CHART_PERIODS: { label: string; days: ChartPeriod }[] = [
+  { label: '7D',  days: 7   },
+  { label: '1M',  days: 30  },
+  { label: '3M',  days: 90  },
+  { label: '1Y',  days: 365 },
+];
+
+interface RatePoint { date: string; rate: number; }
+
+// SVG viewBox constants — coordinate space for path calculations
+const CVW = 400;  // viewBox width
+const CVH = 200;  // viewBox height
+const CPL = 0;    // padding left
+const CPT = 18;   // padding top (space for max-rate label)
+const CPB = 24;   // padding bottom (space for date labels)
+const CCW = CVW - CPL;
+const CCH = CVH - CPT - CPB;
+
+/** Catmull-Rom → cubic bezier smooth path through the given points */
+function smoothCurvePath(pts: ReadonlyArray<{ x: number; y: number }>): string {
+  if (pts.length < 2) return pts[0] ? `M ${pts[0].x} ${pts[0].y}` : '';
+  let d = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 1; i < pts.length; i++) {
+    const p0 = pts[Math.max(0, i - 2)];
+    const p1 = pts[i - 1];
+    const p2 = pts[i];
+    const p3 = pts[Math.min(pts.length - 1, i + 1)];
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+  }
+  return d;
+}
+
+function fmtChartDate(dateStr: string): string {
+  try {
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch { return dateStr.slice(5); }
+}
+
+// ── Tab icon SVGs ─────────────────────────────────────────────────────────────
+
+function ConvertTabIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7 16V4m0 0L3 8m4-4 4 4M17 8v12m0 0 4-4m-4 4-4-4"/>
+    </svg>
+  );
+}
+
+function ChartTabIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+    </svg>
+  );
+}
+
+// ── RateChart ─────────────────────────────────────────────────────────────────
+
+function RateChart({ from, to, compact }: { from: string; to: string; compact?: boolean }) {
+  const [period, setPeriod]     = useState<ChartPeriod>(30);
+  const [data, setData]         = useState<RatePoint[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
+  const [hover, setHover]       = useState<{ i: number; svgX: number; svgY: number } | null>(null);
+  const svgRef                  = useRef<SVGSVGElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true); setError(false); setHover(null);
+    apiFetch(`/api/currency/history?from=${from}&to=${to}&days=${period}`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then((d: { rates: RatePoint[] }) => { if (!cancelled) { setData(d.rates); setLoading(false); } })
+      .catch(() => { if (!cancelled) { setError(true); setLoading(false); } });
+    return () => { cancelled = true; };
+  }, [from, to, period, retryKey]);
+
+  const pts = useMemo(() => {
+    if (data.length < 2) return [];
+    const rates = data.map(d => d.rate);
+    const minR = Math.min(...rates);
+    const maxR = Math.max(...rates);
+    const range = maxR - minR || 1;
+    return data.map((d, i) => ({
+      x: CPL + (i / (data.length - 1)) * CCW,
+      y: CPT + (1 - (d.rate - minR) / range) * CCH,
+    }));
+  }, [data]);
+
+  const minRate = data.length ? Math.min(...data.map(d => d.rate)) : 0;
+  const maxRate = data.length ? Math.max(...data.map(d => d.rate)) : 0;
+  const change  = data.length >= 2
+    ? ((data[data.length - 1].rate - data[0].rate) / data[0].rate) * 100
+    : 0;
+  const isUp      = change >= 0;
+  const lineColor = isUp ? '#22c55e' : '#ef4444';
+  const gradId    = `cg-${from}-${to}`;
+
+  function handleMouseMove(e: React.MouseEvent<SVGSVGElement>) {
+    if (!pts.length || !svgRef.current) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const mx   = ((e.clientX - rect.left) / rect.width) * CVW;
+    let closest = 0; let minDist = Infinity;
+    pts.forEach((p, i) => {
+      const dist = Math.abs(p.x - mx);
+      if (dist < minDist) { minDist = dist; closest = i; }
+    });
+    setHover({ i: closest, svgX: pts[closest].x, svgY: pts[closest].y });
+  }
+
+  const linePath = pts.length >= 2 ? smoothCurvePath(pts) : '';
+  const areaPath = linePath
+    ? `${linePath} L ${pts[pts.length - 1].x},${CPT + CCH} L ${CPL},${CPT + CCH} Z`
+    : '';
+  const hovered = hover !== null ? data[hover.i] : null;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+
+      {/* ── Header: current rate + change badge ─────────────────────────────── */}
+      <div style={{
+        display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+        padding: compact ? '8px 10px 4px' : '10px 14px 4px', flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <div style={{ fontSize: 10, color: 'var(--text-faint)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            {from} / {to}
+          </div>
+          {data.length > 0 && !loading && (
+            <div style={{
+              fontFamily: "'Space Mono', monospace",
+              fontSize: compact ? 20 : 26, fontWeight: 700,
+              color: 'var(--text)', lineHeight: 1.1,
+              letterSpacing: '-0.02em',
+            }}>
+              {formatRate(data[data.length - 1].rate)}
+            </div>
+          )}
+        </div>
+        {data.length >= 2 && !loading && (
+          <div style={{
+            padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700,
+            background: isUp ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
+            color: lineColor, marginTop: 2, flexShrink: 0,
+          }}>
+            {isUp ? '▲' : '▼'} {Math.abs(change).toFixed(2)}%
+            <span style={{ fontWeight: 400, fontSize: 10, marginLeft: 4, opacity: 0.7 }}>
+              {period === 365 ? '1Y' : period === 90 ? '3M' : period === 30 ? '1M' : '7D'}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* ── Period selector ──────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', gap: 3, padding: compact ? '0 10px 6px' : '0 14px 8px', flexShrink: 0 }}>
+        {CHART_PERIODS.map(p => {
+          const active = period === p.days;
+          return (
+            <button
+              key={p.days}
+              onClick={() => setPeriod(p.days)}
+              style={{
+                padding: '3px 10px', borderRadius: 999, fontSize: 10,
+                fontWeight: active ? 700 : 400,
+                background: active ? 'var(--accent-dim)' : 'transparent',
+                border: `1px solid ${active ? 'rgba(124,106,255,0.35)' : 'var(--border)'}`,
+                color: active ? 'var(--accent)' : 'var(--text-faint)',
+                cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit',
+              }}
+              onMouseEnter={e => { if (!active) e.currentTarget.style.borderColor = 'var(--border-hover)'; }}
+              onMouseLeave={e => { if (!active) e.currentTarget.style.borderColor = 'var(--border)'; }}
+            >
+              {p.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Chart canvas ─────────────────────────────────────────────────────── */}
+      <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
+
+        {loading && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 22, height: 22, borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'cx-spin 0.8s linear infinite' }} />
+          </div>
+        )}
+
+        {error && !loading && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" strokeWidth="1.5">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>Chart unavailable</span>
+            <button
+              onClick={() => setRetryKey(k => k + 1)}
+              style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {!loading && !error && data.length === 0 && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>No data for this pair</span>
+          </div>
+        )}
+
+        {!loading && !error && data.length >= 2 && (
+          <svg
+            ref={svgRef}
+            viewBox={`0 0 ${CVW} ${CVH}`}
+            preserveAspectRatio="none"
+            style={{ width: '100%', height: '100%', display: 'block', cursor: 'crosshair', overflow: 'visible' }}
+            onMouseMove={handleMouseMove}
+            onMouseLeave={() => setHover(null)}
+          >
+            <defs>
+              <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stopColor={lineColor} stopOpacity="0.28" />
+                <stop offset="75%"  stopColor={lineColor} stopOpacity="0.06" />
+                <stop offset="100%" stopColor={lineColor} stopOpacity="0" />
+              </linearGradient>
+              <clipPath id="cc-clip">
+                <rect x={CPL} y={CPT} width={CCW} height={CCH} />
+              </clipPath>
+            </defs>
+
+            {/* Subtle horizontal guides */}
+            {[0, 0.33, 0.67, 1].map(f => (
+              <line
+                key={f}
+                x1={CPL} y1={CPT + f * CCH}
+                x2={CPL + CCW} y2={CPT + f * CCH}
+                stroke="var(--border)" strokeWidth="0.5" opacity="0.6"
+              />
+            ))}
+
+            {/* Area fill */}
+            {areaPath && (
+              <path d={areaPath} fill={`url(#${gradId})`} clipPath="url(#cc-clip)" />
+            )}
+
+            {/* Price line */}
+            {linePath && (
+              <path
+                d={linePath} fill="none"
+                stroke={lineColor} strokeWidth="2" strokeLinecap="round"
+                clipPath="url(#cc-clip)"
+                style={{ filter: `drop-shadow(0 0 5px ${lineColor}55)` }}
+              />
+            )}
+
+            {/* Max / min labels (top-left and bottom-left) */}
+            <text x={CPL + 3} y={CPT - 3}
+              fill="var(--text-faint)" fontSize="8.5"
+              fontFamily="'Space Mono', monospace">
+              {formatRate(maxRate)}
+            </text>
+            <text x={CPL + 3} y={CVH - CPB + 11}
+              fill="var(--text-faint)" fontSize="8.5"
+              fontFamily="'Space Mono', monospace">
+              {formatRate(minRate)}
+            </text>
+
+            {/* Date range labels */}
+            <text x={CPL + 3} y={CVH - 4}
+              fill="var(--text-faint)" fontSize="8" fontFamily="system-ui" textAnchor="start">
+              {fmtChartDate(data[0].date)}
+            </text>
+            <text x={CPL + CCW - 3} y={CVH - 4}
+              fill="var(--text-faint)" fontSize="8" fontFamily="system-ui" textAnchor="end">
+              {fmtChartDate(data[data.length - 1].date)}
+            </text>
+
+            {/* Hover: crosshair + dot + tooltip */}
+            {hover && hovered && (() => {
+              const tw = 92; const th = 38;
+              const tx = Math.min(Math.max(hover.svgX - tw / 2, CPL + 2), CPL + CCW - tw - 2);
+              const ty = hover.svgY > CPT + CCH / 2
+                ? hover.svgY - th - 12
+                : hover.svgY + 12;
+              const hChange = data.length >= 2
+                ? ((hovered.rate - data[0].rate) / data[0].rate) * 100
+                : 0;
+              const hColor = hChange >= 0 ? '#22c55e' : '#ef4444';
+              return (
+                <>
+                  {/* Vertical crosshair */}
+                  <line
+                    x1={hover.svgX} y1={CPT}
+                    x2={hover.svgX} y2={CPT + CCH}
+                    stroke="var(--text-muted)" strokeWidth="0.8" strokeDasharray="3,3" opacity="0.6"
+                  />
+                  {/* Data point dot */}
+                  <circle
+                    cx={hover.svgX} cy={hover.svgY} r="5"
+                    fill={lineColor} stroke="var(--surface)" strokeWidth="2.5"
+                    style={{ filter: `drop-shadow(0 0 6px ${lineColor}80)` }}
+                  />
+                  {/* Tooltip card */}
+                  <rect
+                    x={tx} y={ty} width={tw} height={th} rx="7" ry="7"
+                    fill="var(--surface2)" stroke="var(--border)" strokeWidth="0.8"
+                    style={{ filter: 'drop-shadow(0 4px 14px rgba(0,0,0,0.55))' }}
+                  />
+                  <text x={tx + tw / 2} y={ty + 13}
+                    fill="var(--text-faint)" fontSize="8.5" fontFamily="system-ui" textAnchor="middle">
+                    {fmtChartDate(hovered.date)}
+                  </text>
+                  <text x={tx + tw / 2} y={ty + 28}
+                    fill={lineColor} fontSize="12" fontFamily="'Space Mono', monospace"
+                    fontWeight="700" textAnchor="middle">
+                    {formatRate(hovered.rate)}
+                  </text>
+                  <text x={tx + tw / 2} y={ty + 36.5}
+                    fill={hColor} fontSize="7" fontFamily="'Space Mono', monospace"
+                    textAnchor="middle" opacity="0.85">
+                    {hChange >= 0 ? '+' : ''}{hChange.toFixed(2)}%
+                  </text>
+                </>
+              );
+            })()}
+          </svg>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main widget ────────────────────────────────────────────────────────────────
 
 export function CurrencyWidget({ onClose: _onClose }: { onClose: () => void }) {
@@ -734,6 +1073,8 @@ export function CurrencyWidget({ onClose: _onClose }: { onClose: () => void }) {
     return parts.length > 1 ? `${intPart}.${parts[1]}` : intPart;
   }, [amountStr]);
 
+  const [view, setView] = useState<'converter' | 'chart'>('converter');
+
   const fromMeta = getCurrencyMeta(fromCode);
   const toMeta   = getCurrencyMeta(toCode);
   const mode     = getLayoutMode(size.w, size.h);
@@ -792,155 +1133,196 @@ export function CurrencyWidget({ onClose: _onClose }: { onClose: () => void }) {
   // ── Slim / Standard / Expanded ────────────────────────────────────────────
   return (
     <div ref={containerRef} style={rootStyle}>
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: compact ? 8 : 12, gap: compact ? 8 : 10, boxSizing: 'border-box', overflowY: 'auto', scrollbarWidth: 'none' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
 
-        {/* Selector row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 6 : 8, flexShrink: 0 }}>
-          <CurrencySelector code={fromCode} allCurrencies={allCurrencies} recentPairs={recentPairs} compact={compact} onChange={setFromCode} />
-
-          {/* Swap + direction */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-            <svg width="20" height="10" viewBox="0 0 20 10" fill="none">
-              <line x1="1" y1="5" x2="15" y2="5" stroke="rgba(124,106,255,0.4)" strokeWidth="1.4" strokeLinecap="round"/>
-              <polyline points="12,2 16,5 12,8" fill="none" stroke="var(--accent)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            <button
-              onClick={handleSwap}
-              title="Swap currencies"
-              style={{
-                background: 'var(--surface3)', border: '1px solid var(--border)',
-                borderRadius: '50%', width: compact ? 26 : 30, height: compact ? 26 : 30,
-                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 13, color: 'var(--text-muted)', transition: 'all 0.15s',
-                animation: swapping ? 'cx-swap 0.28s ease-in-out' : 'none',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'var(--accent-dim)'; e.currentTarget.style.color = 'var(--accent)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface3)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
-            >⇄</button>
-          </div>
-
-          <CurrencySelector code={toCode} allCurrencies={allCurrencies} recentPairs={recentPairs} compact={compact} onChange={setToCode} />
-        </div>
-
-        {/* Amount input */}
-        <div style={{ flexShrink: 0 }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            background: 'var(--surface2)', border: '1px solid var(--border)',
-            borderRadius: 10, padding: compact ? '8px 10px' : '10px 14px',
-            transition: 'border-color 0.15s',
-          }}
-            onFocus={() => {}}
-          >
-            <span style={{ fontFamily: "'Space Mono', monospace", fontSize: compact ? 16 : 20, fontWeight: 700, color: 'var(--text-muted)', flexShrink: 0 }}>
-              {fromMeta.symbol}
-            </span>
-            <input
-              value={displayAmount}
-              onChange={e => handleAmountInput(e.target.value)}
-              onFocus={e => (e.currentTarget.parentElement!.style.borderColor = 'rgba(124,106,255,0.5)')}
-              onBlur={e => (e.currentTarget.parentElement!.style.borderColor = 'var(--border)')}
-              style={{
-                flex: 1, background: 'none', border: 'none', outline: 'none',
-                fontFamily: "'Space Mono', monospace", fontSize: compact ? 16 : 20,
-                fontWeight: 700, color: 'var(--text)', minWidth: 0,
-              }}
-              placeholder="0"
-              inputMode="decimal"
-            />
-            <span style={{ fontSize: 11, color: 'var(--text-faint)', flexShrink: 0 }}>{fromCode}</span>
-          </div>
-        </div>
-
-        {/* Result */}
+        {/* ── Tab bar ─────────────────────────────────────────────────────────── */}
         <div style={{
-          flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-          justifyContent: 'center', gap: compact ? 4 : 6, minHeight: 0,
+          display: 'flex', flexShrink: 0,
+          borderBottom: '1px solid var(--border)',
         }}>
-          {result ? (
-            <>
-              {/* Big converted amount */}
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <span style={{ fontSize: compact ? 22 : 28 }}>{toMeta.flag}</span>
-                <AnimatedAmount
-                  value={result.converted}
-                  code={toCode}
-                  fontSize={compact ? 28 : mode === 'expanded' ? 48 : 38}
-                />
-                <span style={{ fontFamily: "'Space Mono', monospace", fontSize: compact ? 12 : 15, color: 'var(--text-muted)', fontWeight: 600 }}>
-                  {toCode}
-                </span>
-              </div>
-
-              {/* Rate display */}
-              {!compact && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-                  <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: 'var(--text-muted)' }}>
-                    1 {fromCode} = {formatRate(result.rate)} {toCode}
-                  </span>
-                  <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: 'var(--text-faint)' }}>
-                    1 {toCode} = {formatRate(result.inverseRate)} {fromCode}
-                  </span>
-                  <span style={{ fontSize: 10, color: result.stale ? '#f59e0b' : 'var(--text-faint)', marginTop: 2 }}>
-                    {result.stale ? '⚠️ Using cached rates · ' : ''}Rates updated {formatAge(result.ratesTimestamp)}
-                  </span>
-                </div>
-              )}
-
-              {compact && (
-                <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: 'var(--text-faint)' }}>
-                  1 {fromCode} = {formatRate(result.rate)} {toCode}
-                </span>
-              )}
-            </>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {loading && <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'cx-spin 0.8s linear infinite' }} />}
-              <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>
-                {loading ? 'Fetching rates…' : 'Enter an amount to convert'}
-              </span>
-            </div>
-          )}
+          {([
+            { id: 'converter' as const, label: 'Converter', Icon: ConvertTabIcon },
+            { id: 'chart'     as const, label: 'Chart',     Icon: ChartTabIcon   },
+          ]).map(tab => {
+            const active = view === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setView(tab.id)}
+                style={{
+                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  gap: 5, padding: '7px 0 6px',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontSize: 11, fontWeight: active ? 700 : 400,
+                  color: active ? 'var(--accent)' : 'var(--text-muted)',
+                  fontFamily: 'inherit',
+                  borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
+                  marginBottom: -1, transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.color = 'var(--text)'; }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.color = 'var(--text-muted)'; }}
+              >
+                <tab.Icon />
+                {!compact && tab.label}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Fee breakdown — hidden in micro/slim unless expanded */}
-        {result && (mode === 'standard' || mode === 'expanded') && (
-          <div style={{ flexShrink: 0 }}>
-            <button
-              onClick={() => setFeesOpen(v => !v)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 4, width: '100%',
-                background: 'none', border: 'none', cursor: 'pointer',
-                padding: '4px 0', color: 'var(--text-muted)', fontSize: 11,
-                fontFamily: 'inherit', justifyContent: 'center',
-                transition: 'color 0.15s',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.color = 'var(--text)')}
-              onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
-            >
-              <span>{feesOpen ? '▴' : '▾'}</span>
-              <span>After exchange fees</span>
-            </button>
-
-            {feesOpen && (
-              <FeeBreakdown
-                result={result} fromMeta={fromMeta} toMeta={toMeta}
-                feeMethod={feeMethod} onFeeMethodChange={setFeeMethod}
-                compact={mode === 'standard'}
-              />
-            )}
+        {/* ── Chart view ──────────────────────────────────────────────────────── */}
+        {view === 'chart' && (
+          <div style={{ flex: 1, overflow: 'hidden' }}>
+            <RateChart from={fromCode} to={toCode} compact={compact} />
           </div>
         )}
 
-        {/* Slim: compact fees link */}
-        {result && mode === 'slim' && (
-          <div style={{ textAlign: 'center', flexShrink: 0 }}>
-            <button
-              onClick={() => setShowFloating(true)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: 'var(--text-faint)', fontFamily: 'inherit' }}
-            >
-              fees ▾
-            </button>
+        {/* ── Converter view ───────────────────────────────────────────────────── */}
+        {view === 'converter' && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: compact ? 8 : 12, gap: compact ? 8 : 10, overflowY: 'auto', scrollbarWidth: 'none' }}>
+
+            {/* Selector row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: compact ? 6 : 8, flexShrink: 0 }}>
+              <CurrencySelector code={fromCode} allCurrencies={allCurrencies} recentPairs={recentPairs} compact={compact} onChange={setFromCode} />
+
+              {/* Swap + direction arrow */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                <svg width="20" height="10" viewBox="0 0 20 10" fill="none">
+                  <line x1="1" y1="5" x2="15" y2="5" stroke="rgba(124,106,255,0.4)" strokeWidth="1.4" strokeLinecap="round"/>
+                  <polyline points="12,2 16,5 12,8" fill="none" stroke="var(--accent)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <button
+                  onClick={handleSwap}
+                  title="Swap currencies"
+                  style={{
+                    background: 'var(--surface3)', border: '1px solid var(--border)',
+                    borderRadius: '50%', width: compact ? 26 : 30, height: compact ? 26 : 30,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 13, color: 'var(--text-muted)', transition: 'all 0.15s',
+                    animation: swapping ? 'cx-swap 0.28s ease-in-out' : 'none',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--accent-dim)'; e.currentTarget.style.color = 'var(--accent)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'var(--surface3)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+                >⇄</button>
+              </div>
+
+              <CurrencySelector code={toCode} allCurrencies={allCurrencies} recentPairs={recentPairs} compact={compact} onChange={setToCode} />
+            </div>
+
+            {/* Amount input */}
+            <div style={{ flexShrink: 0 }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                background: 'var(--surface2)', border: '1px solid var(--border)',
+                borderRadius: 10, padding: compact ? '8px 10px' : '10px 14px',
+                transition: 'border-color 0.15s',
+              }}>
+                <span style={{ fontFamily: "'Space Mono', monospace", fontSize: compact ? 16 : 20, fontWeight: 700, color: 'var(--text-muted)', flexShrink: 0 }}>
+                  {fromMeta.symbol}
+                </span>
+                <input
+                  value={displayAmount}
+                  onChange={e => handleAmountInput(e.target.value)}
+                  onFocus={e => (e.currentTarget.parentElement!.style.borderColor = 'rgba(124,106,255,0.5)')}
+                  onBlur={e => (e.currentTarget.parentElement!.style.borderColor = 'var(--border)')}
+                  style={{
+                    flex: 1, background: 'none', border: 'none', outline: 'none',
+                    fontFamily: "'Space Mono', monospace", fontSize: compact ? 16 : 20,
+                    fontWeight: 700, color: 'var(--text)', minWidth: 0,
+                  }}
+                  placeholder="0"
+                  inputMode="decimal"
+                />
+                <span style={{ fontSize: 11, color: 'var(--text-faint)', flexShrink: 0 }}>{fromCode}</span>
+              </div>
+            </div>
+
+            {/* Result */}
+            <div style={{
+              flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+              justifyContent: 'center', gap: compact ? 4 : 6, minHeight: 0,
+            }}>
+              {result ? (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                    <span style={{ fontSize: compact ? 22 : 28 }}>{toMeta.flag}</span>
+                    <AnimatedAmount
+                      value={result.converted}
+                      code={toCode}
+                      fontSize={compact ? 28 : mode === 'expanded' ? 48 : 38}
+                    />
+                    <span style={{ fontFamily: "'Space Mono', monospace", fontSize: compact ? 12 : 15, color: 'var(--text-muted)', fontWeight: 600 }}>
+                      {toCode}
+                    </span>
+                  </div>
+
+                  {!compact && (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                      <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: 'var(--text-muted)' }}>
+                        1 {fromCode} = {formatRate(result.rate)} {toCode}
+                      </span>
+                      <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: 'var(--text-faint)' }}>
+                        1 {toCode} = {formatRate(result.inverseRate)} {fromCode}
+                      </span>
+                      <span style={{ fontSize: 10, color: result.stale ? '#f59e0b' : 'var(--text-faint)', marginTop: 2 }}>
+                        {result.stale ? '⚠️ Using cached rates · ' : ''}Rates updated {formatAge(result.ratesTimestamp)}
+                      </span>
+                    </div>
+                  )}
+
+                  {compact && (
+                    <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: 'var(--text-faint)' }}>
+                      1 {fromCode} = {formatRate(result.rate)} {toCode}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {loading && <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'cx-spin 0.8s linear infinite' }} />}
+                  <span style={{ fontSize: 12, color: 'var(--text-faint)' }}>
+                    {loading ? 'Fetching rates…' : 'Enter an amount to convert'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Fee breakdown — standard / expanded only */}
+            {result && (mode === 'standard' || mode === 'expanded') && (
+              <div style={{ flexShrink: 0 }}>
+                <button
+                  onClick={() => setFeesOpen(v => !v)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 4, width: '100%',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    padding: '4px 0', color: 'var(--text-muted)', fontSize: 11,
+                    fontFamily: 'inherit', justifyContent: 'center', transition: 'color 0.15s',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.color = 'var(--text)')}
+                  onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+                >
+                  <span>{feesOpen ? '▴' : '▾'}</span>
+                  <span>After exchange fees</span>
+                </button>
+                {feesOpen && (
+                  <FeeBreakdown
+                    result={result} fromMeta={fromMeta} toMeta={toMeta}
+                    feeMethod={feeMethod} onFeeMethodChange={setFeeMethod}
+                    compact={mode === 'standard'}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Slim: open floating panel for full details */}
+            {result && mode === 'slim' && (
+              <div style={{ textAlign: 'center', flexShrink: 0 }}>
+                <button
+                  onClick={() => setShowFloating(true)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: 'var(--text-faint)', fontFamily: 'inherit' }}
+                >
+                  fees ▾
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -980,8 +1362,9 @@ function FloatingPanel({
   onFeesOpen: (v: boolean) => void; onFeeMethod: (m: string) => void;
   onClose: () => void;
 }) {
-  const fromMeta = getCurrencyMeta(fromCode);
-  const toMeta   = getCurrencyMeta(toCode);
+  const fromMeta   = getCurrencyMeta(fromCode);
+  const toMeta     = getCurrencyMeta(toCode);
+  const [panelView, setPanelView] = useState<'converter' | 'chart'>('converter');
 
   const displayAmount = useMemo(() => {
     const safe = String(amountStr);
@@ -1001,71 +1384,112 @@ function FloatingPanel({
       <div style={{
         position: 'fixed', top: '50%', left: '50%',
         transform: 'translate(-50%, -50%)',
-        width: 320, maxHeight: '80vh',
+        width: 340, height: 520,
         background: 'var(--surface)', border: '1px solid var(--border)',
         borderRadius: 16, zIndex: 9991, overflow: 'hidden',
         boxShadow: '0 24px 80px rgba(0,0,0,0.7)',
         animation: 'cx-float-in 0.2s ease-out both',
         display: 'flex', flexDirection: 'column',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px 8px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-          <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>Currency Converter</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 16 }}>✕</button>
+
+        {/* Panel header: title + close */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px 0', flexShrink: 0 }}>
+          <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>Currency</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 16, lineHeight: 1 }}>✕</button>
         </div>
 
-        <div style={{ overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 12, scrollbarWidth: 'none' }}>
-          {/* Selectors */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <CurrencySelector code={fromCode} allCurrencies={allCurrencies} recentPairs={recentPairs} compact onChange={onFromChange} />
-            <button onClick={onSwap} style={{ background: 'var(--surface3)', border: '1px solid var(--border)', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: 'var(--text-muted)', flexShrink: 0, animation: swapping ? 'cx-swap 0.28s ease-in-out' : 'none' }}>⇄</button>
-            <CurrencySelector code={toCode} allCurrencies={allCurrencies} recentPairs={recentPairs} compact onChange={onToChange} />
-          </div>
-
-          {/* Amount */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: '8px 10px' }}>
-            <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 16, fontWeight: 700, color: 'var(--text-muted)', flexShrink: 0 }}>{fromMeta.symbol}</span>
-            <input
-              value={displayAmount}
-              onChange={e => onAmountChange(e.target.value)}
-              style={{ flex: 1, background: 'none', border: 'none', outline: 'none', fontFamily: "'Space Mono', monospace", fontSize: 16, fontWeight: 700, color: 'var(--text)', minWidth: 0 }}
-              placeholder="0" inputMode="decimal" autoFocus
-            />
-            <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{fromCode}</span>
-          </div>
-
-          {/* Result */}
-          {result && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '4px 0' }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                <span style={{ fontSize: 22 }}>{toMeta.flag}</span>
-                <AnimatedAmount value={result.converted} code={toCode} fontSize={32} />
-                <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>{toCode}</span>
-              </div>
-              <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: 'var(--text-faint)' }}>
-                1 {fromCode} = {formatRate(result.rate)} {toCode}
-              </span>
-            </div>
-          )}
-          {loading && !result && (
-            <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-faint)' }}>Fetching rates…</div>
-          )}
-
-          {/* Fees */}
-          {result && (
-            <div>
+        {/* Tab bar */}
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', flexShrink: 0, padding: '0 4px', marginTop: 6 }}>
+          {([
+            { id: 'converter' as const, label: 'Converter', Icon: ConvertTabIcon },
+            { id: 'chart'     as const, label: 'Chart',     Icon: ChartTabIcon   },
+          ]).map(tab => {
+            const active = panelView === tab.id;
+            return (
               <button
-                onClick={() => onFeesOpen(!feesOpen)}
-                style={{ display: 'flex', alignItems: 'center', gap: 4, width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', color: 'var(--text-muted)', fontSize: 11, fontFamily: 'inherit', justifyContent: 'center' }}
+                key={tab.id}
+                onClick={() => setPanelView(tab.id)}
+                style={{
+                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  gap: 5, padding: '7px 0 6px',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontSize: 11, fontWeight: active ? 700 : 400,
+                  color: active ? 'var(--accent)' : 'var(--text-muted)',
+                  fontFamily: 'inherit',
+                  borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
+                  marginBottom: -1, transition: 'all 0.15s',
+                }}
               >
-                <span>{feesOpen ? '▴' : '▾'}</span>
-                <span>After exchange fees</span>
+                <tab.Icon />
+                {tab.label}
               </button>
-              {feesOpen && (
-                <FeeBreakdown result={result} fromMeta={fromMeta} toMeta={toMeta} feeMethod={feeMethod} onFeeMethodChange={onFeeMethod} compact />
-              )}
-            </div>
-          )}
+            );
+          })}
         </div>
+
+        {/* Chart view */}
+        {panelView === 'chart' && (
+          <div style={{ flex: 1, overflow: 'hidden' }}>
+            <RateChart from={fromCode} to={toCode} compact />
+          </div>
+        )}
+
+        {/* Converter view */}
+        {panelView === 'converter' && (
+          <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 12, scrollbarWidth: 'none' }}>
+            {/* Selectors */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <CurrencySelector code={fromCode} allCurrencies={allCurrencies} recentPairs={recentPairs} compact onChange={onFromChange} />
+              <button onClick={onSwap} style={{ background: 'var(--surface3)', border: '1px solid var(--border)', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: 'var(--text-muted)', flexShrink: 0, animation: swapping ? 'cx-swap 0.28s ease-in-out' : 'none' }}>⇄</button>
+              <CurrencySelector code={toCode} allCurrencies={allCurrencies} recentPairs={recentPairs} compact onChange={onToChange} />
+            </div>
+
+            {/* Amount */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: '8px 10px' }}>
+              <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 16, fontWeight: 700, color: 'var(--text-muted)', flexShrink: 0 }}>{fromMeta.symbol}</span>
+              <input
+                value={displayAmount}
+                onChange={e => onAmountChange(e.target.value)}
+                style={{ flex: 1, background: 'none', border: 'none', outline: 'none', fontFamily: "'Space Mono', monospace", fontSize: 16, fontWeight: 700, color: 'var(--text)', minWidth: 0 }}
+                placeholder="0" inputMode="decimal" autoFocus
+              />
+              <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{fromCode}</span>
+            </div>
+
+            {/* Result */}
+            {result && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '4px 0' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                  <span style={{ fontSize: 22 }}>{toMeta.flag}</span>
+                  <AnimatedAmount value={result.converted} code={toCode} fontSize={32} />
+                  <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>{toCode}</span>
+                </div>
+                <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: 'var(--text-faint)' }}>
+                  1 {fromCode} = {formatRate(result.rate)} {toCode}
+                </span>
+              </div>
+            )}
+            {loading && !result && (
+              <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-faint)' }}>Fetching rates…</div>
+            )}
+
+            {/* Fees */}
+            {result && (
+              <div>
+                <button
+                  onClick={() => onFeesOpen(!feesOpen)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 4, width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', color: 'var(--text-muted)', fontSize: 11, fontFamily: 'inherit', justifyContent: 'center' }}
+                >
+                  <span>{feesOpen ? '▴' : '▾'}</span>
+                  <span>After exchange fees</span>
+                </button>
+                {feesOpen && (
+                  <FeeBreakdown result={result} fromMeta={fromMeta} toMeta={toMeta} feeMethod={feeMethod} onFeeMethodChange={onFeeMethod} compact />
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </>,
     document.body,
