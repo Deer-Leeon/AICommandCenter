@@ -3,7 +3,7 @@ import { useMobileCardOrder } from './useMobileCardOrder';
 import { MobileCardStack } from './MobileCardStack';
 import { MobileBottomBar } from './MobileBottomBar';
 import { MobileSearchOverlay } from './MobileSearchOverlay';
-import { MobileLayoutEditor } from './MobileLayoutEditor';
+import { MobileLayoutEditor, LAUNCH_FULLSCREEN_KEY } from './MobileLayoutEditor';
 import { MobileCardContent } from './cards/MobileCardRegistry';
 import { SettingsModal } from '../components/SettingsModal';
 import { useStore } from '../store/useStore';
@@ -37,6 +37,17 @@ export default function MobileApp() {
   const exitFullscreen = useCallback(() => {
     setFsVisible(false);
     setTimeout(() => setIsFullscreen(false), 380);
+  }, []);
+
+  // Apply launch-fullscreen preference on first mount
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(LAUNCH_FULLSCREEN_KEY) === 'true') {
+        enterFullscreen();
+      }
+    } catch { /* ignore */ }
+  // Run once on mount only
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Capacitor: push notifications + keyboard avoidance ──────────────────

@@ -275,6 +275,16 @@ function saveLaunchWidgetPref(w: WidgetType) {
   try { localStorage.setItem(LAUNCH_WIDGET_KEY, w); } catch { /* quota */ }
 }
 
+// ── Launch fullscreen preference ──────────────────────────────────────────────
+export const LAUNCH_FULLSCREEN_KEY = 'nexus_mobile_launch_fullscreen';
+
+function loadLaunchFullscreen(): boolean {
+  try { return localStorage.getItem(LAUNCH_FULLSCREEN_KEY) === 'true'; } catch { return false; }
+}
+function saveLaunchFullscreen(v: boolean) {
+  try { localStorage.setItem(LAUNCH_FULLSCREEN_KEY, v ? 'true' : 'false'); } catch { /* quota */ }
+}
+
 // ── Main editor ────────────────────────────────────────────────────────────────
 export function MobileLayoutEditor({ order, onConfirm, onClose }: Props) {
   const [slots, setSlots] = useState<(WidgetType | null)[]>(() => orderToSlots(order));
@@ -283,6 +293,9 @@ export function MobileLayoutEditor({ order, onConfirm, onClose }: Props) {
 
   // Which widget should open first on launch
   const [launchWidget, setLaunchWidget] = useState<WidgetType | null>(loadLaunchWidgetPref);
+
+  // Whether the app should open in fullscreen focus mode
+  const [launchFullscreen, setLaunchFullscreen] = useState<boolean>(loadLaunchFullscreen);
 
   useEffect(() => { requestAnimationFrame(() => setVisible(true)); }, []);
 
@@ -311,6 +324,7 @@ export function MobileLayoutEditor({ order, onConfirm, onClose }: Props) {
       ? launchWidget
       : newOrder[0];
     saveLaunchWidgetPref(effectiveLaunch);
+    saveLaunchFullscreen(launchFullscreen);
     onConfirm(newOrder, 0);
     dismiss();
   }
@@ -426,52 +440,92 @@ export function MobileLayoutEditor({ order, onConfirm, onClose }: Props) {
         )}
       </div>
 
-      {/* ── Launch widget section ─────────────────────────────────────────────── */}
+      {/* ── Launch settings section ───────────────────────────────────────────── */}
       <div style={{
         flexShrink: 0,
         borderTop: '1px solid var(--border)',
-        padding: '12px 16px 14px',
+        padding: '12px 16px 16px',
         background: 'var(--surface)',
+        display: 'flex', flexDirection: 'column', gap: 14,
       }}>
-        <div style={{
-          fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)',
-          letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10,
-        }}>
-          Opens on launch
+
+        {/* Opens on launch */}
+        <div>
+          <div style={{
+            fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)',
+            letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10,
+          }}>
+            Opens on launch
+          </div>
+          <div style={{
+            display: 'flex', gap: 7, overflowX: 'auto', paddingBottom: 2,
+            scrollbarWidth: 'none',
+          }}>
+            {currentWidgets.map(w => {
+              const cfg    = WIDGET_CONFIGS.find(c => c.id === w);
+              const accent = WIDGET_ACCENT[w] ?? 'var(--accent)';
+              const sel    = (launchWidget ?? currentWidgets[0]) === w;
+              return (
+                <button
+                  key={w}
+                  onPointerDown={() => setLaunchWidget(w)}
+                  style={{
+                    flexShrink: 0,
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '7px 13px', borderRadius: 99,
+                    background: sel ? `${accent}22` : 'var(--surface2)',
+                    border: `1.5px solid ${sel ? accent : 'var(--border)'}`,
+                    color: sel ? accent : 'var(--text-muted)',
+                    fontSize: 12, fontWeight: sel ? 700 : 400,
+                    cursor: 'pointer', touchAction: 'manipulation',
+                    transition: 'background 0.15s, border 0.15s, color 0.15s',
+                    boxShadow: sel ? `0 2px 10px ${accent}40` : 'none',
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                >
+                  <span style={{ fontSize: 15 }}>{cfg?.icon}</span>
+                  <span>{cfg?.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <div style={{
-          display: 'flex', gap: 7, overflowX: 'auto', paddingBottom: 2,
-          scrollbarWidth: 'none',
-        }}>
-          {currentWidgets.map(w => {
-            const cfg    = WIDGET_CONFIGS.find(c => c.id === w);
-            const accent = WIDGET_ACCENT[w] ?? 'var(--accent)';
-            const sel    = (launchWidget ?? currentWidgets[0]) === w;
-            return (
-              <button
-                key={w}
-                onPointerDown={() => setLaunchWidget(w)}
-                style={{
-                  flexShrink: 0,
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '7px 13px',
-                  borderRadius: 99,
-                  background: sel ? `${accent}22` : 'var(--surface2)',
-                  border: `1.5px solid ${sel ? accent : 'var(--border)'}`,
-                  color: sel ? accent : 'var(--text-muted)',
-                  fontSize: 12, fontWeight: sel ? 700 : 400,
-                  cursor: 'pointer', touchAction: 'manipulation',
-                  transition: 'background 0.15s, border 0.15s, color 0.15s',
-                  boxShadow: sel ? `0 2px 10px ${accent}40` : 'none',
-                  WebkitTapHighlightColor: 'transparent',
-                }}
-              >
-                <span style={{ fontSize: 15 }}>{cfg?.icon}</span>
-                <span>{cfg?.label}</span>
-              </button>
-            );
-          })}
+
+        {/* Launch in fullscreen toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500 }}>
+              Open in focus mode
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+              Launch directly in fullscreen
+            </div>
+          </div>
+
+          {/* Toggle pill */}
+          <div
+            onPointerDown={() => setLaunchFullscreen(v => !v)}
+            style={{
+              width: 50, height: 28, borderRadius: 14,
+              background: launchFullscreen ? 'var(--accent)' : 'rgba(255,255,255,0.1)',
+              border: `1.5px solid ${launchFullscreen ? 'var(--accent)' : 'var(--border)'}`,
+              position: 'relative', cursor: 'pointer', flexShrink: 0,
+              transition: 'background 0.2s, border-color 0.2s',
+              boxShadow: launchFullscreen ? '0 0 12px rgba(124,106,255,0.4)' : 'none',
+              touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent',
+            }}
+          >
+            <div style={{
+              position: 'absolute',
+              top: 3, left: launchFullscreen ? 24 : 3,
+              width: 20, height: 20, borderRadius: '50%',
+              background: '#fff',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
+              transition: 'left 0.2s cubic-bezier(0.25,0.46,0.45,0.94)',
+            }} />
+          </div>
         </div>
+
       </div>
     </div>
   );
