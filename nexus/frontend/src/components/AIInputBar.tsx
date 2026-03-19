@@ -5,6 +5,7 @@ import {
 import { useAI } from '../hooks/useAI';
 import { useOmnibarStore } from '../store/useOmnibarStore';
 import { useAuth } from '../hooks/useAuth';
+import { useTheme } from '../hooks/useTheme';
 import { isExtension, getExtensionId } from '../lib/platform';
 
 const ALLOWED_AI_EMAILS = new Set(['lj.buchmiller@gmail.com']);
@@ -75,16 +76,9 @@ export function AIInputBar() {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
-  // Track OS colour scheme so we can invert the bar's palette
-  const [isDark, setIsDark] = useState(() =>
-    window.matchMedia('(prefers-color-scheme: dark)').matches,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const handler = (e: MediaQueryListEvent) => setIsDark(e.matches);
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
-  }, []);
+  // Track resolved theme (respects manual dark/light/auto selection)
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
 
   const inputRef          = useRef<HTMLInputElement>(null);
   const containerRef      = useRef<HTMLDivElement>(null);

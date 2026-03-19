@@ -179,30 +179,14 @@ export function Sidebar({ isOpen, onToggle, onOpenSettings, onOpenConnections, l
       {/* Inner clipping wrapper for the chips list — min-h-0 prevents flex from
           ignoring the height constraint, which would push UserBlock off-screen */}
       <div className="flex flex-col flex-1 min-h-0" style={{ overflow: 'hidden' }}>
-        {/* Header */}
-        <div className="flex items-center px-3 pt-4 pb-3" style={{ minHeight: '52px', position: 'relative', zIndex: 1 }}>
-          <div
-            style={{
-              overflow: 'hidden',
-              opacity: isOpen ? 1 : 0,
-              maxWidth: isOpen ? '160px' : '0px',
-              whiteSpace: 'nowrap',
-              transition: isOpen
-                ? 'opacity 0.18s ease 0.15s, max-width 0.28s ease'
-                : 'opacity 0.06s ease, max-width 0.28s ease 0.06s',
-            }}
-          >
-            <span
-              className="text-xs font-mono tracking-widest uppercase"
-              style={{
-                color: layoutMode ? 'var(--teal)' : 'var(--text-muted)',
-                letterSpacing: '0.15em',
-              }}
-            >
-              {layoutMode ? 'Layout Mode' : 'Widgets'}
+        {/* Compact layout-mode badge — only visible in layout mode */}
+        {layoutMode && (
+          <div style={{ padding: '10px 12px 4px', flexShrink: 0, overflow: 'hidden', opacity: isOpen ? 1 : 0, transition: 'opacity 0.15s ease' }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, color: 'var(--teal)', letterSpacing: '0.15em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+              Layout Mode
             </span>
           </div>
-        </div>
+        )}
 
         {/* Layout mode instructions OR widget chips */}
         <div style={{ flex: 1, overflow: 'hidden', minHeight: 0, position: 'relative' }}>
@@ -271,7 +255,7 @@ export function Sidebar({ isOpen, onToggle, onOpenSettings, onOpenConnections, l
                 ref={scrollRef}
                 onScroll={handleScroll}
                 className="h-full overflow-y-auto nexus-scroll"
-                style={{ padding: '2px 8px 16px', overflowX: 'hidden' }}
+                style={{ padding: '8px 8px 16px', overflowX: 'hidden' }}
               >
                 {CATEGORY_ORDER.map(cat => {
                   const configs = WIDGET_CONFIGS.filter(c => c.category === cat);

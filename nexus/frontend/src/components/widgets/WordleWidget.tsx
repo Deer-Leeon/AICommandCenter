@@ -3,6 +3,7 @@ import { apiFetch } from '../../lib/api';
 import { useWidgetReady } from '../../hooks/useWidgetReady';
 import { useConnectionRefresh } from '../../hooks/useConnectionRefresh';
 import { nexusSSE } from '../../lib/nexusSSE';
+import { useTheme } from '../../hooks/useTheme';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -157,9 +158,8 @@ const STYLES = `
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function WordleWidget({ onClose: _onClose }: WordleWidgetProps) {
-  const [isDark, setIsDark] = useState(
-    () => !window.matchMedia('(prefers-color-scheme: light)').matches,
-  );
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
 
   // Game state
   const [guesses,   setGuesses]   = useState<GuessEntry[]>([]);
@@ -246,13 +246,6 @@ export function WordleWidget({ onClose: _onClose }: WordleWidgetProps) {
     return () => obs.disconnect();
   }, []);
 
-  // ── Theme ──────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: light)');
-    const h = (e: MediaQueryListEvent) => setIsDark(!e.matches);
-    mq.addEventListener('change', h);
-    return () => mq.removeEventListener('change', h);
-  }, []);
 
   // ── Toast ──────────────────────────────────────────────────────────────────
   const showToast = useCallback((msg: string, persist = false) => {
