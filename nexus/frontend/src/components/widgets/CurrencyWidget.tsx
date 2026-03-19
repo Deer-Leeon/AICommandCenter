@@ -603,14 +603,11 @@ const CHART_PERIODS: { label: string; days: ChartPeriod }[] = [
 
 interface RatePoint { date: string; rate: number; }
 
-// SVG viewBox constants — coordinate space for path calculations
-const CVW = 400;  // viewBox width
-const CVH = 200;  // viewBox height
-const CPL = 0;    // padding left
-const CPT = 18;   // padding top (space for max-rate label)
-const CPB = 24;   // padding bottom (space for date labels)
-const CCW = CVW - CPL;
-const CCH = CVH - CPT - CPB;
+// SVG viewBox constants — all labels live in HTML, not SVG
+// so no padding needed for text; tiny VPAD just prevents glow clipping
+const CVW  = 400;
+const CVH  = 200;
+const VPAD = 5;  // top/bottom buffer so glow doesn't clip
 
 /** Catmull-Rom → cubic bezier smooth path through the given points */
 function smoothCurvePath(pts: ReadonlyArray<{ x: number; y: number }>): string {
@@ -663,8 +660,9 @@ function RateChart({ from, to, compact }: { from: string; to: string; compact?: 
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(false);
   const [retryKey, setRetryKey] = useState(0);
-  const [hover, setHover]       = useState<{ i: number; svgX: number; svgY: number } | null>(null);
-  const svgRef                  = useRef<SVGSVGElement>(null);
+  // hover stores SVG-space coords so we can drive both SVG elements and HTML tooltip
+  const [hover, setHover] = useState<{ i: number; svgX: number; svgY: number } | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -679,20 +677,19 @@ function RateChart({ from, to, compact }: { from: string; to: string; compact?: 
   const pts = useMemo(() => {
     if (data.length < 2) return [];
     const rates = data.map(d => d.rate);
-    const minR = Math.min(...rates);
-    const maxR = Math.max(...rates);
+    const minR  = Math.min(...rates);
+    const maxR  = Math.max(...rates);
     const range = maxR - minR || 1;
     return data.map((d, i) => ({
-      x: CPL + (i / (data.length - 1)) * CCW,
-      y: CPT + (1 - (d.rate - minR) / range) * CCH,
+      x: (i / (data.length - 1)) * CVW,
+      y: VPAD + (1 - (d.rate - minR) / range) * (CVH - VPAD * 2),
     }));
   }, [data]);
 
-  const minRate = data.length ? Math.min(...data.map(d => d.rate)) : 0;
-  const maxRate = data.length ? Math.max(...data.map(d => d.rate)) : 0;
-  const change  = data.length >= 2
-    ? ((data[data.length - 1].rate - data[0].rate) / data[0].rate) * 100
-    : 0;
+  const minRate   = data.length ? Math.min(...data.map(d => d.rate)) : 0;
+  const maxRate   = data.length ? Math.max(...data.map(d => d.rate)) : 0;
+  const change    = data.length >= 2
+    ? ((data[data.length - 1].rate - data[0].rate) / data[0].rate) * 100 : 0;
   const isUp      = change >= 0;
   const lineColor = isUp ? '#22c55e' : '#ef4444';
   const gradId    = `cg-${from}-${to}`;
@@ -703,78 +700,99 @@ function RateChart({ from, to, compact }: { from: string; to: string; compact?: 
     const mx   = ((e.clientX - rect.left) / rect.width) * CVW;
     let closest = 0; let minDist = Infinity;
     pts.forEach((p, i) => {
-      const dist = Math.abs(p.x - mx);
-      if (dist < minDist) { minDist = dist; closest = i; }
+      const d = Math.abs(p.x - mx);
+      if (d < minDist) { minDist = d; closest = i; }
     });
     setHover({ i: closest, svgX: pts[closest].x, svgY: pts[closest].y });
   }
 
   const linePath = pts.length >= 2 ? smoothCurvePath(pts) : '';
+  // Area closes at the very bottom of the SVG so gradient fills to edge
   const areaPath = linePath
-    ? `${linePath} L ${pts[pts.length - 1].x},${CPT + CCH} L ${CPL},${CPT + CCH} Z`
+    ? `${linePath} L ${pts[pts.length - 1].x},${CVH} L 0,${CVH} Z`
     : '';
-  const hovered = hover !== null ? data[hover.i] : null;
+  const hovered  = hover !== null ? data[hover.i] : null;
+  const hChange  = hovered && data.length >= 2
+    ? ((hovered.rate - data[0].rate) / data[0].rate) * 100 : 0;
+  const hColor   = hChange >= 0 ? '#22c55e' : '#ef4444';
+
+  // HTML tooltip position (% within the chart div, derived from SVG coords)
+  const tipLeft = hover ? (hover.svgX / CVW) * 100 : 0;
+  const tipTop  = hover ? (hover.svgY / CVH) * 100 : 0;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
 
-      {/* ── Header: current rate + change badge ─────────────────────────────── */}
+      {/* ── Compact single-row header ──────────────────────────────────────── */}
       <div style={{
-        display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-        padding: compact ? '8px 10px 4px' : '10px 14px 4px', flexShrink: 0,
+        display: 'flex', alignItems: 'center',
+        padding: compact ? '8px 10px 0' : '10px 14px 0',
+        gap: 8, flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          <div style={{ fontSize: 10, color: 'var(--text-faint)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-            {from} / {to}
-          </div>
-          {data.length > 0 && !loading && (
-            <div style={{
-              fontFamily: "'Space Mono', monospace",
-              fontSize: compact ? 20 : 26, fontWeight: 700,
-              color: 'var(--text)', lineHeight: 1.1,
-              letterSpacing: '-0.02em',
-            }}>
-              {formatRate(data[data.length - 1].rate)}
-            </div>
-          )}
+        {/* Hero rate number */}
+        <div style={{
+          fontFamily: "'Space Mono', monospace", fontWeight: 700,
+          fontSize: compact ? 18 : 22, color: 'var(--text)',
+          letterSpacing: '-0.02em', lineHeight: 1,
+        }}>
+          {!loading && data.length > 0
+            ? formatRate(data[data.length - 1].rate)
+            : <span style={{ color: 'var(--border)' }}>—</span>}
         </div>
+        {/* Pair label */}
+        <div style={{ fontSize: 10, color: 'var(--text-faint)', letterSpacing: '0.06em', lineHeight: 1 }}>
+          {from}/{to}
+        </div>
+        <div style={{ flex: 1 }} />
+        {/* Change badge */}
         {data.length >= 2 && !loading && (
           <div style={{
-            padding: '4px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700,
+            padding: '3px 8px', borderRadius: 999, fontSize: 10, fontWeight: 700,
             background: isUp ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
-            color: lineColor, marginTop: 2, flexShrink: 0,
+            color: lineColor, flexShrink: 0,
           }}>
             {isUp ? '▲' : '▼'} {Math.abs(change).toFixed(2)}%
-            <span style={{ fontWeight: 400, fontSize: 10, marginLeft: 4, opacity: 0.7 }}>
-              {period === 365 ? '1Y' : period === 90 ? '3M' : period === 30 ? '1M' : '7D'}
-            </span>
           </div>
         )}
       </div>
 
-      {/* ── Period selector ──────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 3, padding: compact ? '0 10px 6px' : '0 14px 8px', flexShrink: 0 }}>
-        {CHART_PERIODS.map(p => {
-          const active = period === p.days;
-          return (
-            <button
-              key={p.days}
-              onClick={() => setPeriod(p.days)}
-              style={{
-                padding: '3px 10px', borderRadius: 999, fontSize: 10,
-                fontWeight: active ? 700 : 400,
-                background: active ? 'var(--accent-dim)' : 'transparent',
-                border: `1px solid ${active ? 'rgba(124,106,255,0.35)' : 'var(--border)'}`,
-                color: active ? 'var(--accent)' : 'var(--text-faint)',
-                cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit',
-              }}
-              onMouseEnter={e => { if (!active) e.currentTarget.style.borderColor = 'var(--border-hover)'; }}
-              onMouseLeave={e => { if (!active) e.currentTarget.style.borderColor = 'var(--border)'; }}
-            >
-              {p.label}
-            </button>
-          );
-        })}
+      {/* ── Period pills + hi/lo on one compact row ────────────────────────── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: compact ? '5px 10px 5px' : '6px 14px 6px', flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', gap: 2 }}>
+          {CHART_PERIODS.map(p => {
+            const active = period === p.days;
+            return (
+              <button
+                key={p.days}
+                onClick={() => setPeriod(p.days)}
+                style={{
+                  padding: '2px 7px', borderRadius: 999, fontSize: 9.5,
+                  fontWeight: active ? 700 : 400,
+                  background: active ? 'rgba(124,106,255,0.15)' : 'transparent',
+                  border: `1px solid ${active ? 'rgba(124,106,255,0.3)' : 'transparent'}`,
+                  color: active ? 'var(--accent)' : 'var(--text-faint)',
+                  cursor: 'pointer', transition: 'all 0.12s', fontFamily: 'inherit',
+                }}
+              >
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+        {/* Hi / Lo labels in HTML — no SVG distortion */}
+        {data.length >= 2 && !loading && (
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <span style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: "'Space Mono', monospace" }}>
+              H {formatRate(maxRate)}
+            </span>
+            <span style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: "'Space Mono', monospace" }}>
+              L {formatRate(minRate)}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* ── Chart canvas ─────────────────────────────────────────────────────── */}
@@ -782,13 +800,13 @@ function RateChart({ from, to, compact }: { from: string; to: string; compact?: 
 
         {loading && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ width: 22, height: 22, borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'cx-spin 0.8s linear infinite' }} />
+            <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', animation: 'cx-spin 0.8s linear infinite' }} />
           </div>
         )}
 
         {error && !loading && (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" strokeWidth="1.5">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" strokeWidth="1.5">
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
             </svg>
             <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>Chart unavailable</span>
@@ -808,123 +826,112 @@ function RateChart({ from, to, compact }: { from: string; to: string; compact?: 
         )}
 
         {!loading && !error && data.length >= 2 && (
-          <svg
-            ref={svgRef}
-            viewBox={`0 0 ${CVW} ${CVH}`}
-            preserveAspectRatio="none"
-            style={{ width: '100%', height: '100%', display: 'block', cursor: 'crosshair', overflow: 'visible' }}
-            onMouseMove={handleMouseMove}
-            onMouseLeave={() => setHover(null)}
-          >
-            <defs>
-              <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%"   stopColor={lineColor} stopOpacity="0.28" />
-                <stop offset="75%"  stopColor={lineColor} stopOpacity="0.06" />
-                <stop offset="100%" stopColor={lineColor} stopOpacity="0" />
-              </linearGradient>
-              <clipPath id="cc-clip">
-                <rect x={CPL} y={CPT} width={CCW} height={CCH} />
-              </clipPath>
-            </defs>
+          <>
+            {/* Pure SVG — no text inside so preserveAspectRatio="none" doesn't distort labels */}
+            <svg
+              ref={svgRef}
+              viewBox={`0 0 ${CVW} ${CVH}`}
+              preserveAspectRatio="none"
+              style={{ width: '100%', height: '100%', display: 'block', cursor: 'crosshair' }}
+              onMouseMove={handleMouseMove}
+              onMouseLeave={() => setHover(null)}
+            >
+              <defs>
+                <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%"   stopColor={lineColor} stopOpacity="0.32" />
+                  <stop offset="60%"  stopColor={lineColor} stopOpacity="0.08" />
+                  <stop offset="100%" stopColor={lineColor} stopOpacity="0" />
+                </linearGradient>
+                <clipPath id="cc-clip">
+                  <rect x="0" y="0" width={CVW} height={CVH} />
+                </clipPath>
+              </defs>
 
-            {/* Subtle horizontal guides */}
-            {[0, 0.33, 0.67, 1].map(f => (
-              <line
-                key={f}
-                x1={CPL} y1={CPT + f * CCH}
-                x2={CPL + CCW} y2={CPT + f * CCH}
-                stroke="var(--border)" strokeWidth="0.5" opacity="0.6"
-              />
-            ))}
+              {/* Subtle horizontal guides */}
+              {[0.25, 0.5, 0.75].map(f => (
+                <line
+                  key={f}
+                  x1="0" y1={f * CVH} x2={CVW} y2={f * CVH}
+                  stroke="var(--border)" strokeWidth="0.5" opacity="0.45"
+                />
+              ))}
 
-            {/* Area fill */}
-            {areaPath && (
-              <path d={areaPath} fill={`url(#${gradId})`} clipPath="url(#cc-clip)" />
-            )}
+              {/* Gradient area fill */}
+              {areaPath && <path d={areaPath} fill={`url(#${gradId})`} clipPath="url(#cc-clip)" />}
 
-            {/* Price line */}
-            {linePath && (
-              <path
-                d={linePath} fill="none"
-                stroke={lineColor} strokeWidth="2" strokeLinecap="round"
-                clipPath="url(#cc-clip)"
-                style={{ filter: `drop-shadow(0 0 5px ${lineColor}55)` }}
-              />
-            )}
+              {/* Price line with glow */}
+              {linePath && (
+                <path
+                  d={linePath} fill="none"
+                  stroke={lineColor} strokeWidth="2.2" strokeLinecap="round"
+                  clipPath="url(#cc-clip)"
+                  style={{ filter: `drop-shadow(0 0 6px ${lineColor}70)` }}
+                />
+              )}
 
-            {/* Max / min labels (top-left and bottom-left) */}
-            <text x={CPL + 3} y={CPT - 3}
-              fill="var(--text-faint)" fontSize="8.5"
-              fontFamily="'Space Mono', monospace">
-              {formatRate(maxRate)}
-            </text>
-            <text x={CPL + 3} y={CVH - CPB + 11}
-              fill="var(--text-faint)" fontSize="8.5"
-              fontFamily="'Space Mono', monospace">
-              {formatRate(minRate)}
-            </text>
-
-            {/* Date range labels */}
-            <text x={CPL + 3} y={CVH - 4}
-              fill="var(--text-faint)" fontSize="8" fontFamily="system-ui" textAnchor="start">
-              {fmtChartDate(data[0].date)}
-            </text>
-            <text x={CPL + CCW - 3} y={CVH - 4}
-              fill="var(--text-faint)" fontSize="8" fontFamily="system-ui" textAnchor="end">
-              {fmtChartDate(data[data.length - 1].date)}
-            </text>
-
-            {/* Hover: crosshair + dot + tooltip */}
-            {hover && hovered && (() => {
-              const tw = 92; const th = 38;
-              const tx = Math.min(Math.max(hover.svgX - tw / 2, CPL + 2), CPL + CCW - tw - 2);
-              const ty = hover.svgY > CPT + CCH / 2
-                ? hover.svgY - th - 12
-                : hover.svgY + 12;
-              const hChange = data.length >= 2
-                ? ((hovered.rate - data[0].rate) / data[0].rate) * 100
-                : 0;
-              const hColor = hChange >= 0 ? '#22c55e' : '#ef4444';
-              return (
+              {/* Hover crosshair + dot */}
+              {hover && (
                 <>
-                  {/* Vertical crosshair */}
                   <line
-                    x1={hover.svgX} y1={CPT}
-                    x2={hover.svgX} y2={CPT + CCH}
-                    stroke="var(--text-muted)" strokeWidth="0.8" strokeDasharray="3,3" opacity="0.6"
+                    x1={hover.svgX} y1="0" x2={hover.svgX} y2={CVH}
+                    stroke="var(--text-muted)" strokeWidth="0.8"
+                    strokeDasharray="3,3" opacity="0.5"
                   />
-                  {/* Data point dot */}
                   <circle
                     cx={hover.svgX} cy={hover.svgY} r="5"
                     fill={lineColor} stroke="var(--surface)" strokeWidth="2.5"
-                    style={{ filter: `drop-shadow(0 0 6px ${lineColor}80)` }}
+                    style={{ filter: `drop-shadow(0 0 8px ${lineColor})` }}
                   />
-                  {/* Tooltip card */}
-                  <rect
-                    x={tx} y={ty} width={tw} height={th} rx="7" ry="7"
-                    fill="var(--surface2)" stroke="var(--border)" strokeWidth="0.8"
-                    style={{ filter: 'drop-shadow(0 4px 14px rgba(0,0,0,0.55))' }}
-                  />
-                  <text x={tx + tw / 2} y={ty + 13}
-                    fill="var(--text-faint)" fontSize="8.5" fontFamily="system-ui" textAnchor="middle">
-                    {fmtChartDate(hovered.date)}
-                  </text>
-                  <text x={tx + tw / 2} y={ty + 28}
-                    fill={lineColor} fontSize="12" fontFamily="'Space Mono', monospace"
-                    fontWeight="700" textAnchor="middle">
-                    {formatRate(hovered.rate)}
-                  </text>
-                  <text x={tx + tw / 2} y={ty + 36.5}
-                    fill={hColor} fontSize="7" fontFamily="'Space Mono', monospace"
-                    textAnchor="middle" opacity="0.85">
-                    {hChange >= 0 ? '+' : ''}{hChange.toFixed(2)}%
-                  </text>
                 </>
-              );
-            })()}
-          </svg>
+              )}
+            </svg>
+
+            {/* HTML tooltip — renders in CSS pixels, never distorted */}
+            {hover && hovered && (
+              <div style={{
+                position: 'absolute',
+                left: `${tipLeft}%`,
+                top: `${tipTop}%`,
+                // flip sides so tooltip stays inside the widget
+                transform: `translate(${tipLeft > 60 ? 'calc(-100% - 8px)' : '8px'}, ${tipTop > 50 ? 'calc(-100% - 4px)' : '4px'})`,
+                pointerEvents: 'none', zIndex: 10,
+                background: 'var(--surface2)',
+                border: '1px solid var(--border)',
+                borderRadius: 9,
+                padding: '5px 10px',
+                boxShadow: '0 6px 24px rgba(0,0,0,0.6)',
+                display: 'flex', flexDirection: 'column', gap: 2,
+                minWidth: 80,
+              }}>
+                <span style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: 'system-ui', whiteSpace: 'nowrap' }}>
+                  {fmtChartDate(hovered.date)}
+                </span>
+                <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, fontWeight: 700, color: lineColor, whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
+                  {formatRate(hovered.rate)}
+                </span>
+                <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 9, color: hColor, whiteSpace: 'nowrap' }}>
+                  {hChange >= 0 ? '+' : ''}{hChange.toFixed(2)}%
+                </span>
+              </div>
+            )}
+          </>
         )}
       </div>
+
+      {/* ── Date range labels in HTML (not SVG) ──────────────────────────────── */}
+      {data.length >= 2 && !loading && !error && (
+        <div style={{
+          display: 'flex', justifyContent: 'space-between',
+          padding: compact ? '3px 10px 5px' : '3px 14px 6px', flexShrink: 0,
+        }}>
+          <span style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: 'system-ui' }}>
+            {fmtChartDate(data[0].date)}
+          </span>
+          <span style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: 'system-ui' }}>
+            {fmtChartDate(data[data.length - 1].date)}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
