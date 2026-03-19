@@ -496,7 +496,7 @@ function AnimatedAmount({ value, code, fontSize }: { value: number; code: string
 
   return (
     <span style={{
-      fontFamily: "'Space Mono', monospace", fontWeight: 700,
+      fontFamily: 'var(--font-sans)', fontWeight: 700,
       fontSize, color: 'var(--accent)', lineHeight: 1, letterSpacing: '-0.02em',
     }}>
       {formatAmount(displayed, code)}
@@ -563,7 +563,7 @@ function FeeBreakdown({
         <div style={{ height: 1, background: 'var(--border)', margin: '2px 0' }} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>You receive</span>
-          <span style={{ fontFamily: "'Space Mono', monospace", fontWeight: 700, fontSize: compact ? 16 : 18, color: 'var(--accent)' }}>
+          <span style={{ fontFamily: 'var(--font-sans)', fontWeight: 700, fontSize: compact ? 16 : 18, color: 'var(--accent)' }}>
             {toMeta.symbol}{formatAmount(selected.received, result.to)} {result.to}
           </span>
         </div>
@@ -583,7 +583,7 @@ function FeeRow({ label, value, red, small }: { label: string; value: string; re
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
       <span style={{ fontSize: small ? 10 : 11, color: 'var(--text-muted)' }}>{label}</span>
       <span style={{
-        fontFamily: "'Space Mono', monospace", fontSize: small ? 10 : 12,
+        fontFamily: 'var(--font-sans)', fontSize: small ? 10 : 12,
         color: red ? '#ef4444' : 'var(--text)', fontWeight: 500, flexShrink: 0,
       }}>{value}</span>
     </div>
@@ -731,7 +731,7 @@ function RateChart({ from, to, compact }: { from: string; to: string; compact?: 
       }}>
         {/* Hero rate number */}
         <div style={{
-          fontFamily: "'Space Mono', monospace", fontWeight: 700,
+          fontFamily: 'var(--font-sans)', fontWeight: 700,
           fontSize: compact ? 18 : 22, color: 'var(--text)',
           letterSpacing: '-0.02em', lineHeight: 1,
         }}>
@@ -785,10 +785,10 @@ function RateChart({ from, to, compact }: { from: string; to: string; compact?: 
         {/* Hi / Lo labels in HTML — no SVG distortion */}
         {data.length >= 2 && !loading && (
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-            <span style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: "'Space Mono', monospace" }}>
+            <span style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: 'var(--font-sans)' }}>
               H {formatRate(maxRate)}
             </span>
-            <span style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: "'Space Mono', monospace" }}>
+            <span style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: 'var(--font-sans)' }}>
               L {formatRate(minRate)}
             </span>
           </div>
@@ -903,13 +903,13 @@ function RateChart({ from, to, compact }: { from: string; to: string; compact?: 
                 display: 'flex', flexDirection: 'column', gap: 2,
                 minWidth: 80,
               }}>
-                <span style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: 'system-ui', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: 'var(--font-sans)', whiteSpace: 'nowrap' }}>
                   {fmtChartDate(hovered.date)}
                 </span>
-                <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, fontWeight: 700, color: lineColor, whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
+                <span style={{ fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 700, color: lineColor, whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
                   {formatRate(hovered.rate)}
                 </span>
-                <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 9, color: hColor, whiteSpace: 'nowrap' }}>
+                <span style={{ fontFamily: 'var(--font-sans)', fontSize: 9, color: hColor, whiteSpace: 'nowrap' }}>
                   {hChange >= 0 ? '+' : ''}{hChange.toFixed(2)}%
                 </span>
               </div>
@@ -924,10 +924,10 @@ function RateChart({ from, to, compact }: { from: string; to: string; compact?: 
           display: 'flex', justifyContent: 'space-between',
           padding: compact ? '3px 10px 5px' : '3px 14px 6px', flexShrink: 0,
         }}>
-          <span style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: 'system-ui' }}>
+          <span style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: 'var(--font-sans)' }}>
             {fmtChartDate(data[0].date)}
           </span>
-          <span style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: 'system-ui' }}>
+          <span style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: 'var(--font-sans)' }}>
             {fmtChartDate(data[data.length - 1].date)}
           </span>
         </div>
@@ -1095,19 +1095,19 @@ export function CurrencyWidget({ onClose: _onClose }: { onClose: () => void }) {
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '8px 10px', gap: 3, cursor: 'pointer' }}>
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 5 }}>
               <span style={{ fontSize: 16 }}>{fromMeta.flag}</span>
-              <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
+              <span style={{ fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
                 {formatAmount(result.amount, fromCode)}
               </span>
               <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{fromCode}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <span style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: "'Space Mono', monospace" }}>
+              <span style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: 'var(--font-sans)' }}>
                 1 {fromCode} = {formatRate(result.rate)} {toCode}
               </span>
             </div>
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 5 }}>
               <span style={{ fontSize: 16 }}>{toMeta.flag}</span>
-              <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}>
+              <span style={{ fontFamily: 'var(--font-sans)', fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}>
                 {formatAmount(result.converted, toCode)}
               </span>
               <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{toCode}</span>
@@ -1223,7 +1223,7 @@ export function CurrencyWidget({ onClose: _onClose }: { onClose: () => void }) {
                 borderRadius: 10, padding: compact ? '8px 10px' : '10px 14px',
                 transition: 'border-color 0.15s',
               }}>
-                <span style={{ fontFamily: "'Space Mono', monospace", fontSize: compact ? 16 : 20, fontWeight: 700, color: 'var(--text-muted)', flexShrink: 0 }}>
+                <span style={{ fontFamily: 'var(--font-sans)', fontSize: compact ? 16 : 20, fontWeight: 700, color: 'var(--text-muted)', flexShrink: 0 }}>
                   {fromMeta.symbol}
                 </span>
                 <input
@@ -1233,7 +1233,7 @@ export function CurrencyWidget({ onClose: _onClose }: { onClose: () => void }) {
                   onBlur={e => (e.currentTarget.parentElement!.style.borderColor = 'var(--border)')}
                   style={{
                     flex: 1, background: 'none', border: 'none', outline: 'none',
-                    fontFamily: "'Space Mono', monospace", fontSize: compact ? 16 : 20,
+                    fontFamily: 'var(--font-sans)', fontSize: compact ? 16 : 20,
                     fontWeight: 700, color: 'var(--text)', minWidth: 0,
                   }}
                   placeholder="0"
@@ -1257,17 +1257,17 @@ export function CurrencyWidget({ onClose: _onClose }: { onClose: () => void }) {
                       code={toCode}
                       fontSize={compact ? 28 : mode === 'expanded' ? 48 : 38}
                     />
-                    <span style={{ fontFamily: "'Space Mono', monospace", fontSize: compact ? 12 : 15, color: 'var(--text-muted)', fontWeight: 600 }}>
+                    <span style={{ fontFamily: 'var(--font-sans)', fontSize: compact ? 12 : 15, color: 'var(--text-muted)', fontWeight: 600 }}>
                       {toCode}
                     </span>
                   </div>
 
                   {!compact && (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-                      <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: 'var(--text-muted)' }}>
+                      <span style={{ fontFamily: 'var(--font-sans)', fontSize: 11, color: 'var(--text-muted)' }}>
                         1 {fromCode} = {formatRate(result.rate)} {toCode}
                       </span>
-                      <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: 'var(--text-faint)' }}>
+                      <span style={{ fontFamily: 'var(--font-sans)', fontSize: 11, color: 'var(--text-faint)' }}>
                         1 {toCode} = {formatRate(result.inverseRate)} {fromCode}
                       </span>
                       <span style={{ fontSize: 10, color: result.stale ? '#f59e0b' : 'var(--text-faint)', marginTop: 2 }}>
@@ -1277,7 +1277,7 @@ export function CurrencyWidget({ onClose: _onClose }: { onClose: () => void }) {
                   )}
 
                   {compact && (
-                    <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: 'var(--text-faint)' }}>
+                    <span style={{ fontFamily: 'var(--font-sans)', fontSize: 10, color: 'var(--text-faint)' }}>
                       1 {fromCode} = {formatRate(result.rate)} {toCode}
                     </span>
                   )}
@@ -1453,11 +1453,11 @@ function FloatingPanel({
 
             {/* Amount */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: '8px 10px' }}>
-              <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 16, fontWeight: 700, color: 'var(--text-muted)', flexShrink: 0 }}>{fromMeta.symbol}</span>
+              <span style={{ fontFamily: 'var(--font-sans)', fontSize: 16, fontWeight: 700, color: 'var(--text-muted)', flexShrink: 0 }}>{fromMeta.symbol}</span>
               <input
                 value={displayAmount}
                 onChange={e => onAmountChange(e.target.value)}
-                style={{ flex: 1, background: 'none', border: 'none', outline: 'none', fontFamily: "'Space Mono', monospace", fontSize: 16, fontWeight: 700, color: 'var(--text)', minWidth: 0 }}
+                style={{ flex: 1, background: 'none', border: 'none', outline: 'none', fontFamily: 'var(--font-sans)', fontSize: 16, fontWeight: 700, color: 'var(--text)', minWidth: 0 }}
                 placeholder="0" inputMode="decimal" autoFocus
               />
               <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>{fromCode}</span>
@@ -1469,9 +1469,9 @@ function FloatingPanel({
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                   <span style={{ fontSize: 22 }}>{toMeta.flag}</span>
                   <AnimatedAmount value={result.converted} code={toCode} fontSize={32} />
-                  <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>{toCode}</span>
+                  <span style={{ fontFamily: 'var(--font-sans)', fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>{toCode}</span>
                 </div>
-                <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, color: 'var(--text-faint)' }}>
+                <span style={{ fontFamily: 'var(--font-sans)', fontSize: 10, color: 'var(--text-faint)' }}>
                   1 {fromCode} = {formatRate(result.rate)} {toCode}
                 </span>
               </div>

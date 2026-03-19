@@ -385,6 +385,7 @@ function PlacedWidget({
         (e.currentTarget as HTMLElement).style.boxShadow = 'var(--shadow-widget)';
       }}
       data-cell={cellKey}
+      data-widget-type={widgetType}
     >
       {/* Title bar — grab handle */}
       <div

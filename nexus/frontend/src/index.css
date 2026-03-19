@@ -483,6 +483,17 @@ html[data-theme="light"] .widget-title {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
+   CURRENCY WIDGET — DM Sans font override (title + body)
+───────────────────────────────────────────────────────────────────────────── */
+[data-widget-type="currency"] .widget-title {
+  font-family: var(--font-sans) !important;
+  letter-spacing: 0.08em;
+}
+[data-widget-type="currency"] > *:not(:first-child) {
+  font-family: var(--font-sans);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
    DATE / TIME INPUTS  — color-scheme switches with OS theme
 ───────────────────────────────────────────────────────────────────────────── */
 
