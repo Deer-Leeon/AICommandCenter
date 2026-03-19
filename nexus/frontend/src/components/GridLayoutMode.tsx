@@ -901,10 +901,13 @@ export function GridLayoutMode({ onClose: _onClose }: { onClose: () => void }) {
           }
 
           // ── Snap threshold ──────────────────────────────────────────────────
-          // Cursor must cross 50% of a column width past a boundary before snapping.
-          // This creates a dead-zone that prevents back-and-forth oscillation.
-          // We use the column pitch (cellW + GAP) as our unit throughout.
-          const SNAP_THRESH = 0.5;
+          // Using > 0.5 is critical: with exactly 0.5 the snap-forward and
+          // snap-backward thresholds land on the SAME point (N + 0.5 == N+1 - 0.5),
+          // giving zero dead-zone and causing 1-frame oscillation when the cursor
+          // hovers near a column boundary.  0.55 creates a ~10% dead-zone band
+          // around each boundary, absorbing natural cursor wobble while still
+          // feeling responsive.
+          const SNAP_THRESH = 0.55;
 
           // ── Resize handles (left / right) ───────────────────────────────────
           // Uses pointer capture so events are guaranteed even when the cursor
