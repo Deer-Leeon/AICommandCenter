@@ -1,10 +1,17 @@
 import { useState, useEffect } from 'react';
 import { supabase, getAuthRedirectUrl } from '../lib/supabase';
 import { isCapacitor } from '../lib/isCapacitor';
+import { isElectron } from '../lib/isElectron';
 import { openInAppBrowser } from '../lib/capacitorBridge';
 import type { User, Session } from '@supabase/supabase-js';
 
 function readCachedUser(): User | null {
+  // On Capacitor (iOS/Android) the session lives in native Preferences, which
+  // is async-only. localStorage will be empty or stale, so we skip the sync
+  // read and let getSession() restore the session from Preferences.
+  if (typeof window !== 'undefined' && !!(window as Record<string, unknown>).Capacitor) {
+    return null;
+  }
   try {
     const raw = window.localStorage.getItem('nexus-auth');
     if (!raw) return null;
@@ -70,6 +77,8 @@ export function useAuth() {
       return;
     }
 
+    // iOS / Android: open Google in Safari View Controller so biometrics,
+    // saved passwords and 2FA work correctly in a real browser context.
     if (isCapacitor()) {
       const { data } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -83,6 +92,29 @@ export function useAuth() {
       return;
     }
 
+    // Electron: RFC 8252 loopback server — opens Google in the user's default
+    // system browser rather than the embedded WebView. Google increasingly
+    // blocks OAuth in embedded WebViews; the system browser always works.
+    // The loopback server in main.ts catches the redirect, extracts the PKCE
+    // code, and sends it to the renderer via the 'deep-link' IPC event.
+    // main.tsx registers onDeepLink and calls exchangeCodeForSession(code).
+    if (isElectron() && window.electronAPI) {
+      const port = await window.electronAPI.startOAuthServer();
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `http://localhost:${port}/auth/callback`,
+          skipBrowserRedirect: true,
+          queryParams: { prompt: 'select_account' },
+        },
+      });
+      if (!error && data.url) {
+        await window.electronAPI.openExternalUrl(data.url);
+      }
+      return;
+    }
+
+    // Web: standard PKCE — navigate the current tab to Google and back.
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {

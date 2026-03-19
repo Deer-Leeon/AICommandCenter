@@ -100,12 +100,28 @@ function Root() {
     setServicesConnected(true);
   };
 
-  // ── Electron: handle OAuth params forwarded by main process ─────────────
-  // When the user completes a Google/Spotify OAuth flow in the Electron app,
-  // main.ts intercepts the production redirect and forwards the query string
-  // via IPC so we can process it without navigating away.
+  // ── Electron: IPC event handlers (registered once on mount) ─────────────
   useEffect(() => {
     if (!IS_ELECTRON || !window.electronAPI) return;
+
+    // RFC 8252 loopback OAuth: the local HTTP server in main.ts catches the
+    // Google redirect (http://localhost:PORT/auth/callback?code=…), sends it
+    // here as nexus://auth/callback?code=… via the 'deep-link' IPC channel.
+    // We exchange the PKCE code for a session so the user is signed in.
+    window.electronAPI.onDeepLink(async (url: string) => {
+      try {
+        const parsed = new URL(url);
+        const code = parsed.searchParams.get('code');
+        if (code) {
+          await supabase.auth.exchangeCodeForSession(code);
+        }
+      } catch {
+        // Malformed deep-link URL — ignore
+      }
+    });
+
+    // Service connection callbacks forwarded by the dev-mode will-navigate
+    // interceptor (Google Calendar, Gmail, Slack, etc.)
     window.electronAPI.onOAuthParams((qs: string) => {
       const params = new URLSearchParams(qs);
       const anySuccess =
@@ -116,9 +132,7 @@ function Root() {
         params.get('google_gmail_connected') === 'true'    ||
         params.get('google_connected') === 'true'          ||
         params.get('slack_connected') === 'true';
-      if (anySuccess) {
-        handleServicesComplete();
-      }
+      if (anySuccess) handleServicesComplete();
     });
   // Register once on mount — dependencies are stable
   // eslint-disable-next-line react-hooks/exhaustive-deps
