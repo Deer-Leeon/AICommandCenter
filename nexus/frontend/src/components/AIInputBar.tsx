@@ -85,6 +85,16 @@ export function AIInputBar() {
   const userInteractedRef = useRef(false);
   const bufferFlushedRef  = useRef(false);
 
+  // Track container width to adapt layout at small colSpan sizes
+  const [containerWidth, setContainerWidth] = useState(0);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setContainerWidth(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const { sendMessage, isLoading } = useAI();
 
   // Pull from shared omnibar store
@@ -365,6 +375,12 @@ export function AIInputBar() {
   const mutedColor = isDark ? 'rgba(13,13,24,0.45)' : 'rgba(240,240,248,0.5)';
   const iconColor  = isDark ? 'rgba(13,13,24,0.4)'  : 'rgba(240,240,248,0.4)';
 
+  // Responsive breakpoints based on measured container width
+  const isNarrow    = containerWidth > 0 && containerWidth < 280;  // hide AI Mode label
+  const isTiny      = containerWidth > 0 && containerWidth < 180;  // hide AI Mode button entirely
+  const hPad        = isTiny ? 10 : isNarrow ? 12 : 18;
+  const itemGap     = isTiny ? 6  : isNarrow ? 8  : 12;
+
   const pillStyle: CSSProperties = {
     display: 'flex', alignItems: 'center', height: isDark ? 47 : 54,
     borderRadius: mode === 'google' ? 30 : 12,
@@ -377,7 +393,8 @@ export function AIInputBar() {
     boxShadow: focused
       ? `0 4px 24px rgba(0,0,0,0.3), 0 0 0 3px rgba(${borderRgb},0.09)`
       : `0 2px 12px rgba(0,0,0,0.22)`,
-    paddingLeft: 18, paddingRight: 18, gap: 12,
+    paddingLeft: hPad, paddingRight: hPad, gap: itemGap,
+    overflow: 'hidden',
   };
 
   return (
@@ -415,13 +432,13 @@ export function AIInputBar() {
             className="nexus-omnibar-input"
           />
 
-          {/* AI Mode toggle pill — only visible to allowed users */}
-          {hasAIAccess && <button
+          {/* AI Mode toggle pill — only visible to allowed users; hides at narrow widths */}
+          {hasAIAccess && !isTiny && <button
             onClick={() => switchMode()}
             title={mode === 'google' ? 'Switch to NEXUS AI (Tab)' : 'Switch to Google Search (Tab)'}
             style={{
               flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5,
-              padding: '5px 12px', borderRadius: 9999, cursor: 'pointer',
+              padding: isNarrow ? '5px 8px' : '5px 12px', borderRadius: 9999, cursor: 'pointer',
               border: mode === 'ai'
                 ? '1px solid rgba(124,106,255,0.5)'
                 : `1px solid ${isDark ? 'rgba(13,13,24,0.18)' : 'rgba(240,240,248,0.18)'}`,
@@ -450,7 +467,8 @@ export function AIInputBar() {
                 <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
               </svg>
             </span>
-            AI Mode
+            {/* Label hidden when bar is too narrow */}
+            {!isNarrow && 'AI Mode'}
           </button>}
 
           {/* Loading spinner */}

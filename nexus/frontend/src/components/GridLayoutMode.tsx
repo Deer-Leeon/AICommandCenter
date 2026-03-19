@@ -1037,13 +1037,16 @@ export function GridLayoutMode({ onClose: _onClose }: { onClose: () => void }) {
               title="Drag to reposition · use edge handles to resize"
               style={{
                 position: 'absolute', left, top, width, height: BAR_H,
-                background: 'rgba(var(--accent-rgb),0.07)',
-                border: '1.5px dashed rgba(var(--accent-rgb),0.45)',
+                /* Opaque bg so the live AIInputBar underneath doesn't bleed through */
+                background: 'var(--bg)',
+                border: '1.5px dashed rgba(var(--accent-rgb),0.55)',
                 borderRadius: 9999,
+                boxShadow: 'inset 0 0 0 100px rgba(var(--accent-rgb),0.05)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700,
                 color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase',
                 zIndex: 60, userSelect: 'none', cursor: 'grab',
+                overflow: 'hidden',
               }}>
               ⌕ Search Bar
 
