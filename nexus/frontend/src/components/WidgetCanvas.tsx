@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, lazy, Suspense, useRef, useMemo, Component } from 'react';
+import { useEffect, useLayoutEffect, useState, useCallback, lazy, Suspense, useRef, useMemo, Component } from 'react';
 import type { ReactNode } from 'react';
 import { useStore } from '../store/useStore';
 import { useRevealStore } from '../store/useRevealStore';
@@ -199,8 +199,6 @@ function computeSearchBarRect(
 // All search-bar layout editing (resize + reposition) lives exclusively in
 // GridLayoutMode so it can only be changed when the user enters layout edit mode.
 function SearchBarSlot({ rect }: { rect: WidgetRect | null }) {
-  const serverLayoutSynced = useStore((s) => s.serverLayoutSynced);
-
   if (!rect) return null;
 
   return (
@@ -210,11 +208,6 @@ function SearchBarSlot({ rect }: { rect: WidgetRect | null }) {
       display: 'flex', flexDirection: 'column',
       alignItems: 'stretch', justifyContent: 'center',
       pointerEvents: 'auto',
-      // Stay invisible until the server layout has been applied so the bar
-      // never flashes at the default/cached position before jumping to the
-      // user's saved position.
-      opacity: serverLayoutSynced ? 1 : 0,
-      transition: 'opacity 0.15s ease',
     }}>
       <AIResponseCard />
       <AIInputBar />
@@ -502,7 +495,11 @@ export function WidgetCanvas({ gridEl }: WidgetCanvasProps) {
     setSearchBarRect(computeSearchBarRect(gridEl, searchBarConfig));
   }, [gridEl, gridSpans, searchBarConfig]);
 
-  useEffect(() => { recomputeRects(); }, [recomputeRects]);
+  // useLayoutEffect fires synchronously before the browser paints — this means
+  // the search bar rect is computed and applied in the same frame that gridEl
+  // first becomes available, eliminating the one-frame delay where the bar
+  // was invisible (searchBarRect = null) before useEffect would have fired.
+  useLayoutEffect(() => { recomputeRects(); }, [recomputeRects]);
 
   useEffect(() => {
     if (!gridEl) return;
