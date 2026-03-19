@@ -304,7 +304,10 @@ export default function App() {
             <RevealOverlay />
           </div>
 
-          <StatusBar onLayoutClick={showLayoutEditor ? undefined : () => setShowLayoutEditor(true)} />
+          <StatusBar
+            onLayoutClick={() => setShowLayoutEditor(o => !o)}
+            isLayoutMode={showLayoutEditor}
+          />
         </div>
       </div>
 

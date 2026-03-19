@@ -38,9 +38,10 @@ function StatusDot({ state }: { state: ServiceConnectionState }) {
 
 interface StatusBarProps {
   onLayoutClick?: () => void;
+  isLayoutMode?: boolean;
 }
 
-export function StatusBar({ onLayoutClick }: StatusBarProps) {
+export function StatusBar({ onLayoutClick, isLayoutMode = false }: StatusBarProps) {
   const { serviceStates } = useStore();
   const [clock, setClock] = useState('');
 
@@ -85,32 +86,35 @@ export function StatusBar({ onLayoutClick }: StatusBarProps) {
         {onLayoutClick && (
           <button
             onClick={onLayoutClick}
-            title="Edit grid layout"
+            title={isLayoutMode ? 'Save layout' : 'Edit grid layout'}
             className="font-mono"
             style={{
               fontSize: '10px',
-              padding: '1px 6px',
+              padding: '1px 8px',
               borderRadius: '4px',
               lineHeight: '16px',
               letterSpacing: '0.04em',
-              background: 'transparent',
-              border: '1px solid var(--border)',
-              color: 'var(--text-muted)',
+              background: isLayoutMode ? 'rgba(61,232,176,0.1)' : 'transparent',
+              border: isLayoutMode ? '1px solid rgba(61,232,176,0.55)' : '1px solid var(--border)',
+              color: isLayoutMode ? 'var(--teal)' : 'var(--text-muted)',
               cursor: 'pointer',
-              transition: 'border-color 0.15s, color 0.15s',
+              transition: 'border-color 0.15s, color 0.15s, background 0.15s',
+              fontWeight: isLayoutMode ? 700 : 400,
             }}
             onMouseEnter={e => {
               const el = e.currentTarget as HTMLElement;
-              el.style.borderColor = 'rgba(61,232,176,0.45)';
+              el.style.borderColor = 'rgba(61,232,176,0.7)';
               el.style.color = 'var(--teal)';
+              el.style.background = 'rgba(61,232,176,0.15)';
             }}
             onMouseLeave={e => {
               const el = e.currentTarget as HTMLElement;
-              el.style.borderColor = 'var(--border)';
-              el.style.color = 'var(--text-muted)';
+              el.style.borderColor = isLayoutMode ? 'rgba(61,232,176,0.55)' : 'var(--border)';
+              el.style.color = isLayoutMode ? 'var(--teal)' : 'var(--text-muted)';
+              el.style.background = isLayoutMode ? 'rgba(61,232,176,0.1)' : 'transparent';
             }}
           >
-            ⊞ Layout
+            {isLayoutMode ? '✓ Save' : '⊞ Layout'}
           </button>
         )}
         <span

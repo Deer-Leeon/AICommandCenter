@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useStore } from '../store/useStore';
 import { ROWS, COLS, getCoveredCells } from './Grid';
-import type { GridSpan, WidgetType } from '../types';
+import type { GridSpan, WidgetType, SearchBarConfig } from '../types';
+import { DEFAULT_SEARCH_BAR_CONFIG } from '../types';
 
 // ── Constants (must match Grid.tsx / WidgetCanvas.tsx) ────────────────────────
 const PAD = 16;
@@ -9,6 +10,8 @@ const GAP = 10;
 const HIT = 16;
 const COMMIT = 0.25;
 const DRAG_THRESHOLD = 10; // px movement to initiate zone drag (from anywhere in zone)
+const BAR_H  = 54;
+const BAR_MG = 8;
 
 /** Returns which edge can be dragged based on where the pointer is within the zone.
  *  Vertical line at 20%–80% height splits left/right; diagonals from its endpoints to corners create top/bottom triangles. */
@@ -32,21 +35,42 @@ function getDragDirectionFromPoint(zone: ZoneInfo, clientX: number, clientY: num
 const SNAP_EASING = 'cubic-bezier(0.34, 1.28, 0.64, 1)';
 const SNAP_MS = 350;
 
-// Must stay in sync with WidgetCanvas.tsx
-const NOTCH_COLS = new Set([1, 2, 3]);
+// Static fallback (used only when no config is provided)
 const NOTCH = 30;
 
-function spansNotchCol(col: number, colSpan: number): boolean {
-  for (let c = col; c < col + colSpan; c++) if (NOTCH_COLS.has(c)) return true;
+function spansNotchCol(col: number, colSpan: number, notchCols: Set<number>): boolean {
+  for (let c = col; c < col + colSpan; c++) if (notchCols.has(c)) return true;
   return false;
 }
 
-function applyNotch(row: number, col: number, colSpan: number, rowSpan: number, y: number, h: number) {
-  if (spansNotchCol(col, colSpan) && rowSpan === 1) {
-    if (row === 0) return { y, h: h - NOTCH };
-    return { y: y + NOTCH, h: h - NOTCH };
+function applyNotch(
+  row: number, col: number, colSpan: number, rowSpan: number,
+  y: number, h: number,
+  notchCols: Set<number>, notch: number,
+) {
+  if (spansNotchCol(col, colSpan, notchCols) && rowSpan === 1) {
+    if (row === 0) return { y, h: h - notch };
+    return { y: y + notch, h: h - notch };
   }
   return { y, h };
+}
+
+function cfgNotchCols(cfg: SearchBarConfig): Set<number> {
+  return cfg.position === 'middle'
+    ? new Set(Array.from({ length: cfg.colSpan }, (_, i) => cfg.colStart + i))
+    : new Set<number>();
+}
+
+function cfgNotch(cfg: SearchBarConfig): number {
+  return cfg.position === 'middle' ? NOTCH : 0;
+}
+
+function cfgTopPad(cfg: SearchBarConfig): number {
+  return PAD + (cfg.position === 'top' ? BAR_H + BAR_MG : 0);
+}
+
+function cfgBottomPad(cfg: SearchBarConfig): number {
+  return PAD + (cfg.position === 'bottom' ? BAR_H + BAR_MG : 0);
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -83,21 +107,28 @@ interface DragState {
 }
 
 // ── Geometry ──────────────────────────────────────────────────────────────────
-function cellMetrics(cw: number, ch: number) {
+function cellMetrics(cw: number, ch: number, cfg: SearchBarConfig) {
+  const topPad    = cfgTopPad(cfg);
+  const bottomPad = cfgBottomPad(cfg);
   return {
-    cellW: (cw - 2 * PAD - GAP * (COLS - 1)) / COLS,
-    cellH: (ch - 2 * PAD - GAP * (ROWS - 1)) / ROWS,
+    cellW:    (cw - 2 * PAD - GAP * (COLS - 1)) / COLS,
+    cellH:    (ch - topPad - bottomPad - GAP * (ROWS - 1)) / ROWS,
+    topPad,
+    bottomPad,
   };
 }
 function cellX(col: number, cellW: number) { return PAD + col * (cellW + GAP); }
-function cellY(row: number, cellH: number) { return PAD + row * (cellH + GAP); }
+function cellY(row: number, cellH: number, topPad: number) { return topPad + row * (cellH + GAP); }
 
 function computeZones(
   cw: number, ch: number,
   spans: Record<string, GridSpan>,
-  grid: Record<string, WidgetType | null>
+  grid: Record<string, WidgetType | null>,
+  cfg: SearchBarConfig,
 ): ZoneInfo[] {
-  const { cellW, cellH } = cellMetrics(cw, ch);
+  const { cellW, cellH, topPad } = cellMetrics(cw, ch, cfg);
+  const notchCols = cfgNotchCols(cfg);
+  const notch     = cfgNotch(cfg);
   const covered = getCoveredCells(spans);
   const out: ZoneInfo[] = [];
   for (let r = 0; r < ROWS; r++) {
@@ -105,9 +136,9 @@ function computeZones(
       const key = `${r},${c}`;
       if (covered.has(key)) continue;
       const sp = spans[key] ?? { rowSpan: 1, colSpan: 1 };
-      const rawY = cellY(r, cellH);
+      const rawY = cellY(r, cellH, topPad);
       const rawH = sp.rowSpan * cellH + (sp.rowSpan - 1) * GAP;
-      const { y, h } = applyNotch(r, c, sp.colSpan, sp.rowSpan, rawY, rawH);
+      const { y, h } = applyNotch(r, c, sp.colSpan, sp.rowSpan, rawY, rawH, notchCols, notch);
       out.push({
         key, row: r, col: c,
         rowSpan: sp.rowSpan, colSpan: sp.colSpan,
@@ -121,10 +152,14 @@ function computeZones(
   return out;
 }
 
-function zoneRect(r: number, c: number, rs: number, cs: number, cellW: number, cellH: number) {
-  const rawY = cellY(r, cellH);
+function zoneRect(
+  r: number, c: number, rs: number, cs: number,
+  cellW: number, cellH: number,
+  topPad: number, notchCols: Set<number>, notch: number,
+) {
+  const rawY = cellY(r, cellH, topPad);
   const rawH = rs * cellH + (rs - 1) * GAP;
-  const { y, h } = applyNotch(r, c, cs, rs, rawY, rawH);
+  const { y, h } = applyNotch(r, c, cs, rs, rawY, rawH, notchCols, notch);
   return { x: cellX(c, cellW), y, w: cs * cellW + (cs - 1) * GAP, h };
 }
 
@@ -152,10 +187,11 @@ function getMaxMerge(
   dir: Dir,
   spans: Record<string, GridSpan>,
   grid: Record<string, WidgetType | null>,
+  notchCols: Set<number>,
 ): { results: MergeResult[]; blocked: boolean } {
   // Block vertical expansion that would bridge the search-bar notch gap.
-  // Notch columns (1-3, 0-indexed) must never span from row 0 to row 1.
-  if (spansNotchCol(zone.col, zone.colSpan)) {
+  // Notch columns must never span from row 0 to row 1.
+  if (spansNotchCol(zone.col, zone.colSpan, notchCols)) {
     if (dir === 'bottom' && zone.row === 0) return { results: [], blocked: true };
     if (dir === 'top'    && zone.row >= 1)  return { results: [], blocked: true };
   }
@@ -236,7 +272,8 @@ function getContractResults(zone: ZoneInfo, dir: Dir): MergeResult[] {
 }
 
 export function GridLayoutMode({ onClose }: { onClose: () => void }) {
-  const { gridSpans, grid, splitZone, resizeZone } = useStore();
+  const { gridSpans, grid, splitZone, resizeZone, searchBarConfig } = useStore();
+  const cfg = searchBarConfig ?? DEFAULT_SEARCH_BAR_CONFIG;
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
   const [hoveredZone, setHoveredZone] = useState<string | null>(null);
@@ -266,8 +303,10 @@ export function GridLayoutMode({ onClose }: { onClose: () => void }) {
   }, []);
 
   const { w: cw, h: ch } = containerSize;
-  const zones = cw > 0 ? computeZones(cw, ch, gridSpans, grid) : [];
-  const { cellW, cellH } = cw > 0 ? cellMetrics(cw, ch) : { cellW: 0, cellH: 0 };
+  const zones = cw > 0 ? computeZones(cw, ch, gridSpans, grid, cfg) : [];
+  const { cellW, cellH, topPad } = cw > 0 ? cellMetrics(cw, ch, cfg) : { cellW: 0, cellH: 0, topPad: PAD };
+  const notchCols = cfgNotchCols(cfg);
+  const notch     = cfgNotch(cfg);
 
   // ── Double-click to split ──────────────────────────────────────────────────
   const handleZoneDblClick = useCallback((zone: ZoneInfo) => {
@@ -308,7 +347,7 @@ export function GridLayoutMode({ onClose }: { onClose: () => void }) {
 
   // Build DragState for a zone + direction (used by both handle and zone-level drag)
   const buildDragState = useCallback((zone: ZoneInfo, dir: Dir, startPtr: number): DragState => {
-    const { results, blocked } = getMaxMerge(zone, dir, gridSpans, grid);
+    const { results, blocked } = getMaxMerge(zone, dir, gridSpans, grid, notchCols);
     const contractResults = getContractResults(zone, dir);
     const isH = dir === 'left' || dir === 'right';
     const cs = isH ? cellW : cellH;
@@ -328,7 +367,7 @@ export function GridLayoutMode({ onClose }: { onClose: () => void }) {
       maxContractOffset: maxContractN > 0 ? maxContractN * (cs + GAP) : 0,
       startPtr,
     };
-  }, [gridSpans, grid, cellW, cellH]);
+  }, [gridSpans, grid, cellW, cellH, notchCols]);
 
   // ── Zone-level pointer down: grab anywhere in zone, drag initiates on movement ─
   const handleZonePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>, zone: ZoneInfo) => {
@@ -461,7 +500,7 @@ export function GridLayoutMode({ onClose }: { onClose: () => void }) {
     // Occupied zones can expand into adjacent free cells; merged zones can shrink.
     const dirs: Dir[] = ['top', 'right', 'bottom', 'left'];
     return dirs.map(dir => {
-      const { results, blocked } = getMaxMerge(zone, dir, gridSpans, grid);
+      const { results, blocked } = getMaxMerge(zone, dir, gridSpans, grid, notchCols);
       const contractResults = getContractResults(zone, dir);
       const maxN = results.length;
       const maxContractN = contractResults.length;
@@ -590,12 +629,12 @@ export function GridLayoutMode({ onClose }: { onClose: () => void }) {
     if (dragOffset >= dragState.threshold && !dragState.blocked && dragState.maxN > 0) {
       const step = Math.max(0, Math.min(Math.floor((dragOffset - dragState.threshold) / (cs + GAP)), dragState.maxN - 1));
       const r = dragState.mergeResults[step];
-      return r ? { rect: zoneRect(r.rowStart, r.colStart, r.rowSpan, r.colSpan, cellW, cellH), isContract: false } : null;
+      return r ? { rect: zoneRect(r.rowStart, r.colStart, r.rowSpan, r.colSpan, cellW, cellH, topPad, notchCols, notch), isContract: false } : null;
     }
     if (dragOffset <= -dragState.threshold && dragState.maxContractN > 0) {
       const step = Math.max(0, Math.min(Math.floor((-dragOffset - dragState.threshold) / (cs + GAP)), dragState.maxContractN - 1));
       const r = dragState.contractResults[step];
-      return r ? { rect: zoneRect(r.rowStart, r.colStart, r.rowSpan, r.colSpan, cellW, cellH), isContract: true } : null;
+      return r ? { rect: zoneRect(r.rowStart, r.colStart, r.rowSpan, r.colSpan, cellW, cellH, topPad, notchCols, notch), isContract: true } : null;
     }
     return null;
   })();
@@ -675,7 +714,7 @@ export function GridLayoutMode({ onClose }: { onClose: () => void }) {
           // fillColor is same hue, less intense for region background
           const dirs: Dir[] = ['top', 'right', 'bottom', 'left'];
           const edgeData = dirs.map(dir => {
-            const { results, blocked } = getMaxMerge(zone, dir, gridSpans, grid);
+            const { results, blocked } = getMaxMerge(zone, dir, gridSpans, grid, notchCols);
             const contractResults = getContractResults(zone, dir);
             const canExpand = results.length > 0;
             const canContract = contractResults.length > 0;
@@ -819,48 +858,34 @@ export function GridLayoutMode({ onClose }: { onClose: () => void }) {
           }} />
         )}
 
-        {/* Save Layout button — sits in the search-bar notch slot, covering the search bar */}
+        {/* Search bar indicator — shows its current position in the layout */}
         {cw > 0 && (() => {
-          const left     = PAD + 1 * (cellW + GAP);
-          const width    = 3 * cellW + 2 * GAP;
-          const coverTop = PAD + cellH - NOTCH;        // top of full notch gap
-          const coverH   = 2 * NOTCH + GAP;            // full notch gap height (70px)
-          const btnTop   = PAD + cellH + GAP / 2 - 23; // center 46px bar in notch gap
+          const left  = PAD + cfg.colStart * (cellW + GAP);
+          const width = cfg.colSpan * cellW + (cfg.colSpan - 1) * GAP;
+
+          let top: number;
+          if (cfg.position === 'top') {
+            top = PAD;
+          } else if (cfg.position === 'bottom') {
+            top = ch - cfgBottomPad(cfg) - BAR_H;
+          } else {
+            const centerY = topPad + cellH + GAP / 2;
+            top = centerY - BAR_H / 2;
+          }
+
           return (
-            <>
-              {/* Opaque cover hides the search bar underneath the layout overlay */}
-              <div style={{
-                position: 'absolute', left, top: coverTop, width, height: coverH,
-                background: 'var(--bg)', zIndex: 59, pointerEvents: 'none',
-              }} />
-              <button
-                onClick={onClose}
-                style={{
-                  position: 'absolute', left, top: btnTop, width, height: 46,
-                  background: 'rgba(61,232,176,0.1)',
-                  border: '1.5px solid rgba(61,232,176,0.55)',
-                  borderRadius: 9999, cursor: 'pointer',
-                  color: 'var(--teal)', fontFamily: 'var(--font-mono)',
-                  fontSize: 13, fontWeight: 700,
-                  textTransform: 'uppercase', letterSpacing: '0.12em',
-                  boxShadow: '0 0 18px rgba(61,232,176,0.12)',
-                  transition: 'background 0.15s, box-shadow 0.15s',
-                  zIndex: 60,
-                }}
-                onMouseEnter={e => {
-                  const el = e.currentTarget as HTMLElement;
-                  el.style.background = 'rgba(61,232,176,0.18)';
-                  el.style.boxShadow = '0 0 28px rgba(61,232,176,0.22)';
-                }}
-                onMouseLeave={e => {
-                  const el = e.currentTarget as HTMLElement;
-                  el.style.background = 'rgba(61,232,176,0.1)';
-                  el.style.boxShadow = '0 0 18px rgba(61,232,176,0.12)';
-                }}
-              >
-                ✓ Save Layout
-              </button>
-            </>
+            <div style={{
+              position: 'absolute', left, top, width, height: BAR_H,
+              background: 'rgba(var(--accent-rgb),0.07)',
+              border: '1.5px dashed rgba(var(--accent-rgb),0.4)',
+              borderRadius: 9999,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700,
+              color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase',
+              pointerEvents: 'none', zIndex: 60,
+            }}>
+              ⌕ Search Bar
+            </div>
           );
         })()}
 

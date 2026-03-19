@@ -77,8 +77,6 @@ const GRID_GAP = 10;
 const BAR_H      = 54;
 const BAR_MARGIN = 8;   // gap between bar edge and the nearest widget row (top/bottom modes)
 const NOTCH      = 30;  // per-side notch when bar is in 'middle' mode
-// Reserve so bottom-positioned bar + drag handle sit above the PageNavBar pill
-const PAGE_NAV_BAR_RESERVE = 70;
 
 // ── Geometry helpers ──────────────────────────────────────────────────────────
 interface GridGeometry {
@@ -93,7 +91,7 @@ function getGridGeometry(gridEl: HTMLElement, cfg: SearchBarConfig): GridGeometr
   const availWidth = gridRect.width - GRID_PADDING * 2;
 
   const extraTop    = cfg.position === 'top'    ? BAR_H + BAR_MARGIN : 0;
-  const extraBottom = cfg.position === 'bottom' ? BAR_H + BAR_MARGIN + PAGE_NAV_BAR_RESERVE : 0;
+  const extraBottom = cfg.position === 'bottom' ? BAR_H + BAR_MARGIN : 0;
   const topPad      = GRID_PADDING + extraTop;
   const bottomPad   = GRID_PADDING + extraBottom;
   const availHeight = gridRect.height - topPad - bottomPad;
@@ -165,7 +163,7 @@ function computeSearchBarRect(
   if (cfg.position === 'top') {
     top = GRID_PADDING;
   } else if (cfg.position === 'bottom') {
-    top = gridRect.height - GRID_PADDING - BAR_H - PAGE_NAV_BAR_RESERVE;
+    top = gridRect.height - GRID_PADDING - BAR_H;
   } else {
     // middle: bar floats at the boundary between row 0 and row 1
     const centerY = topPad + cellHeight + GRID_GAP / 2;
@@ -305,8 +303,8 @@ function SearchBarSlot({
           title="Drag to reposition search bar"
           style={{
             position: 'absolute',
-            top: cfg.position === 'bottom' ? undefined : -18,
-            bottom: cfg.position === 'bottom' ? -18 : undefined,
+            top: cfg.position === 'top' ? undefined : -20,
+            bottom: cfg.position === 'top' ? -20 : undefined,
             left: '50%', transform: 'translateX(-50%)',
             width: 56, height: 14,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
