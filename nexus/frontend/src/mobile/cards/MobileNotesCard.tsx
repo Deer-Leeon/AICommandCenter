@@ -28,7 +28,10 @@ export function MobileNotesCard() {
   // Full-screen editor overlay
   if (editing) {
     return (
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: 16, gap: 12 }}>
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: 16, gap: 12, overflow: 'hidden' }}>
+        <style>{`
+          .mobile-notes-textarea::-webkit-resizer { display: none; }
+        `}</style>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button onClick={() => setEditing(null)} style={{
             background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: 8,
@@ -49,6 +52,7 @@ export function MobileNotesCard() {
           }} />
         <textarea value={draftContent} onChange={e => setDraftContent(e.target.value)}
           placeholder="Write something…"
+          className="mobile-notes-textarea"
           style={{
             flex: 1, background: 'transparent', border: 'none', resize: 'none',
             fontSize: 15, color: 'var(--text)', lineHeight: 1.6, outline: 'none',
@@ -59,7 +63,13 @@ export function MobileNotesCard() {
   }
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '20px 20px 12px' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '20px 20px 12px', overflow: 'hidden' }}>
+      <style>{`
+        .mobile-notes-list::-webkit-scrollbar { display: none; }
+        .mobile-notes-list { scrollbar-width: none; -ms-overflow-style: none; }
+        .mobile-notes-textarea::-webkit-resizer { display: none; }
+      `}</style>
+
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 14 }}>
         <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', flex: 1 }}>
           Notes
@@ -71,7 +81,7 @@ export function MobileNotesCard() {
         }}>+</button>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className="mobile-notes-list" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', gap: 8 }}>
         {notes.length === 0 && (
           <div style={{ color: 'var(--text-muted)', fontSize: 14, paddingTop: 8 }}>
             No notes yet. Tap + to create one.

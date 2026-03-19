@@ -213,11 +213,6 @@ export function MobileCardStack({ order, onActiveWidgetChange }: Props) {
                     background: `linear-gradient(90deg, transparent 0%, ${accent} 35%, ${accent} 65%, transparent 100%)`,
                     opacity: 0.65, zIndex: 5, pointerEvents: 'none',
                   }} />
-                  <div style={{
-                    position: 'absolute', bottom: 0, right: 0, width: 22, height: 22,
-                    background: 'radial-gradient(circle at 100% 100%, transparent 52%, rgba(0,0,0,0.18) 100%)',
-                    borderRadius: '0 0 22px 0', pointerEvents: 'none', zIndex: 5,
-                  }} />
                   <div data-scroll-inner="" style={{ position: 'absolute', inset: 0, zIndex: 3 }}>
                     <MobileCardContent widgetType={widgetType} />
                   </div>
