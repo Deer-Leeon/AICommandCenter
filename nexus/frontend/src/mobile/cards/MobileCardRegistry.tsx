@@ -13,6 +13,7 @@ import { WordleWidget } from '../../components/widgets/WordleWidget';
 import { MobileSharedChessCard } from './MobileSharedChessCard';
 import { F1Widget } from '../../components/widgets/F1Widget';
 import { GmailWidget } from '../../components/widgets/GmailWidget';
+import { MobileSlackCard } from './MobileSlackCard';
 
 export function MobileCardContent({ widgetType }: { widgetType: WidgetType }) {
   switch (widgetType) {
@@ -29,6 +30,7 @@ export function MobileCardContent({ widgetType }: { widgetType: WidgetType }) {
     case 'wordle':       return <WordleWidget onClose={() => {}} />;
     case 'f1':           return <F1Widget onClose={() => {}} />;
     case 'gmail':        return <GmailWidget onClose={() => {}} />;
+    case 'slack':        return <MobileSlackCard />;
     case 'shared_chess': return <MobileSharedChessCard />;
     default:             return <MobileFallbackCard widgetType={widgetType} />;
   }
