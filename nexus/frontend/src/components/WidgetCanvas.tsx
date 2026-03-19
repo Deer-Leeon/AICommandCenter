@@ -909,15 +909,15 @@ export function WidgetCanvas({ gridEl }: WidgetCanvasProps) {
           GridLayoutMode is raised to z=56 so it still covers this slot in layout mode.
           SettingsModal is at z=60 so it covers both.
           Delay 160ms sits between row 1 (90ms) and row 0 (240ms) on the ease-out curve. */}
+      {/* Search bar: only render after reveal is fully complete so it never
+          punches through the overlay (z-55 > overlay z-50) mid-animation.
+          When animation is disabled, revealed=true immediately → instant show. */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
           zIndex: 55,
-          ...(revealed
-            ? { opacity: 1 }
-            : revealing
-            ? { animation: 'nexusWidgetIn 0.3s 160ms cubic-bezier(0, 0, 0.2, 1) both', pointerEvents: 'none' }
-            : { opacity: 0, pointerEvents: 'none' }),
+          opacity: revealed ? 1 : 0,
+          pointerEvents: revealed ? 'auto' : 'none',
         }}
       >
         <SearchBarSlot rect={searchBarRect} />
