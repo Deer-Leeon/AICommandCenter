@@ -45,15 +45,43 @@ interface Persisted {
   feeMethod: string;
   recentPairs: Array<{ from: string; to: string }>;
 }
+const PERSISTED_DEFAULTS: Persisted = {
+  from: 'USD', to: 'EUR', amount: '1000',
+  feesOpen: false, feeMethod: 'wise', recentPairs: [],
+};
+
 function readPersisted(): Persisted {
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return { from: 'USD', to: 'EUR', amount: '1000', feesOpen: false, feeMethod: 'wise', recentPairs: [] };
-    return { from: 'USD', to: 'EUR', amount: '1000', feesOpen: false, feeMethod: 'wise', recentPairs: [], ...JSON.parse(raw) };
-  } catch { return { from: 'USD', to: 'EUR', amount: '1000', feesOpen: false, feeMethod: 'wise', recentPairs: [] }; }
+    if (!raw) return { ...PERSISTED_DEFAULTS };
+    const parsed = JSON.parse(raw) as Partial<Persisted>;
+    return {
+      ...PERSISTED_DEFAULTS,
+      ...parsed,
+      // Always coerce amount to string — old data may have stored it as a number,
+      // which would cause TypeError inside doConvert's .replace() call.
+      amount: String(parsed.amount ?? PERSISTED_DEFAULTS.amount),
+      // Guard against non-array values from malformed stored data
+      recentPairs: Array.isArray(parsed.recentPairs) ? parsed.recentPairs : [],
+    };
+  } catch { return { ...PERSISTED_DEFAULTS }; }
 }
 function writePersisted(p: Persisted) {
   try { localStorage.setItem(LS_KEY, JSON.stringify(p)); } catch { /* quota */ }
+}
+
+function clearBadPersisted() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    // If amount was stored as a non-string, nuke the entry so readPersisted gets the default
+    if (parsed.amount !== undefined && typeof parsed.amount !== 'string') {
+      localStorage.removeItem(LS_KEY);
+    }
+  } catch {
+    try { localStorage.removeItem(LS_KEY); } catch { /* ignore */ }
+  }
 }
 
 // ── Currency metadata ─────────────────────────────────────────────────────────
@@ -568,7 +596,9 @@ export function CurrencyWidget({ onClose: _onClose }: { onClose: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
 
-  const persisted = useMemo(() => readPersisted(), []);
+  // Purge any corrupted persisted data before reading so we never initialize
+  // amountStr as a non-string (which would crash doConvert's .replace() call).
+  const persisted = useMemo(() => { clearBadPersisted(); return readPersisted(); }, []);
 
   const [fromCode, setFromCode]       = useState(persisted.from);
   const [toCode, setToCode]           = useState(persisted.to);
@@ -612,7 +642,7 @@ export function CurrencyWidget({ onClose: _onClose }: { onClose: () => void }) {
   // Convert — instant from cache; only fetches once per base currency
   const convertTimer = useRef<ReturnType<typeof setTimeout>>();
   const doConvert = useCallback(() => {
-    const amount = parseFloat(amountStr.replace(/,/g, '')) || 0;
+    const amount = parseFloat(String(amountStr).replace(/,/g, '')) || 0;
     if (!fromCode || !toCode || amount <= 0) return;
     clearTimeout(convertTimer.current);
 
@@ -696,9 +726,10 @@ export function CurrencyWidget({ onClose: _onClose }: { onClose: () => void }) {
 
   // Format display amount (add commas)
   const displayAmount = useMemo(() => {
-    const n = parseFloat(amountStr.replace(/,/g, ''));
-    if (isNaN(n)) return amountStr;
-    const parts = amountStr.split('.');
+    const safe = String(amountStr);
+    const n = parseFloat(safe.replace(/,/g, ''));
+    if (isNaN(n)) return safe;
+    const parts = safe.split('.');
     const intPart = parseInt(parts[0]).toLocaleString('en-US');
     return parts.length > 1 ? `${intPart}.${parts[1]}` : intPart;
   }, [amountStr]);
@@ -953,9 +984,10 @@ function FloatingPanel({
   const toMeta   = getCurrencyMeta(toCode);
 
   const displayAmount = useMemo(() => {
-    const n = parseFloat(amountStr.replace(/,/g, ''));
-    if (isNaN(n)) return amountStr;
-    const parts = amountStr.split('.');
+    const safe = String(amountStr);
+    const n = parseFloat(safe.replace(/,/g, ''));
+    if (isNaN(n)) return safe;
+    const parts = safe.split('.');
     const intPart = parseInt(parts[0]).toLocaleString('en-US');
     return parts.length > 1 ? `${intPart}.${parts[1]}` : intPart;
   }, [amountStr]);
