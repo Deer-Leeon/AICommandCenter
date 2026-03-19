@@ -909,13 +909,12 @@ export function WidgetCanvas({ gridEl }: WidgetCanvasProps) {
           GridLayoutMode is raised to z=56 so it still covers this slot in layout mode.
           SettingsModal is at z=60 so it covers both.
           Delay 160ms sits between row 1 (90ms) and row 0 (240ms) on the ease-out curve. */}
-      {/* Search bar: always above the reveal overlay (z-55 > overlay z-50),
-          immediately visible and interactive. The overlay slides up underneath
-          it. No animation on the bar itself — it just appears as soon as the
-          rect is computed (synchronously on first paint via useLayoutEffect). */}
+      {/* Search bar: rendered at full opacity BELOW the reveal overlay (z-10 < overlay z-50).
+          It is fully ready from first paint — the overlay physically slides up and
+          uncovers it. No secondary animation or opacity delay on the bar itself. */}
       <div
         className="absolute inset-0 pointer-events-none"
-        style={{ zIndex: 55 }}
+        style={{ zIndex: 10 }}
       >
         <SearchBarSlot rect={searchBarRect} />
       </div>
