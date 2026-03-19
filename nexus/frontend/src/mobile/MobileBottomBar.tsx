@@ -265,16 +265,23 @@ interface Props {
   onToggleFullscreen?: () => void;
 }
 
-type Sheet = 'quickadd' | 'theme' | null;
+type Sheet = 'quickadd' | null;
 
 // ── Bottom bar ────────────────────────────────────────────────────────────────
 
+const THEME_CYCLE: ThemeMode[] = ['dark', 'light', 'auto'];
+
 export function MobileBottomBar({ onOpenSearch, onOpenSettings, isFullscreen, onToggleFullscreen }: Props) {
   const [sheet, setSheet] = useState<Sheet>(null);
-  const { theme } = useTheme();
+  const { theme, setTheme } = useTheme();
 
   const themeIcon = theme === 'dark' ? <MoonIcon /> : theme === 'light' ? <SunIcon /> : <AutoThemeIcon />;
   const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : 'Auto';
+
+  const cycleTheme = () => {
+    const next = THEME_CYCLE[(THEME_CYCLE.indexOf(theme) + 1) % THEME_CYCLE.length];
+    setTheme(next);
+  };
 
   return (
     <>
@@ -301,7 +308,7 @@ export function MobileBottomBar({ onOpenSearch, onOpenSettings, isFullscreen, on
           <PillBtn icon={<SearchIcon />}  label="Search"   onClick={onOpenSearch} />
           <PillBtn icon={<PlusIcon />}    label="Add"      onClick={() => setSheet('quickadd')} variant="accent" />
           <PillBtn icon={<SlidersIcon />} label="Settings" onClick={onOpenSettings} />
-          <PillBtn icon={themeIcon}       label={themeLabel} onClick={() => setSheet('theme')} />
+          <PillBtn icon={themeIcon}       label={themeLabel} onClick={cycleTheme} />
           <PillBtn
             icon={isFullscreen ? <CollapseIcon /> : <ExpandIcon />}
             label={isFullscreen ? 'Restore' : 'Focus'}
@@ -312,7 +319,6 @@ export function MobileBottomBar({ onOpenSearch, onOpenSettings, isFullscreen, on
       </div>
 
       {sheet === 'quickadd' && <QuickAddSheet onClose={() => setSheet(null)} />}
-      {sheet === 'theme'    && <ThemeSheet    onClose={() => setSheet(null)} />}
     </>
   );
 }
