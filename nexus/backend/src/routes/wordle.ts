@@ -1,6 +1,7 @@
 import { Router, type Response } from 'express';
 import { requireAuth, type AuthRequest } from '../middleware/auth.js';
 import { supabase } from '../lib/supabase.js';
+import { broadcastToUser } from '../lib/sseRegistry.js';
 
 export const wordleRouter = Router();
 
@@ -268,6 +269,16 @@ wordleRouter.post('/guess', requireAuth, async (req: AuthRequest, res: Response)
   if (newStatus === 'won' || newStatus === 'lost') {
     await updateStats(req.user!.id, newStatus, newGuesses.length, today);
   }
+
+  // Push updated state to all other devices logged in with the same account
+  // so cross-device play stays in sync in real-time.
+  broadcastToUser(req.user!.id, {
+    type:     'wordle:state_updated',
+    date:     today,
+    guesses:  newGuesses,
+    status:   newStatus,
+    solution: newStatus !== 'playing' ? daily.solution : undefined,
+  });
 
   res.json({
     results,

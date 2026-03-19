@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiFetch } from '../../lib/api';
 import { useWidgetReady } from '../../hooks/useWidgetReady';
 import { useConnectionRefresh } from '../../hooks/useConnectionRefresh';
+import { nexusSSE } from '../../lib/nexusSSE';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -363,6 +364,42 @@ export function WordleWidget({ onClose: _onClose }: WordleWidgetProps) {
   useConnectionRefresh(useCallback(() => {
     fetchFriends();
   }, [fetchFriends]));
+
+  // Cross-device real-time sync: when another device (same account) submits a
+  // guess, the backend broadcasts wordle:state_updated over SSE. Apply the
+  // incoming guesses if they are ahead of local state and no flip animation is
+  // currently running on this device (which would indicate this device was the
+  // one that submitted the guess).
+  useEffect(() => {
+    return nexusSSE.subscribe((event) => {
+      if (event.type !== 'wordle:state_updated') return;
+      if (event.date !== loadedDate.current) return;
+
+      const incoming = (event.guesses as GuessEntry[]) ?? [];
+
+      // Skip if this device already has the same or more guesses — the HTTP
+      // response already handled the update on the submitting device.
+      if (incoming.length <= guessesRef.current.length) return;
+
+      // Skip if a flip animation is currently running on this device — that
+      // means this device just submitted and will handle its own update.
+      if (flippingRef.current !== null) return;
+
+      const newStatus = event.status as 'playing' | 'won' | 'lost';
+      const sol = (event.solution as string | undefined) ?? null;
+
+      setGuesses(incoming);
+      setStatus(newStatus);
+      if (sol) setSolution(sol);
+      setRevealedRows(new Set(incoming.map((_: GuessEntry, i: number) => i)));
+      setKeyMap(computeKeyStates(incoming));
+
+      if (newStatus === 'won' || newStatus === 'lost') {
+        fetchFriends();
+        setShowModal(true);
+      }
+    });
+  }, [fetchFriends]);
 
   // ── Flip animation ─────────────────────────────────────────────────────────
   const triggerFlip = useCallback((
