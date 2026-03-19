@@ -18,7 +18,7 @@ layoutRouter.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
 
 // PUT /api/layout — upserts the grid for the current user
 layoutRouter.put('/', requireAuth, async (req: AuthRequest, res: Response) => {
-  const { grid } = req.body as { grid: Record<string, string> };
+  const { grid, sourceSession } = req.body as { grid: Record<string, string>; sourceSession?: string };
 
   if (!grid || typeof grid !== 'object') {
     res.status(400).json({ error: 'grid must be an object' });
@@ -40,9 +40,10 @@ layoutRouter.put('/', requireAuth, async (req: AuthRequest, res: Response) => {
     return;
   }
 
-  // Push the full layout to all other sessions so they can apply it
-  // immediately — no extra GET round-trip needed on the receiving end.
-  broadcastToUser(req.user!.id, { type: 'layout:update', grid });
+  // Broadcast the updated layout to all open sessions for this user.
+  // sourceSession is echoed back so each client can detect and drop events
+  // it originated itself, preventing mid-drag state resets on the sender.
+  broadcastToUser(req.user!.id, { type: 'layout:update', grid, sourceSession });
 
   res.json({ success: true });
 });

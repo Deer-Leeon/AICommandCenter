@@ -152,3 +152,11 @@ class NexusSSEManager {
 }
 
 export const nexusSSE = new NexusSSEManager();
+
+/**
+ * Stable per-tab identifier, generated once when this module is loaded.
+ * Stamped on every layout PUT so the SSE echo that bounces back from the
+ * server can be recognised and ignored — preventing the "brief snap to
+ * old state" flicker that occurred when setPages() was called mid-drag.
+ */
+export const nexusSessionId: string = crypto.randomUUID();

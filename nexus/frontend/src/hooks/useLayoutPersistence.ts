@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useStore, layoutCacheKeyV3, makeStarterPages } from '../store/useStore';
 import { apiFetch } from '../lib/api';
-import { nexusSSE } from '../lib/nexusSSE';
+import { nexusSSE, nexusSessionId } from '../lib/nexusSSE';
 import type { WidgetType, GridSpan, Page, PagesLayout } from '../types';
 
 // ── Legacy v2 shape (for migration) ──────────────────────────────────────────
@@ -181,7 +181,10 @@ export function useLayoutPersistence(userId?: string) {
         writeCachedLayoutV3(userId, payload);
         apiFetch('/api/layout', {
           method: 'PUT',
-          body: JSON.stringify({ grid: payload }),
+          // sourceSession lets the server tag the SSE broadcast so this
+          // same tab can recognise and drop its own echo (prevents the
+          // "brief snap to old size" flicker during active drags).
+          body: JSON.stringify({ grid: payload, sourceSession: nexusSessionId }),
         })
           .then(() => { localModifiedRef.current = false; })
           .catch(() => {});
@@ -206,6 +209,10 @@ export function useLayoutPersistence(userId?: string) {
 
     return nexusSSE.subscribe((event) => {
       if (event.type !== 'layout:update') return;
+      // Drop echoes of our own saves — the server broadcasts to ALL connections
+      // including the one that issued the PUT, which would otherwise call
+      // setPages() with an older layout and briefly reset live drag state.
+      if (event.sourceSession === nexusSessionId) return;
       if (localModifiedRef.current) return; // local edit in flight — skip
 
       const raw = event.grid as Record<string, unknown> | undefined;
