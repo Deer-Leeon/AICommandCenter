@@ -2,6 +2,7 @@
   "name": "nexus",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "NEXUS — AI-powered personal command center",
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
@@ -18,7 +19,8 @@
     "electron:build": "npm run build:frontend && cd electron && npm run build && npx electron-builder --config electron-builder.yml",
     "electron:build:dmg": "cd frontend && VITE_ELECTRON=true npx vite build && cd ../electron && npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false SKIP_NOTARIZE=true npx electron-builder --mac dmg --config electron-builder.yml",
     "electron:build:dmg:signed": "cd frontend && VITE_ELECTRON=true npx vite build && cd ../electron && npm run build && npx electron-builder --mac dmg --config electron-builder.yml",
-    "electron:install": "cd electron && npm install"
+    "electron:install": "cd electron && npm install",
+    "build:extension-thin": "node scripts/build-thin-extension.js"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

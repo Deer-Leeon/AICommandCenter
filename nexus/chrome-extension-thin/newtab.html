@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!--
+    Empty title: Chrome shows the <title> of newtab.html in the native NTP
+    bottom bar while the redirect is in-flight. An empty title means nothing
+    appears there.
+  -->
+  <title></title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #0a0a0f;
+      overflow: hidden;
+    }
+
+    #offline {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #0a0a0f;
+      color: #ffffff;
+      font-family: 'Space Mono', monospace, system-ui;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    #offline.visible {
+      display: flex;
+    }
+
+    #offline h1 {
+      font-size: 24px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #7c3aed, #0ea5e9);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: 0.1em;
+    }
+
+    #offline p {
+      color: #6b7280;
+      font-size: 14px;
+    }
+
+    #offline button {
+      margin-top: 8px;
+      padding: 10px 24px;
+      background: #7c3aed;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    #offline button:hover {
+      background: #6d28d9;
+    }
+  </style>
+
+  <!--
+    redirect.js fires here — render-blocking, before <body> is parsed.
+    If the user is online this immediately calls window.location.replace()
+    so Chrome never has time to paint body content or its NTP chrome UI.
+  -->
+  <script src="redirect.js"></script>
+</head>
+<body>
+
+  <!-- Only shown when the user is offline (redirect.js skipped the redirect) -->
+  <div id="offline">
+    <h1>NEXUS</h1>
+    <p>You appear to be offline</p>
+    <button id="retry-btn">Retry</button>
+  </div>
+
+  <script src="newtab.js"></script>
+
+</body>
+</html>

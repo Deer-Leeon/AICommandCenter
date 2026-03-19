@@ -1,103 +1,65 @@
 # NEXUS Chrome Extension Setup
 
-Turn NEXUS into your instant new-tab page — loads in under 100 ms, no server round-trip needed for the shell.
+The extension uses a **thin loader** approach — the only job of the extension
+is to redirect the new tab page to `nexus.lj-buchmiller.com`. All app code
+lives on the website and updates instantly on deploy, with no Chrome Web Store
+resubmission needed for feature changes.
 
 ---
 
-## 1. Build the extension
+## Extension location
 
-```bash
-cd nexus/frontend
-npm run build:ext
+```
+nexus/chrome-extension-thin/
+├── manifest.json     — MV3 manifest (v2.0.0)
+├── newtab.html       — Dark background shown instantly on new tab
+├── newtab.js         — Redirects to nexus.lj-buchmiller.com?source=extension
+├── background.js     — Service worker: cache warming via chrome.alarms
+├── icons/            — Extension icons (16, 32, 48, 128 px)
+├── README.md         — Architecture notes
+└── RESUBMISSION_NOTES.md  — Paste into Chrome Web Store reviewer notes
 ```
 
-The output lands in `nexus/frontend/dist-extension/`.
-
 ---
 
-## 2. Load the unpacked extension in Chrome
+## Load the extension locally (for testing)
 
 1. Open **chrome://extensions**
 2. Enable **Developer mode** (top-right toggle)
 3. Click **Load unpacked**
-4. Select the `nexus/frontend/dist-extension/` folder
-5. Chrome loads the extension. Note the **Extension ID** shown (looks like `abcdefghijklmnopqrstuvwxyzabcdef`)
+4. Select `nexus/chrome-extension-thin/` ← the source folder, not `dist/`
+5. Open a new tab — it shows the dark NEXUS background for a split second,
+   then redirects to the NEXUS website
 
 ---
 
-## 3. Whitelist your Extension ID for Google OAuth
+## Build the ZIP for Chrome Web Store submission
 
-Chrome extensions get a unique ID. Supabase OAuth must know this ID to allow the redirect.
-
-### 3a — Google Cloud Console
-
-1. Go to [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials)
-2. Click your OAuth 2.0 Client ID
-3. Under **Authorized redirect URIs**, add:
-   ```
-   chrome-extension://YOUR_EXTENSION_ID/index.extension.html
-   ```
-4. Save
-
-### 3b — Supabase Dashboard
-
-1. Open your Supabase project → **Authentication → URL Configuration**
-2. Under **Redirect URLs**, add:
-   ```
-   chrome-extension://YOUR_EXTENSION_ID/index.extension.html
-   ```
-3. Save
-
----
-
-## 4. Open a new tab
-
-Open a new Chrome tab — NEXUS appears instantly! Sign in with Google once and you're done.
-
----
-
-## Keeping the same Extension ID across rebuilds
-
-As long as you always load from the **same folder** (`dist-extension/`), the ID is stable. If you ever delete the extension and re-add it, Chrome assigns a new ID and you'll need to update the redirect URIs.
-
-### (Optional) Fix the ID permanently
-
-Add a `key` field to `manifest.json` to pin the ID across installs (useful if you ever publish to the Chrome Web Store):
-
-1. In Chrome, go to **chrome://extensions** → your extension → click the extension ID link
-2. Copy the public key from the extension details page
-3. Add it to `public/manifest.json` (alongside the existing fields):
-   ```json
-   "key": "MIIBIjANBgkqhkiG9w0B..."
-   ```
-4. Rebuild: `npm run build:ext`
-
----
-
-## Updating the extension
-
-Whenever you make changes:
+From the `nexus/` root:
 
 ```bash
-npm run build:ext
+npm run build:extension-thin
 ```
 
-Then in **chrome://extensions**, click the **↺ refresh** button on the NEXUS card.  
-Open a new tab — your updates are live.
+Output: `chrome-extension-thin/nexus-extension-v2.0.0.zip`
+
+Then:
+
+1. Go to [chrome.google.com/webstore/devconsole](https://chrome.google.com/webstore/devconsole)
+2. Upload the ZIP
+3. Paste `RESUBMISSION_NOTES.md` into the reviewer notes field
+4. Submit
 
 ---
 
-## Both web + extension at the same time
+## When to resubmit to Chrome Web Store
 
-The website (`https://nexus.lj-buchmiller.com`) and the extension are completely independent. Each has its own Supabase session stored in its own `localStorage`. You can be logged into both simultaneously — they both talk to the same backend API.
+Only when these files change:
 
----
+- `manifest.json` — permissions, version bump
+- `newtab.html` — the shell page
+- `newtab.js` — redirect logic
+- `background.js` — cache warming
 
-## Troubleshooting
-
-| Symptom | Fix |
-|---|---|
-| "Sign in" redirects to a broken page | Double-check the redirect URI in Google Console and Supabase matches `chrome-extension://YOUR_ID/index.extension.html` exactly |
-| New tab shows blank white page | Open DevTools on the extension page (right-click → Inspect) and check the Console for CSP errors |
-| Extension ID changed | You removed and re-added the extension. Update the redirect URIs with the new ID |
-| Build fails with TS errors | Run `npm run build` (web build) first — it shows all errors clearly |
+**Feature updates to the NEXUS app never require resubmission.**
+Just deploy the website — all extension users get the update automatically.

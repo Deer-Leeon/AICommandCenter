@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { WidgetType } from '../types';
-import { WIDGET_CONFIGS } from '../types';
+import { WIDGET_CONFIGS, type WidgetConfig } from '../types';
 
 const WIDGET_ACCENT: Partial<Record<WidgetType, string>> = {
   calendar: '#4285f4', tasks: '#1a73e8', todo: '#3de8b0', pomodoro: '#7c6aff',
@@ -10,6 +10,8 @@ const WIDGET_ACCENT: Partial<Record<WidgetType, string>> = {
   links: '#7c6aff', obsidian: '#8b5cf6',
 };
 
+const CATEGORY_ORDER: WidgetConfig['category'][] = ['Work', 'Music', 'Finance', 'Games', 'Info', 'Tools'];
+
 interface Props {
   order: WidgetType[];
   activeIdx: number;
@@ -17,10 +19,6 @@ interface Props {
   onClose: () => void;
 }
 
-// ── Slot descriptor ────────────────────────────────────────────────────────────
-// slot 0 = left-5 (furthest), ..., slot 4 = left-1 (closest)
-// slot 5 = ACTIVE
-// slot 6 = right-1 (closest), ..., slot 10 = right-5 (furthest)
 const SLOT_COUNT = 11;
 
 function slotLabel(pos: number): string {
@@ -34,8 +32,6 @@ function slotSide(pos: number): 'left' | 'center' | 'right' {
   return pos < 5 ? 'left' : 'right';
 }
 
-// Same interleaved sequence used by MobileCardStack:
-// order[0] → slot 5 (active), order[1] → slot 4, order[2] → slot 6, order[3] → slot 3, ...
 const SLOT_SEQUENCE = [5, 4, 6, 3, 7, 2, 8, 1, 9, 0, 10] as const;
 
 function orderToSlots(order: WidgetType[], _activeIdx: number): (WidgetType | null)[] {
@@ -47,365 +43,496 @@ function orderToSlots(order: WidgetType[], _activeIdx: number): (WidgetType | nu
   return slots;
 }
 
-// Convert 11-slot array back to flat order[] using the same SLOT_SEQUENCE.
 function slotsToOrder(slots: (WidgetType | null)[]): { order: WidgetType[]; activeIdx: number } {
   const order = SLOT_SEQUENCE.map(pos => slots[pos]).filter(Boolean) as WidgetType[];
   return { order, activeIdx: 0 };
 }
 
-// ── Slot card (small visual) ───────────────────────────────────────────────────
+// ── Individual slot card ───────────────────────────────────────────────────────
 function SlotCard({
-  widgetType,
-  pos,
-  isDropTarget,
-  isDragging,
-  onDragStart,
-  onDrop,
-  onDragOver,
-  onRemove,
+  widgetType, pos,
+  onRemove, onTapEmpty,
 }: {
   widgetType: WidgetType | null;
   pos: number;
-  isDropTarget: boolean;
-  isDragging: boolean;
-  onDragStart: () => void;
-  onDrop: () => void;
-  onDragOver: (e: React.DragEvent) => void;
   onRemove: () => void;
+  onTapEmpty: () => void;
 }) {
-  const side = slotSide(pos);
+  const side    = slotSide(pos);
   const isCenter = side === 'center';
-  const cfg = widgetType ? WIDGET_CONFIGS.find(c => c.id === widgetType) : null;
-  const accent = widgetType ? (WIDGET_ACCENT[widgetType] ?? 'var(--accent)') : 'transparent';
+  const cfg    = widgetType ? WIDGET_CONFIGS.find(c => c.id === widgetType) : null;
+  const accent = widgetType ? (WIDGET_ACCENT[widgetType] ?? 'var(--accent)') : 'var(--accent)';
 
-  return (
-    <div
-      draggable={!!widgetType}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      style={{
-        width: isCenter ? 80 : 52,
-        height: isCenter ? 104 : 56,
-        borderRadius: isCenter ? 14 : 10,
-        background: isDropTarget
-          ? 'rgba(var(--accent-rgb),0.2)'
-          : widgetType
-          ? 'var(--surface2)'
-          : 'var(--surface3)',
-        border: isDropTarget
-          ? '2px dashed rgba(var(--accent-rgb),0.7)'
-          : widgetType
-          ? '1px solid var(--card-border)'
-          : '1px dashed var(--border)',
+  // Sizes — larger now that we have full screen
+  const W = isCenter ? 96 : 64;
+  const H = isCenter ? 128 : 68;
+
+  if (widgetType) {
+    return (
+      <div style={{
+        width: W, height: H,
+        borderRadius: isCenter ? 16 : 12,
+        background: 'var(--surface2)',
+        border: '1px solid var(--card-border)',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
-        gap: 3, position: 'relative',
-        transition: 'all 0.18s ease',
-        opacity: isDragging ? 0.4 : 1,
-        cursor: widgetType ? 'grab' : 'default',
+        gap: 4, position: 'relative',
         flexShrink: 0,
-      }}
-    >
-      {/* Accent left/right border */}
-      {widgetType && (
+      }}>
+        {/* Accent edge */}
         <div style={{
           position: 'absolute',
           [side === 'right' ? 'left' : 'right']: 0,
-          top: 4, bottom: 4, width: 2,
-          background: accent, borderRadius: 2,
-          opacity: 0.7,
+          top: 6, bottom: 6, width: 2,
+          background: accent, borderRadius: 2, opacity: 0.8,
         }} />
-      )}
+        <span style={{ fontSize: isCenter ? 24 : 18 }}>{cfg?.icon ?? '🔧'}</span>
+        <span style={{
+          fontSize: isCenter ? 10 : 9,
+          color: 'var(--text-muted)',
+          fontFamily: 'var(--font-mono)',
+          letterSpacing: '0.02em',
+          textAlign: 'center',
+          lineHeight: 1.2,
+          padding: '0 6px',
+        }}>
+          {cfg?.label ?? widgetType}
+        </span>
+        {/* Remove button */}
+        <button
+          onPointerDown={e => { e.stopPropagation(); onRemove(); }}
+          style={{
+            position: 'absolute', top: 3, right: 3,
+            width: 18, height: 18, borderRadius: '50%',
+            background: 'rgba(239,68,68,0.8)', border: 'none',
+            color: '#fff', fontSize: 10, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            touchAction: 'manipulation',
+          }}
+        >✕</button>
+        {/* Slot label */}
+        <div style={{
+          position: 'absolute', bottom: -18,
+          fontSize: 9, color: 'var(--text-faint)',
+          fontFamily: 'var(--font-mono)', textAlign: 'center',
+          whiteSpace: 'nowrap',
+        }}>
+          {isCenter ? '★ Active' : slotLabel(pos)}
+        </div>
+      </div>
+    );
+  }
 
-      {widgetType ? (
-        <>
-          <span style={{ fontSize: isCenter ? 22 : 16 }}>{cfg?.icon ?? '🔧'}</span>
-          <span style={{
-            fontSize: isCenter ? 9 : 8,
-            color: 'var(--text-muted)',
-            fontFamily: 'var(--font-mono)',
-            letterSpacing: '0.03em',
-            textAlign: 'center',
-            lineHeight: 1.2,
-            padding: '0 4px',
-          }}>
-            {cfg?.label ?? widgetType}
-          </span>
-          {/* Remove button */}
-          <button
-            onClick={e => { e.stopPropagation(); onRemove(); }}
-            style={{
-              position: 'absolute', top: 2, right: 2,
-              width: 14, height: 14, borderRadius: '50%',
-              background: 'rgba(239,68,68,0.7)', border: 'none',
-              color: '#fff', fontSize: 8, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              lineHeight: 1,
-            }}
-          >✕</button>
-        </>
-      ) : (
-        <span style={{ fontSize: 16, opacity: 0.2 }}>＋</span>
-      )}
-
+  // Empty slot — tappable + button
+  return (
+    <button
+      onPointerDown={e => { e.preventDefault(); e.stopPropagation(); onTapEmpty(); }}
+      style={{
+        width: W, height: H,
+        borderRadius: isCenter ? 16 : 12,
+        background: 'var(--surface3)',
+        border: '2px dashed var(--border)',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        gap: 4, position: 'relative',
+        flexShrink: 0,
+        cursor: 'pointer',
+        touchAction: 'manipulation',
+        WebkitTapHighlightColor: 'transparent',
+        padding: 0,
+        transition: 'border-color 0.15s, background 0.15s',
+      }}
+    >
+      <span style={{ fontSize: isCenter ? 28 : 22, color: 'var(--accent)', opacity: 0.7 }}>＋</span>
+      <span style={{
+        fontSize: 9, color: 'var(--accent)',
+        fontFamily: 'var(--font-mono)', opacity: 0.6,
+      }}>
+        Add
+      </span>
       {/* Slot label */}
       <div style={{
-        position: 'absolute', bottom: -16,
-        fontSize: 8, color: 'var(--text-faint)',
+        position: 'absolute', bottom: -18,
+        fontSize: 9, color: 'var(--text-faint)',
         fontFamily: 'var(--font-mono)', textAlign: 'center',
-        whiteSpace: 'nowrap', letterSpacing: '0.03em',
+        whiteSpace: 'nowrap',
       }}>
         {isCenter ? '★ Active' : slotLabel(pos)}
       </div>
-    </div>
+    </button>
   );
 }
 
-// ── Main editor component ─────────────────────────────────────────────────────
+// ── Widget picker panel (slides up from bottom) ────────────────────────────────
+function WidgetPickerPanel({
+  slotPos,
+  usedWidgets,
+  onPick,
+  onClose,
+}: {
+  slotPos: number;
+  usedWidgets: Set<WidgetType>;
+  onPick: (w: WidgetType) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery]   = useState('');
+  const [ready, setReady]   = useState(false);
+
+  useEffect(() => { requestAnimationFrame(() => setReady(true)); }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return WIDGET_CONFIGS.filter(cfg => {
+      if (usedWidgets.has(cfg.id)) return false;
+      if (!q) return true;
+      return cfg.label.toLowerCase().includes(q) || cfg.category.toLowerCase().includes(q);
+    });
+  }, [query, usedWidgets]);
+
+  const grouped = useMemo(() => {
+    const map = new Map<WidgetConfig['category'], WidgetConfig[]>();
+    for (const cat of CATEGORY_ORDER) map.set(cat, []);
+    for (const c of filtered) map.get(c.category)?.push(c);
+    return map;
+  }, [filtered]);
+
+  return (
+    <>
+      {/* Inner backdrop (dims the layout behind) */}
+      <div
+        onPointerDown={onClose}
+        style={{
+          position: 'absolute', inset: 0, zIndex: 10,
+          background: 'rgba(0,0,0,0.45)',
+          opacity: ready ? 1 : 0,
+          transition: 'opacity 0.22s ease',
+        }}
+      />
+
+      {/* Picker sheet */}
+      <div
+        onPointerDown={e => e.stopPropagation()}
+        style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 11,
+          background: 'var(--surface)',
+          borderRadius: '20px 20px 0 0',
+          border: '1px solid var(--border)',
+          borderBottom: 'none',
+          boxShadow: '0 -8px 40px rgba(0,0,0,0.5)',
+          height: '72dvh',
+          display: 'flex', flexDirection: 'column',
+          transform: ready ? 'translateY(0)' : 'translateY(100%)',
+          transition: 'transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+        }}
+      >
+        {/* Handle */}
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px', flexShrink: 0 }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--border-hover)' }} />
+        </div>
+
+        {/* Picker header */}
+        <div style={{
+          display: 'flex', alignItems: 'center',
+          padding: '4px 16px 12px', gap: 10, flexShrink: 0,
+        }}>
+          <button
+            onPointerDown={onClose}
+            style={{
+              width: 32, height: 32, borderRadius: '50%',
+              background: 'var(--surface2)', border: '1px solid var(--border)',
+              color: 'var(--text-muted)', fontSize: 16, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              touchAction: 'manipulation', flexShrink: 0,
+            }}
+          >‹</button>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>Add Widget</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              → {slotLabel(slotPos)}
+            </div>
+          </div>
+        </div>
+
+        {/* Search */}
+        <div style={{ padding: '0 16px 12px', flexShrink: 0 }}>
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search widgets…"
+            style={{
+              width: '100%', padding: '10px 14px',
+              background: 'var(--surface2)',
+              border: '1px solid var(--border)',
+              borderRadius: 10, color: 'var(--text)',
+              fontSize: 14, outline: 'none',
+              fontFamily: 'inherit',
+              boxSizing: 'border-box',
+            }}
+          />
+        </div>
+
+        {/* Widget list */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 16px' }}>
+          {filtered.length === 0 && (
+            <div style={{
+              textAlign: 'center', padding: '40px 0',
+              color: 'var(--text-faint)', fontSize: 13,
+            }}>
+              No widgets found
+            </div>
+          )}
+
+          {CATEGORY_ORDER.map(cat => {
+            const items = grouped.get(cat) ?? [];
+            if (items.length === 0) return null;
+            return (
+              <div key={cat} style={{ marginBottom: 20 }}>
+                {/* Category label */}
+                <div style={{
+                  fontSize: 10, color: 'var(--text-faint)',
+                  fontFamily: 'var(--font-mono)',
+                  letterSpacing: '0.1em', textTransform: 'uppercase',
+                  marginBottom: 8,
+                }}>
+                  {cat}
+                </div>
+                {/* 2-column grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {items.map(cfg => {
+                    const accent = WIDGET_ACCENT[cfg.id] ?? 'var(--accent)';
+                    return (
+                      <button
+                        key={cfg.id}
+                        onPointerDown={e => { e.preventDefault(); onPick(cfg.id); }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '12px 14px',
+                          background: 'var(--surface2)',
+                          border: `1px solid ${accent}30`,
+                          borderRadius: 12,
+                          cursor: 'pointer',
+                          touchAction: 'manipulation',
+                          WebkitTapHighlightColor: 'transparent',
+                          textAlign: 'left',
+                          transition: 'background 0.15s',
+                          minHeight: 52,
+                        }}
+                      >
+                        <span style={{
+                          fontSize: 22, lineHeight: 1,
+                          flexShrink: 0,
+                        }}>{cfg.icon}</span>
+                        <span style={{
+                          fontSize: 13, color: 'var(--text)',
+                          fontWeight: 500, lineHeight: 1.3,
+                        }}>
+                          {cfg.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Main editor ────────────────────────────────────────────────────────────────
 export function MobileLayoutEditor({ order, activeIdx, onConfirm, onClose }: Props) {
   const [slots, setSlots] = useState<(WidgetType | null)[]>(
     () => orderToSlots(order, activeIdx),
   );
-  const [dragFrom, setDragFrom] = useState<{ source: 'slot' | 'pool'; slotIdx?: number; widget: WidgetType } | null>(null);
-  const [dropTarget, setDropTarget] = useState<number | null>(null);
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible]       = useState(false);
+  // pickerSlot: which slot index was tapped (shows widget picker)
+  const [pickerSlot, setPickerSlot] = useState<number | null>(null);
 
-  // Animate in
   useEffect(() => { requestAnimationFrame(() => setVisible(true)); }, []);
 
-  const dismiss = () => { setVisible(false); setTimeout(onClose, 280); };
+  const dismiss = () => { setVisible(false); setTimeout(onClose, 300); };
 
-  // Widgets currently not in any slot
   const usedWidgets = new Set(slots.filter(Boolean) as WidgetType[]);
 
-  // ── Drag from slot ────────────────────────────────────────────────────────
-  function handleSlotDragStart(slotIdx: number) {
-    const w = slots[slotIdx];
-    if (!w) return;
-    setDragFrom({ source: 'slot', slotIdx, widget: w });
-  }
-
-  function handlePoolDragStart(widget: WidgetType) {
-    setDragFrom({ source: 'pool', widget });
-  }
-
-  function handleDragOver(e: React.DragEvent, target: number) {
-    e.preventDefault();
-    setDropTarget(target);
-  }
-
-  function handleDrop(targetSlot: number) {
-    if (!dragFrom) { setDropTarget(null); return; }
-
-    const next = [...slots];
-
-    if (dragFrom.source === 'slot' && dragFrom.slotIdx !== undefined) {
-      // Swap two slots
-      const fromWidget = next[dragFrom.slotIdx];
-      const toWidget   = next[targetSlot];
-      next[dragFrom.slotIdx] = toWidget;
-      next[targetSlot]       = fromWidget;
-    } else if (dragFrom.source === 'pool') {
-      // Place pool widget into slot (clear old occupant)
-      next[targetSlot] = dragFrom.widget;
-    }
-
-    setSlots(next);
-    setDragFrom(null);
-    setDropTarget(null);
-  }
-
   function handleRemove(slotIdx: number) {
-    const next = [...slots];
-    next[slotIdx] = null;
-    setSlots(next);
+    setSlots(prev => {
+      const next = [...prev];
+      next[slotIdx] = null;
+      return next;
+    });
+  }
+
+  function handlePickWidget(widget: WidgetType) {
+    if (pickerSlot === null) return;
+    setSlots(prev => {
+      const next = [...prev];
+      next[pickerSlot] = widget;
+      return next;
+    });
+    setPickerSlot(null);
   }
 
   function handleConfirm() {
-    // Ensure center slot is always filled
     const { order: newOrder, activeIdx: newActiveIdx } = slotsToOrder(slots);
     if (newOrder.length === 0) return;
     onConfirm(newOrder, newActiveIdx);
     dismiss();
   }
 
-  // ── Layout preview: left column (5) + center (1) + right column (5) ──────
-  const leftSlots  = [0, 1, 2, 3, 4];   // slot indices, top to bottom
+  const leftSlots  = [0, 1, 2, 3, 4];
   const rightSlots = [6, 7, 8, 9, 10];
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        onClick={dismiss}
-        style={{
-          position: 'fixed', inset: 0, zIndex: 600,
-          background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(6px)',
-          opacity: visible ? 1 : 0, transition: 'opacity 0.28s ease',
-        }}
-      />
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 600,
+        background: 'var(--bg)',
+        display: 'flex', flexDirection: 'column',
+        opacity: visible ? 1 : 0,
+        transform: visible ? 'none' : 'translateY(20px)',
+        transition: 'opacity 0.28s ease, transform 0.28s ease',
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}
+    >
+      {/* ── Top bar ─────────────────────────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', alignItems: 'center',
+        padding: '12px 16px', gap: 10,
+        borderBottom: '1px solid var(--border)',
+        flexShrink: 0,
+      }}>
+        <button
+          onPointerDown={dismiss}
+          style={{
+            width: 36, height: 36, borderRadius: '50%',
+            background: 'var(--surface2)', border: '1px solid var(--border)',
+            color: 'var(--text-muted)', fontSize: 18, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            touchAction: 'manipulation',
+          }}
+        >✕</button>
 
-      {/* Sheet */}
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{
-          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 601,
-          background: 'linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%)',
-          borderRadius: '24px 24px 0 0',
-          border: '1px solid var(--border)',
-          boxShadow: '0 -8px 40px var(--card-shadow)',
-          maxHeight: '92dvh',
-          display: 'flex', flexDirection: 'column',
-          transform: visible ? 'translateY(0)' : 'translateY(100%)',
-          transition: 'transform 0.32s cubic-bezier(0.25,0.46,0.45,0.94)',
-          paddingBottom: 'env(safe-area-inset-bottom)',
-        }}
-      >
-        {/* Handle */}
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 6px', flexShrink: 0 }}>
-          <div style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--border-hover)' }} />
-        </div>
-
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', padding: '0 20px 12px', flexShrink: 0 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>Edit Layout</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-              Drag widgets between slots · Tap ✕ to remove
-            </div>
-          </div>
-          <button
-            onClick={handleConfirm}
-            style={{
-              background: 'var(--accent)', border: 'none', borderRadius: 10,
-              padding: '10px 18px', color: '#fff', fontWeight: 700, fontSize: 14,
-              cursor: 'pointer', minHeight: 44,
-            }}
-          >
-            Save ✓
-          </button>
-        </div>
-
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 24px' }}>
-          {/* ── Visual layout preview ─────────────────────────────────────── */}
-          <div style={{
-            background: 'var(--surface3)', borderRadius: 16,
-            border: '1px solid var(--border)',
-            padding: '24px 16px 32px',
-            marginBottom: 24,
-          }}>
-            <div style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)', textAlign: 'center', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 20 }}>
-              Card Layout
-            </div>
-
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center' }}>
-              {/* Left column */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
-                {leftSlots.map(slotIdx => (
-                  <SlotCard
-                    key={slotIdx}
-                    pos={slotIdx}
-                    widgetType={slots[slotIdx]}
-                    isDropTarget={dropTarget === slotIdx}
-                    isDragging={dragFrom?.source === 'slot' && dragFrom.slotIdx === slotIdx}
-                    onDragStart={() => handleSlotDragStart(slotIdx)}
-                    onDrop={() => handleDrop(slotIdx)}
-                    onDragOver={e => handleDragOver(e, slotIdx)}
-                    onRemove={() => handleRemove(slotIdx)}
-                  />
-                ))}
-                <div style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)', textAlign: 'center', marginTop: 4 }}>LEFT SIDE</div>
-              </div>
-
-              {/* Separator arrows */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, opacity: 0.25, color: 'var(--text-muted)', fontSize: 10, alignItems: 'center' }}>
-                {'← →'.split('').map((c, i) => <span key={i}>{c}</span>)}
-              </div>
-
-              {/* Center (active) */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                <SlotCard
-                  pos={5}
-                  widgetType={slots[5]}
-                  isDropTarget={dropTarget === 5}
-                  isDragging={dragFrom?.source === 'slot' && dragFrom.slotIdx === 5}
-                  onDragStart={() => handleSlotDragStart(5)}
-                  onDrop={() => handleDrop(5)}
-                  onDragOver={e => handleDragOver(e, 5)}
-                  onRemove={() => handleRemove(5)}
-                />
-              </div>
-
-              {/* Separator arrows */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, opacity: 0.25, color: 'var(--text-muted)', fontSize: 10, alignItems: 'center' }}>
-                {'← →'.split('').map((c, i) => <span key={i}>{c}</span>)}
-              </div>
-
-              {/* Right column */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
-                {rightSlots.map(slotIdx => (
-                  <SlotCard
-                    key={slotIdx}
-                    pos={slotIdx}
-                    widgetType={slots[slotIdx]}
-                    isDropTarget={dropTarget === slotIdx}
-                    isDragging={dragFrom?.source === 'slot' && dragFrom.slotIdx === slotIdx}
-                    onDragStart={() => handleSlotDragStart(slotIdx)}
-                    onDrop={() => handleDrop(slotIdx)}
-                    onDragOver={e => handleDragOver(e, slotIdx)}
-                    onRemove={() => handleRemove(slotIdx)}
-                  />
-                ))}
-                <div style={{ fontSize: 9, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)', textAlign: 'center', marginTop: 4 }}>RIGHT SIDE</div>
-              </div>
-            </div>
-          </div>
-
-          {/* ── Widget pool ───────────────────────────────────────────────── */}
-          <div>
-            <div style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>
-              Available Widgets
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {WIDGET_CONFIGS.map(cfg => {
-                const inLayout = usedWidgets.has(cfg.id);
-                const accent = WIDGET_ACCENT[cfg.id] ?? 'var(--accent)';
-                return (
-                  <div
-                    key={cfg.id}
-                    draggable={!inLayout}
-                    onDragStart={() => !inLayout && handlePoolDragStart(cfg.id)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 8,
-                      padding: '8px 12px', borderRadius: 10,
-                      background: inLayout ? 'var(--surface3)' : 'var(--surface2)',
-                      border: inLayout
-                        ? '1px solid var(--border)'
-                        : `1px solid ${accent}33`,
-                      opacity: inLayout ? 0.35 : 1,
-                      cursor: inLayout ? 'default' : 'grab',
-                      transition: 'all 0.15s ease',
-                      userSelect: 'none',
-                    }}
-                  >
-                    <span style={{ fontSize: 16 }}>{cfg.icon}</span>
-                    <span style={{ fontSize: 12, color: inLayout ? 'var(--text-faint)' : 'var(--text)', fontWeight: 500 }}>
-                      {cfg.label}
-                    </span>
-                    {inLayout && (
-                      <span style={{ fontSize: 10, color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>✓</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 10, lineHeight: 1.5 }}>
-              Drag widgets from here into a slot above, or drag between slots to reorder.
-            </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)' }}>Edit Layout</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
+            Tap ✕ to remove · Tap ＋ to add a widget
           </div>
         </div>
+
+        <button
+          onPointerDown={handleConfirm}
+          style={{
+            background: 'var(--accent)', border: 'none', borderRadius: 10,
+            padding: '10px 18px', color: '#fff', fontWeight: 700, fontSize: 14,
+            cursor: 'pointer', minHeight: 44, touchAction: 'manipulation',
+          }}
+        >
+          Save ✓
+        </button>
       </div>
-    </>
+
+      {/* ── Layout grid ─────────────────────────────────────────────────────── */}
+      <div style={{
+        flex: 1, display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+        padding: '16px 12px 24px',
+        overflow: 'hidden',
+        position: 'relative',
+      }}>
+
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {/* Left column */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
+            {leftSlots.map(slotIdx => (
+              <SlotCard
+                key={slotIdx}
+                pos={slotIdx}
+                widgetType={slots[slotIdx]}
+                onRemove={() => handleRemove(slotIdx)}
+                onTapEmpty={() => setPickerSlot(slotIdx)}
+              />
+            ))}
+            <div style={{
+              fontSize: 9, color: 'var(--text-faint)',
+              fontFamily: 'var(--font-mono)', textAlign: 'center', marginTop: 6,
+              letterSpacing: '0.06em', textTransform: 'uppercase',
+            }}>
+              Left
+            </div>
+          </div>
+
+          {/* Separator */}
+          <div style={{
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', gap: 2,
+            opacity: 0.2, color: 'var(--text-muted)', fontSize: 12,
+          }}>
+            <span>←</span>
+            <span>→</span>
+          </div>
+
+          {/* Center / Active */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+            <SlotCard
+              pos={5}
+              widgetType={slots[5]}
+              onRemove={() => handleRemove(5)}
+              onTapEmpty={() => setPickerSlot(5)}
+            />
+            <div style={{
+              fontSize: 9, color: 'var(--text-faint)',
+              fontFamily: 'var(--font-mono)', textAlign: 'center', marginTop: 6,
+              letterSpacing: '0.06em', textTransform: 'uppercase',
+            }}>
+              Active
+            </div>
+          </div>
+
+          {/* Separator */}
+          <div style={{
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', gap: 2,
+            opacity: 0.2, color: 'var(--text-muted)', fontSize: 12,
+          }}>
+            <span>←</span>
+            <span>→</span>
+          </div>
+
+          {/* Right column */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
+            {rightSlots.map(slotIdx => (
+              <SlotCard
+                key={slotIdx}
+                pos={slotIdx}
+                widgetType={slots[slotIdx]}
+                onRemove={() => handleRemove(slotIdx)}
+                onTapEmpty={() => setPickerSlot(slotIdx)}
+              />
+            ))}
+            <div style={{
+              fontSize: 9, color: 'var(--text-faint)',
+              fontFamily: 'var(--font-mono)', textAlign: 'center', marginTop: 6,
+              letterSpacing: '0.06em', textTransform: 'uppercase',
+            }}>
+              Right
+            </div>
+          </div>
+        </div>
+
+        {/* Widget picker panel — renders within the layout area */}
+        {pickerSlot !== null && (
+          <WidgetPickerPanel
+            slotPos={pickerSlot}
+            usedWidgets={usedWidgets}
+            onPick={handlePickWidget}
+            onClose={() => setPickerSlot(null)}
+          />
+        )}
+      </div>
+    </div>
   );
 }

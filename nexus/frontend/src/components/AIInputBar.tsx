@@ -5,6 +5,7 @@ import {
 import { useAI } from '../hooks/useAI';
 import { useOmnibarStore } from '../store/useOmnibarStore';
 import { useAuth } from '../hooks/useAuth';
+import { isExtension, getExtensionId } from '../lib/platform';
 
 const ALLOWED_AI_EMAILS = new Set(['lj.buchmiller@gmail.com']);
 
@@ -265,19 +266,45 @@ export function AIInputBar() {
     setInput('');
     setShowDropdown(false);
 
-    // In the Chrome extension context, delegate to chrome.search.query so the
-    // search uses whatever engine the user configured in Chrome settings —
-    // rather than always hardcoding Google. Only applies to the "google" mode;
-    // explicit engine selections (Bing, DuckDuckGo, Perplexity) always use URLs.
-    if (
-      settings.searchEngine === 'google' &&
-      typeof chrome !== 'undefined' &&
-      typeof chrome.search?.query === 'function'
-    ) {
-      chrome.search.query({
-        text: trimmed,
-        disposition: settings.openNewTab ? 'NEW_TAB' : 'CURRENT_TAB',
-      });
+    // ── Extension search (chrome.search.query via externally_connectable) ──────
+    // The thin loader redirects to this website as the top-level page, so
+    // chrome.search.query is NOT directly available here (wrong origin).
+    // Instead we use chrome.runtime.sendMessage(extensionId, ...) which is
+    // allowed because manifest.json declares externally_connectable for this
+    // origin. The background service worker receives the message and calls
+    // chrome.search.query, which respects the user's default Chrome engine.
+    //
+    // The extension ID is embedded in the redirect URL by newtab.js:
+    //   nexus.lj-buchmiller.com?source=extension&extid=<chrome.runtime.id>
+    if (isExtension() && settings.searchEngine === 'google') {
+      const extId = getExtensionId();
+      if (extId && typeof chrome !== 'undefined') {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (chrome as any).runtime.sendMessage(extId, {
+            type: 'NEXUS_SEARCH',
+            query: trimmed,
+            disposition: settings.openNewTab ? 'NEW_TAB' : 'CURRENT_TAB',
+          });
+          return;
+        } catch {
+          // If message passing fails for any reason, fall through to URL nav
+        }
+      }
+    }
+
+    // ── iframe mode (future / fallback) ─────────────────────────────────────
+    // Only fires if the extension somehow loads the website in an iframe instead
+    // of a redirect. Guard: window !== window.top ensures we're actually in a frame.
+    if (isExtension() && settings.searchEngine === 'google' && window !== window.top) {
+      window.parent.postMessage(
+        {
+          type: 'NEXUS_SEARCH_REQUEST',
+          query: trimmed,
+          disposition: settings.openNewTab ? 'NEW_TAB' : 'CURRENT_TAB',
+        },
+        '*',
+      );
       return;
     }
 

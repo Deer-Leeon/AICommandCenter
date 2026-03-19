@@ -142,6 +142,31 @@ Available widgets:
 
 ---
 
+## Chrome Extension
+
+The NEXUS Chrome extension uses a thin loader approach.
+
+### Location
+`nexus/chrome-extension-thin/`
+
+### How it works
+The extension intercepts the new tab page and immediately redirects to
+`nexus.lj-buchmiller.com?source=extension`. All app code lives on the
+website — deploying the website instantly updates what all extension users
+see with no Chrome Web Store resubmission needed.
+
+### Build the extension ZIP for Chrome Web Store submission
+```bash
+npm run build:extension-thin
+```
+Output: `chrome-extension-thin/nexus-extension-v2.0.0.zip`
+
+### When to resubmit to Chrome Web Store
+Only when `manifest.json`, `newtab.html`, `newtab.js`, or `background.js`
+change. Feature updates to the app never require resubmission.
+
+---
+
 ## MCP Server (for Claude Desktop)
 
 The NEXUS MCP server exposes all integrations as tools for any MCP-compatible client.
