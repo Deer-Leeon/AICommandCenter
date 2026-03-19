@@ -1,8 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { WIDGET_CONFIGS, type WidgetConfig } from '../types';
-import { useAuth } from '../hooks/useAuth';
-import { useProfileContext } from '../contexts/ProfileContext';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -132,138 +130,6 @@ function CategorySection({ category, configs, isOpen, pulse }: {
   );
 }
 
-function UserBlock({ isOpen, onOpenSettings }: { isOpen: boolean; onOpenSettings: () => void }) {
-  const { user, signOut } = useAuth();
-  const profile = useProfileContext();
-  const [popupOpen, setPopupOpen] = useState(false);
-  const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const displayLabel = profile?.displayName || user?.email?.split('@')[0] || user?.email || '—';
-  const usernameLabel = profile?.username ? `@${profile.username}` : null;
-
-  // Close popup when clicking outside
-  useEffect(() => {
-    if (!popupOpen) return;
-    function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setPopupOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [popupOpen]);
-
-  if (!user) return null;
-
-  const avatarEl = avatarUrl ? (
-    <img
-      src={avatarUrl}
-      alt="avatar"
-      className="w-7 h-7 rounded-full flex-shrink-0"
-      style={{ border: '1px solid var(--border)' }}
-    />
-  ) : (
-    <div
-      className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-mono flex-shrink-0"
-      style={{ background: 'var(--surface2)', color: 'var(--accent)', border: '1px solid var(--border)' }}
-    >
-      {displayLabel.charAt(0).toUpperCase() || '?'}
-    </div>
-  );
-
-  return (
-    <div ref={containerRef} className="relative px-2 pb-4">
-      {/* "Drag widgets" hint — only visible when expanded */}
-      <div
-        style={{
-          overflow: 'hidden',
-          maxHeight: isOpen ? '40px' : '0px',
-          opacity: isOpen ? 1 : 0,
-          transition: isOpen
-            ? 'opacity 0.18s ease 0.15s, max-height 0.28s ease'
-            : 'opacity 0.06s ease, max-height 0.28s ease 0.06s',
-        }}
-      >
-        <p className="text-xs mb-3" style={{ color: 'var(--text-faint)', fontSize: '10px', lineHeight: 1.5, fontFamily: 'var(--font-mono)' }}>
-          Drag widgets onto the grid
-        </p>
-      </div>
-
-      {/* Clickable user row — popup anchors to this wrapper */}
-      <div className="relative">
-        <button
-          onClick={() => setPopupOpen((p) => !p)}
-          className="flex items-center w-full transition-opacity"
-          style={{
-            background: 'none',
-            border: 'none',
-            padding: 0,
-            cursor: 'pointer',
-            gap: isOpen ? '8px' : '0px',
-            justifyContent: isOpen ? 'flex-start' : 'center',
-          }}
-        >
-          {avatarEl}
-          <span
-            className="text-xs truncate flex-1 min-w-0 text-left overflow-hidden"
-            style={{
-              color: 'var(--text-faint)',
-              fontSize: '10px',
-              opacity: isOpen ? 1 : 0,
-              maxWidth: isOpen ? '160px' : '0px',
-              whiteSpace: 'nowrap',
-              transition: isOpen
-                ? 'opacity 0.18s ease 0.15s, max-width 0.28s ease'
-                : 'opacity 0.06s ease, max-width 0.28s ease 0.06s',
-            }}
-          >
-            {usernameLabel ? `${displayLabel} ${usernameLabel}` : displayLabel}
-          </span>
-        </button>
-
-        {/* Sign-out popup — floats 4px above the row, overlapping whatever is above */}
-        {popupOpen && (
-          <div
-            className="absolute rounded-lg px-3 py-2 flex flex-col gap-1.5"
-            style={{
-              bottom: 'calc(100% + 4px)',
-              left: 0,
-              background: 'var(--surface2)',
-              border: '1px solid var(--border)',
-              boxShadow: 'var(--shadow-popup)',
-              minWidth: '160px',
-              zIndex: 100,
-            }}
-          >
-            <span className="text-xs truncate" style={{ color: 'var(--text-muted)', fontSize: '10px' }}>
-              {usernameLabel ? `${displayLabel} ${usernameLabel}` : displayLabel}
-            </span>
-            <div className="my-1" style={{ borderTop: '1px solid var(--border)' }} />
-            <button
-              onClick={() => { setPopupOpen(false); onOpenSettings(); }}
-              className="text-xs font-mono text-left flex items-center gap-1.5 transition-opacity"
-              style={{ color: 'var(--text-muted)', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '11px' }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.color = 'var(--text)')}
-              onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)')}
-            >
-              ⚙ Settings
-            </button>
-            <button
-              onClick={() => { setPopupOpen(false); signOut(); }}
-              className="text-xs font-mono text-left transition-opacity"
-              style={{ color: 'var(--color-danger)', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '11px' }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.opacity = '0.7')}
-              onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.opacity = '1')}
-            >
-              Sign out
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 export function Sidebar({ isOpen, onToggle, onOpenSettings, onOpenConnections, layoutMode = false, onExitLayout: _onExitLayout }: SidebarProps) {
   const [pulseCount, setPulseCount] = useState(0);
@@ -437,9 +303,6 @@ export function Sidebar({ isOpen, onToggle, onOpenSettings, onOpenConnections, l
           )}
         </div>
       </div>
-
-      {/* User block — outside the clipped wrapper so popup can overflow upward */}
-      <UserBlock isOpen={isOpen} onOpenSettings={onOpenSettings} />
 
       {/* Collapse toggle */}
       <button

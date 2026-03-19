@@ -213,29 +213,32 @@ export default function App() {
 
   return (
     <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      {/* Outer shell: status bar pinned to the very bottom, full width */}
       <div
-        className="flex h-screen w-screen overflow-hidden relative"
+        className="flex flex-col h-screen w-screen overflow-hidden relative"
         style={{ background: 'var(--bg)', zIndex: 1 }}
       >
-        <div
-          style={{
-            maxWidth: sidebarVisible ? '240px' : '0px',
-            overflow: 'hidden',
-            flexShrink: 0,
-            height: '100%',
-            transition: 'max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          }}
-        >
-          <Sidebar
-            isOpen={sidebarOpen}
-            onToggle={() => setSidebarOpen((o) => !o)}
-            onOpenSettings={() => { setSettingsInitialTab('account'); setShowSettings(true); }}
-            layoutMode={showLayoutEditor}
-            onExitLayout={() => setShowLayoutEditor(false)}
-          />
-        </div>
+        {/* Top area: sidebar + content side-by-side */}
+        <div className="flex flex-1 overflow-hidden min-h-0">
+          <div
+            style={{
+              maxWidth: sidebarVisible ? '240px' : '0px',
+              overflow: 'hidden',
+              flexShrink: 0,
+              height: '100%',
+              transition: 'max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            }}
+          >
+            <Sidebar
+              isOpen={sidebarOpen}
+              onToggle={() => setSidebarOpen((o) => !o)}
+              onOpenSettings={() => { setSettingsInitialTab('account'); setShowSettings(true); }}
+              layoutMode={showLayoutEditor}
+              onExitLayout={() => setShowLayoutEditor(false)}
+            />
+          </div>
 
-        <div className="flex flex-col flex-1 overflow-hidden min-w-0">
+          <div className="flex flex-col flex-1 overflow-hidden min-w-0">
           <div
             className="flex-1 relative"
             ref={handleGridRef}
@@ -315,21 +318,23 @@ export default function App() {
             {/* Wave reveal — scoped to the widget grid only */}
             <RevealOverlay />
           </div>
+          </div>{/* end inner content column */}
+        </div>{/* end top area (sidebar + content) */}
 
-          <StatusBar
-            onLayoutClick={() => setShowLayoutEditor(o => !o)}
-            isLayoutMode={showLayoutEditor}
-            sidebarVisible={sidebarVisible}
-            onToggleSidebar={() => {
-              setSidebarVisible(v => {
-                const next = !v;
-                try { localStorage.setItem('nexus_sidebar_visible', String(next)); } catch { /* noop */ }
-                return next;
-              });
-            }}
-            onOpenSettings={() => { setSettingsInitialTab('account'); setShowSettings(true); }}
-          />
-        </div>
+        {/* Status bar — full width across the very bottom */}
+        <StatusBar
+          onLayoutClick={() => setShowLayoutEditor(o => !o)}
+          isLayoutMode={showLayoutEditor}
+          sidebarVisible={sidebarVisible}
+          onToggleSidebar={() => {
+            setSidebarVisible(v => {
+              const next = !v;
+              try { localStorage.setItem('nexus_sidebar_visible', String(next)); } catch { /* noop */ }
+              return next;
+            });
+          }}
+          onOpenSettings={() => { setSettingsInitialTab('account'); setShowSettings(true); }}
+        />
       </div>
 
       {/* Page navigation bar — floating pill at bottom center */}
