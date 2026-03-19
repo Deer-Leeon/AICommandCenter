@@ -297,7 +297,7 @@ function getContractResults(zone: ZoneInfo, dir: Dir): MergeResult[] {
   return results;
 }
 
-export function GridLayoutMode({ onClose }: { onClose: () => void }) {
+export function GridLayoutMode({ onClose: _onClose }: { onClose: () => void }) {
   const { gridSpans, grid, splitZone, resizeZone, searchBarConfig, setSearchBarConfig } = useStore();
   const cfg = searchBarConfig ?? DEFAULT_SEARCH_BAR_CONFIG;
   const containerRef = useRef<HTMLDivElement>(null);

@@ -13,8 +13,6 @@ import { registerPushNotifications, onKeyboardShow, onKeyboardHide } from '../li
 import { apiFetch } from '../lib/api';
 import type { WidgetType } from '../types';
 
-const BOTTOM_BAR_H = 56;
-
 export default function MobileApp() {
   const { order, setOrder } = useMobileCardOrder();
   const [showLayoutEditor, setShowLayoutEditor] = useState(false);

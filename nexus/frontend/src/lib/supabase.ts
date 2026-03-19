@@ -21,8 +21,8 @@ const supabaseAnonKey =
 function isNativeCapacitor(): boolean {
   return (
     typeof window !== 'undefined' &&
-    !!(window as Record<string, unknown>).Capacitor &&
-    !!(((window as Record<string, unknown>).Capacitor) as Record<string, unknown>).isNativePlatform
+    !!(window as unknown as Record<string, unknown>).Capacitor &&
+    !!(((window as unknown as Record<string, unknown>).Capacitor) as Record<string, unknown>).isNativePlatform
   );
 }
 

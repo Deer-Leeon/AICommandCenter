@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, lazy, Suspense, useRef, useMemo, Comp
 import type { ReactNode } from 'react';
 import { useStore } from '../store/useStore';
 import { useRevealStore } from '../store/useRevealStore';
-import { WIDGET_CONFIGS, DEFAULT_SEARCH_BAR_CONFIG, type WidgetType, type GridSpan, type SearchBarConfig } from '../types';
+import { WIDGET_CONFIGS, type WidgetType, type GridSpan, type SearchBarConfig } from '../types';
 import { AIInputBar } from './AIInputBar';
 import { AIResponseCard } from './AIResponseCard';
 import { getCoveredCells } from './Grid';
@@ -691,6 +691,13 @@ interface WidgetCanvasProps { gridEl: HTMLElement | null; }
 export function WidgetCanvas({ gridEl }: WidgetCanvasProps) {
   const { grid, gridSpans, gridConnections, removeWidget, moveWidget, swapWidgets, swapNotifyEnabled, searchBarConfig } = useStore();
   const { revealing, revealed } = useRevealStore();
+
+  // Columns that fall under the search bar in middle mode — used by the drag
+  // target / glow-cell logic below to skip multi-row zones that would bridge
+  // across the search bar slot.
+  const notchCols = searchBarConfig.position === 'middle'
+    ? new Set(Array.from({ length: searchBarConfig.colSpan }, (_, i) => searchBarConfig.colStart + i))
+    : new Set<number>();
   const [rects, setRects]               = useState<Record<string, WidgetRect>>({});
   const [searchBarRect, setSearchBarRect] = useState<WidgetRect | null>(null);
   const [drag, setDrag]                 = useState<DragState | null>(null);
@@ -771,7 +778,7 @@ export function WidgetCanvas({ gridEl }: WidgetCanvasProps) {
 
         // Multi-row zones must not span notch columns (would bridge the search bar)
         const colsInZone = Array.from({ length: colSpan }, (_, i) => col + i);
-        const inNotchCol = colsInZone.some(c => NOTCH_COLS.has(c));
+        const inNotchCol = colsInZone.some(c => notchCols.has(c));
         if (rowSpan > 1 && inNotchCol) continue;
 
         // Every cell in the zone must be empty and unobstructed.
@@ -855,7 +862,7 @@ export function WidgetCanvas({ gridEl }: WidgetCanvasProps) {
         for (let c = col; c < col + colSpan; c++) {
           const k = `${r},${c}`;
           if (result.has(k) || sourceCells.has(k)) continue; // skip already-added & source cells
-          const inNotch = NOTCH_COLS.has(c);
+          const inNotch = notchCols.has(c);
           let top    = GRID_PADDING + r * (ch + GRID_GAP);
           let height = ch;
           if (inNotch) { if (r === 0) height -= NOTCH; else { top += NOTCH; height -= NOTCH; } }

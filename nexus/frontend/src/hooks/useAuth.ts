@@ -8,7 +8,7 @@ function readCachedUser(): User | null {
   // On Capacitor (iOS/Android) the session lives in native Preferences, which
   // is async-only. localStorage will be empty or stale, so we skip the sync
   // read and let getSession() restore the session from Preferences.
-  if (typeof window !== 'undefined' && !!(window as Record<string, unknown>).Capacitor) {
+  if (typeof window !== 'undefined' && !!(window as unknown as Record<string, unknown>).Capacitor) {
     return null;
   }
   try {
