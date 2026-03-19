@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, getAuthRedirectUrl } from '../lib/supabase';
 import { isCapacitor } from '../lib/isCapacitor';
-import { isElectron } from '../lib/isElectron';
 import { openInAppBrowser } from '../lib/capacitorBridge';
 import type { User, Session } from '@supabase/supabase-js';
 
@@ -63,11 +62,14 @@ export function useAuth() {
    * Capacitor (iOS): open the OAuth URL in Safari View Controller so that
    *   Google's 2FA, biometrics, and saved passwords all work correctly.
    *   `skipBrowserRedirect: true` gets the URL without navigating the WebView;
-   *   the PKCE verifier is stored in localStorage so the code exchange works
+   *   the PKCE verifier is stored in Preferences so the code exchange works
    *   when appUrlOpen fires with nexus://auth/callback?code=…
    *
    * Web / Electron: standard PKCE flow — navigate the current window to Google,
-   *   which redirects back to /auth/callback.
+   *   which redirects back to nexus.lj-buchmiller.com/auth/callback.
+   *   Supabase's detectSessionInUrl exchanges the code automatically on load,
+   *   and the session is stored in Electron's Chromium localStorage (persists
+   *   across restarts in ~/Library/Application Support/NEXUS/).
    */
   const signInWithGoogle = async (): Promise<void> => {
     if (window.location.protocol === 'http:' && window.location.hostname !== 'localhost') {
@@ -77,8 +79,6 @@ export function useAuth() {
       return;
     }
 
-    // iOS / Android: open Google in Safari View Controller so biometrics,
-    // saved passwords and 2FA work correctly in a real browser context.
     if (isCapacitor()) {
       const { data } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -92,29 +92,8 @@ export function useAuth() {
       return;
     }
 
-    // Electron: RFC 8252 loopback server — opens Google in the user's default
-    // system browser rather than the embedded WebView. Google increasingly
-    // blocks OAuth in embedded WebViews; the system browser always works.
-    // The loopback server in main.ts catches the redirect, extracts the PKCE
-    // code, and sends it to the renderer via the 'deep-link' IPC event.
-    // main.tsx registers onDeepLink and calls exchangeCodeForSession(code).
-    if (isElectron() && window.electronAPI) {
-      const port = await window.electronAPI.startOAuthServer();
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `http://localhost:${port}/auth/callback`,
-          skipBrowserRedirect: true,
-          queryParams: { prompt: 'select_account' },
-        },
-      });
-      if (!error && data.url) {
-        await window.electronAPI.openExternalUrl(data.url);
-      }
-      return;
-    }
-
-    // Web: standard PKCE — navigate the current tab to Google and back.
+    // Web and Electron: navigate the window to Google and back to /auth/callback.
+    // detectSessionInUrl: true handles the PKCE code exchange on redirect.
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
