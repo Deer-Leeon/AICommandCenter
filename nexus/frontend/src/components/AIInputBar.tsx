@@ -375,9 +375,10 @@ export function AIInputBar() {
   const mutedColor = isDark ? 'rgba(13,13,24,0.45)' : 'rgba(240,240,248,0.5)';
   const iconColor  = isDark ? 'rgba(13,13,24,0.4)'  : 'rgba(240,240,248,0.4)';
 
-  // Responsive breakpoints based on measured container width
-  const isNarrow    = containerWidth > 0 && containerWidth < 280;  // hide AI Mode label
-  const isTiny      = containerWidth > 0 && containerWidth < 180;  // hide AI Mode button entirely
+  // Responsive breakpoints based on measured container width.
+  // Thresholds are conservative so content is hidden well before it would be clipped.
+  const isNarrow    = containerWidth > 0 && containerWidth < 320;  // hide AI Mode label text
+  const isTiny      = containerWidth > 0 && containerWidth < 200;  // hide AI Mode button entirely
   const hPad        = isTiny ? 10 : isNarrow ? 12 : 18;
   const itemGap     = isTiny ? 6  : isNarrow ? 8  : 12;
 
@@ -423,7 +424,8 @@ export function AIInputBar() {
             placeholder={placeholder}
             disabled={isDisabled}
             style={{
-              flex: 1, background: 'transparent', border: 'none', outline: 'none',
+              flex: 1, minWidth: 0, /* allow shrinking below content width on all browsers */
+              background: 'transparent', border: 'none', outline: 'none',
               fontSize: 16, fontWeight: 400, color: textColor, caretColor,
               fontFamily: 'inherit',
               // Override browser placeholder colour to match the inverted palette
