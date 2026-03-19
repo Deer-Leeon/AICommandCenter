@@ -29,6 +29,32 @@ const WIDGET_ACCENT: Partial<Record<WidgetType, string>> = {
   links: '#7c6aff', obsidian: '#8b5cf6',
 };
 
+// ── Tap vs. scroll detection ──────────────────────────────────────────────────
+// Returns a pointerDown handler that only calls onTap() if the finger moves
+// less than `threshold` CSS pixels — any larger movement is treated as a scroll
+// and the action is suppressed.
+function makeTapHandler(onTap: () => void, threshold = 8) {
+  return (e: React.PointerEvent) => {
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let moved = false;
+
+    const onMove = (ev: PointerEvent) => {
+      if (Math.abs(ev.clientX - startX) > threshold || Math.abs(ev.clientY - startY) > threshold) {
+        moved = true;
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      if (!moved) onTap();
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+}
+
 // ── Launch widget preference ──────────────────────────────────────────────────
 const LAUNCH_WIDGET_KEY = 'nexus_mobile_launch_widget';
 
@@ -241,13 +267,13 @@ export function MobileCardStack({ order, onActiveWidgetChange }: Props) {
                     background: accent, borderRadius: 2, opacity: 0.65,
                   }} />
 
-                  {/* Tap target */}
+                  {/* Tap target — only activates on a true tap (< 8 px movement)
+                      so dragging/scrolling past a side card doesn't select it */}
                   <div
-                    onPointerDown={e => {
-                      e.stopPropagation();
+                    onPointerDown={makeTapHandler(() => {
                       hapticSelection();
                       focusWidget(widgetType);
-                    }}
+                    })}
                     style={{ position: 'absolute', inset: 0, zIndex: 10 }}
                   />
 
