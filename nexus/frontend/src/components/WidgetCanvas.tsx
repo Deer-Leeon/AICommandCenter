@@ -86,14 +86,14 @@ interface GridGeometry {
   bottomPad:  number;
 }
 
-function getGridGeometry(gridEl: HTMLElement, cfg: SearchBarConfig): GridGeometry {
-  const gridRect = gridEl.getBoundingClientRect();
+function getGridGeometry(gridEl: HTMLElement, _cfg: SearchBarConfig): GridGeometry {
+  const gridRect   = gridEl.getBoundingClientRect();
   const availWidth = gridRect.width - GRID_PADDING * 2;
 
-  const extraTop    = cfg.position === 'top'    ? BAR_H + BAR_MARGIN : 0;
-  const extraBottom = cfg.position === 'bottom' ? BAR_H + BAR_MARGIN : 0;
-  const topPad      = GRID_PADDING + extraTop;
-  const bottomPad   = GRID_PADDING + extraBottom;
+  // Bar-column cells in top/bottom modes are adjusted individually in computeRects,
+  // so global geometry always uses uniform GRID_PADDING on all sides.
+  const topPad      = GRID_PADDING;
+  const bottomPad   = GRID_PADDING;
   const availHeight = gridRect.height - topPad - bottomPad;
 
   return {
@@ -112,10 +112,18 @@ function computeRects(
 ): Record<string, WidgetRect> {
   const { cellWidth, cellHeight, topPad } = getGridGeometry(gridEl, cfg);
 
-  // Notch only applies when bar is in 'middle' (sits between the two rows)
+  // Notch: middle mode only — columns under the bar are shortened so the bar
+  // can sit between the two rows without overlapping widget content.
   const notchCols = cfg.position === 'middle'
     ? new Set(Array.from({ length: cfg.colSpan }, (_, i) => cfg.colStart + i))
     : new Set<number>();
+
+  // Top/bottom modes: bar columns are shifted/shortened away from the bar edge.
+  // Non-bar columns stretch all the way to the opposite edge (full height).
+  const barCols  = (cfg.position === 'top' || cfg.position === 'bottom')
+    ? new Set(Array.from({ length: cfg.colSpan }, (_, i) => cfg.colStart + i))
+    : new Set<number>();
+  const barExtra = BAR_H + BAR_MARGIN; // space reserved in bar columns
 
   const rects: Record<string, WidgetRect> = {};
   for (let row = 0; row < ROWS; row++) {
@@ -126,16 +134,29 @@ function computeRects(
       let top    = topPad + row * (cellHeight + GRID_GAP);
       let height = span.rowSpan * cellHeight + (span.rowSpan - 1) * GRID_GAP;
 
-      // A widget must be notched if ANY of its columns overlaps a notch column —
-      // not just its top-left column. Otherwise a widget starting at col 0 that
-      // spans into cols 1-3 won't be shortened and will slide behind the search bar.
+      // Middle-mode notch: shorten cells in bar columns so the bar fits between rows.
       const inNotchCol = span.colSpan === 1
         ? notchCols.has(col)
         : Array.from({ length: span.colSpan }, (_, i) => col + i).some(c => notchCols.has(c));
-      const singleRow  = span.rowSpan === 1;
-      if (inNotchCol && singleRow) {
+      if (inNotchCol && span.rowSpan === 1) {
         if (row === 0) { height -= NOTCH; }
         else           { top += NOTCH; height -= NOTCH; }
+      }
+
+      // Top/bottom mode per-column adjustment:
+      // Bar columns are pushed away from the bar; non-bar columns fill the freed space.
+      const spansBarCol = barCols.size > 0 && (
+        span.colSpan === 1
+          ? barCols.has(col)
+          : Array.from({ length: span.colSpan }, (_, i) => col + i).some(c => barCols.has(c))
+      );
+      if (spansBarCol) {
+        if (cfg.position === 'top' && row === 0) {
+          top    += barExtra;
+          height -= barExtra;
+        } else if (cfg.position === 'bottom' && row + span.rowSpan - 1 === ROWS - 1) {
+          height -= barExtra;
+        }
       }
 
       rects[key] = {

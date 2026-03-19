@@ -9,8 +9,6 @@ export const COLS = 6;
 const BAR_H       = 54;
 const BAR_MARGIN  = 8;   // gap between bar edge and nearest widget row
 const GRID_PAD    = 16;
-// Reserve space so the bottom-positioned search bar + its drag handle sit above the PageNavBar pill
-const PAGE_NAV_BAR_RESERVE = 70;
 
 /** Returns the set of cell keys that are "covered" (inside a merged zone but not the top-left). */
 export function getCoveredCells(gridSpans: Record<string, { colSpan: number; rowSpan: number }>): Set<string> {
@@ -34,9 +32,12 @@ interface DropCellProps {
   onOpenPicker: (row: number, col: number) => void;
   notchCols: Set<number>;
   notch: number;
+  barCols: Set<number>;
+  barExtra: number;
+  barPosition: 'top' | 'middle' | 'bottom';
 }
 
-function DropCell({ row, col, colSpan, rowSpan, onOpenPicker, notchCols, notch }: DropCellProps) {
+function DropCell({ row, col, colSpan, rowSpan, onOpenPicker, notchCols, notch, barCols, barExtra, barPosition }: DropCellProps) {
   const key = `${row},${col}`;
   const { grid } = useStore();
   const isOccupied = !!grid[key];
@@ -46,12 +47,20 @@ function DropCell({ row, col, colSpan, rowSpan, onOpenPicker, notchCols, notch }
     if (!isOccupied) onOpenPicker(row, col);
   }
 
-  // Mirror the notch applied in WidgetCanvas.computeRects so empty cells
-  // match the shorter height of occupied cells in center columns.
-  const spansNotch   = Array.from({ length: colSpan }, (_, i) => col + i).some(c => notchCols.has(c));
+  // Mirror the exact margin logic from WidgetCanvas.computeRects so empty drop
+  // zones match the size and position of occupied widget cells.
+  const colIndices   = Array.from({ length: colSpan }, (_, i) => col + i);
+  const spansNotch   = colIndices.some(c => notchCols.has(c));
   const inNotchCol   = spansNotch && rowSpan === 1;
-  const marginTop    = inNotchCol && row === 1 ? notch : 0;
-  const marginBottom = inNotchCol && row === 0 ? notch : 0;
+  let marginTop    = inNotchCol && row === 1 ? notch : 0;
+  let marginBottom = inNotchCol && row === 0 ? notch : 0;
+
+  // Top/bottom bar-column adjustment: push bar columns away from the bar edge.
+  const spansBarCol = barCols.size > 0 && colIndices.some(c => barCols.has(c));
+  if (spansBarCol && rowSpan === 1) {
+    if (barPosition === 'top'    && row === 0)         marginTop    += barExtra;
+    if (barPosition === 'bottom' && row === ROWS - 1)  marginBottom += barExtra;
+  }
 
   return (
     <div
@@ -84,16 +93,18 @@ export function Grid({ onOpenPicker }: GridProps) {
   const cfg = searchBarConfig ?? DEFAULT_SEARCH_BAR_CONFIG;
   const covered = getCoveredCells(gridSpans);
 
-  // Only apply notch when the bar sits between the two widget rows
+  // Middle mode: notch columns shortened so the bar fits between rows.
   const notchCols = cfg.position === 'middle'
     ? new Set(Array.from({ length: cfg.colSpan }, (_, i) => cfg.colStart + i))
     : new Set<number>();
   const notch = cfg.position === 'middle' ? 30 : 0;
 
-  // When bar is at top/bottom, push the grid inward so widgets don't collide.
-  // Bottom also reserves space for the PageNavBar so the bar's drag handle stays reachable.
-  const extraTopPad    = cfg.position === 'top'    ? BAR_H + BAR_MARGIN : 0;
-  const extraBottomPad = cfg.position === 'bottom' ? BAR_H + BAR_MARGIN + PAGE_NAV_BAR_RESERVE : 0;
+  // Top/bottom modes: only bar columns are shifted away from the bar.
+  // Non-bar columns extend to the full edge — no global extra padding needed.
+  const barCols  = (cfg.position === 'top' || cfg.position === 'bottom')
+    ? new Set(Array.from({ length: cfg.colSpan }, (_, i) => cfg.colStart + i))
+    : new Set<number>();
+  const barExtra = BAR_H + BAR_MARGIN;
 
   const cells: React.ReactNode[] = [];
   for (let row = 0; row < ROWS; row++) {
@@ -108,6 +119,9 @@ export function Grid({ onOpenPicker }: GridProps) {
           onOpenPicker={onOpenPicker}
           notchCols={notchCols}
           notch={notch}
+          barCols={barCols}
+          barExtra={barExtra}
+          barPosition={cfg.position}
         />
       );
     }
@@ -118,8 +132,8 @@ export function Grid({ onOpenPicker }: GridProps) {
       id="nexus-grid"
       className="absolute inset-0"
       style={{
-        paddingTop:    GRID_PAD + extraTopPad,
-        paddingBottom: GRID_PAD + extraBottomPad,
+        paddingTop:    GRID_PAD,
+        paddingBottom: GRID_PAD,
         paddingLeft:   GRID_PAD,
         paddingRight:  GRID_PAD,
       }}

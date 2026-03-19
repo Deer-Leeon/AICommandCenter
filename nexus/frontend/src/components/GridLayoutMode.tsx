@@ -65,12 +65,34 @@ function cfgNotch(cfg: SearchBarConfig): number {
   return cfg.position === 'middle' ? NOTCH : 0;
 }
 
-function cfgTopPad(cfg: SearchBarConfig): number {
-  return PAD + (cfg.position === 'top' ? BAR_H + BAR_MG : 0);
+// Bar-column cells are adjusted individually (per-cell) in computeZones / zoneRect,
+// so the global top/bottom padding is always just PAD.
+function cfgTopPad(_cfg: SearchBarConfig): number { return PAD; }
+function cfgBottomPad(_cfg: SearchBarConfig): number { return PAD; }
+
+function cfgBarCols(cfg: SearchBarConfig): Set<number> {
+  return (cfg.position === 'top' || cfg.position === 'bottom')
+    ? new Set(Array.from({ length: cfg.colSpan }, (_, i) => cfg.colStart + i))
+    : new Set<number>();
 }
 
-function cfgBottomPad(cfg: SearchBarConfig): number {
-  return PAD + (cfg.position === 'bottom' ? BAR_H + BAR_MG : 0);
+/** Mirrors WidgetCanvas.computeRects: push bar columns away from the bar edge. */
+function applyBarEdge(
+  row: number, col: number, colSpan: number, rowSpan: number,
+  y: number, h: number,
+  cfg: SearchBarConfig, barCols: Set<number>,
+): { y: number; h: number } {
+  if (barCols.size === 0) return { y, h };
+  const spansBar = Array.from({ length: colSpan }, (_, i) => col + i).some(c => barCols.has(c));
+  if (!spansBar) return { y, h };
+  const barExtra = BAR_H + BAR_MG;
+  if (cfg.position === 'top' && row === 0) {
+    return { y: y + barExtra, h: h - barExtra };
+  }
+  if (cfg.position === 'bottom' && row + rowSpan - 1 === ROWS - 1) {
+    return { y, h: h - barExtra };
+  }
+  return { y, h };
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -129,7 +151,8 @@ function computeZones(
   const { cellW, cellH, topPad } = cellMetrics(cw, ch, cfg);
   const notchCols = cfgNotchCols(cfg);
   const notch     = cfgNotch(cfg);
-  const covered = getCoveredCells(spans);
+  const barCols   = cfgBarCols(cfg);
+  const covered   = getCoveredCells(spans);
   const out: ZoneInfo[] = [];
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
@@ -138,7 +161,8 @@ function computeZones(
       const sp = spans[key] ?? { rowSpan: 1, colSpan: 1 };
       const rawY = cellY(r, cellH, topPad);
       const rawH = sp.rowSpan * cellH + (sp.rowSpan - 1) * GAP;
-      const { y, h } = applyNotch(r, c, sp.colSpan, sp.rowSpan, rawY, rawH, notchCols, notch);
+      const { y: y1, h: h1 } = applyNotch(r, c, sp.colSpan, sp.rowSpan, rawY, rawH, notchCols, notch);
+      const { y,  h  }       = applyBarEdge(r, c, sp.colSpan, sp.rowSpan, y1, h1, cfg, barCols);
       out.push({
         key, row: r, col: c,
         rowSpan: sp.rowSpan, colSpan: sp.colSpan,
@@ -156,10 +180,12 @@ function zoneRect(
   r: number, c: number, rs: number, cs: number,
   cellW: number, cellH: number,
   topPad: number, notchCols: Set<number>, notch: number,
+  cfg: SearchBarConfig, barCols: Set<number>,
 ) {
   const rawY = cellY(r, cellH, topPad);
   const rawH = rs * cellH + (rs - 1) * GAP;
-  const { y, h } = applyNotch(r, c, cs, rs, rawY, rawH, notchCols, notch);
+  const { y: y1, h: h1 } = applyNotch(r, c, cs, rs, rawY, rawH, notchCols, notch);
+  const { y,  h  }       = applyBarEdge(r, c, cs, rs, y1, h1, cfg, barCols);
   return { x: cellX(c, cellW), y, w: cs * cellW + (cs - 1) * GAP, h };
 }
 
@@ -307,6 +333,7 @@ export function GridLayoutMode({ onClose }: { onClose: () => void }) {
   const { cellW, cellH, topPad } = cw > 0 ? cellMetrics(cw, ch, cfg) : { cellW: 0, cellH: 0, topPad: PAD };
   const notchCols = cfgNotchCols(cfg);
   const notch     = cfgNotch(cfg);
+  const barCols   = cfgBarCols(cfg);
 
   // ── Double-click to split ──────────────────────────────────────────────────
   const handleZoneDblClick = useCallback((zone: ZoneInfo) => {
@@ -629,12 +656,12 @@ export function GridLayoutMode({ onClose }: { onClose: () => void }) {
     if (dragOffset >= dragState.threshold && !dragState.blocked && dragState.maxN > 0) {
       const step = Math.max(0, Math.min(Math.floor((dragOffset - dragState.threshold) / (cs + GAP)), dragState.maxN - 1));
       const r = dragState.mergeResults[step];
-      return r ? { rect: zoneRect(r.rowStart, r.colStart, r.rowSpan, r.colSpan, cellW, cellH, topPad, notchCols, notch), isContract: false } : null;
+      return r ? { rect: zoneRect(r.rowStart, r.colStart, r.rowSpan, r.colSpan, cellW, cellH, topPad, notchCols, notch, cfg, barCols), isContract: false } : null;
     }
     if (dragOffset <= -dragState.threshold && dragState.maxContractN > 0) {
       const step = Math.max(0, Math.min(Math.floor((-dragOffset - dragState.threshold) / (cs + GAP)), dragState.maxContractN - 1));
       const r = dragState.contractResults[step];
-      return r ? { rect: zoneRect(r.rowStart, r.colStart, r.rowSpan, r.colSpan, cellW, cellH, topPad, notchCols, notch), isContract: true } : null;
+      return r ? { rect: zoneRect(r.rowStart, r.colStart, r.rowSpan, r.colSpan, cellW, cellH, topPad, notchCols, notch, cfg, barCols), isContract: true } : null;
     }
     return null;
   })();
