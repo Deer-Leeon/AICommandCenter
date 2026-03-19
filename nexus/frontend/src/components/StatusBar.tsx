@@ -255,12 +255,16 @@ export function StatusBar({ onLayoutClick, isLayoutMode = false, sidebarVisible 
 
   return (
     <div
-      className="flex items-center justify-between px-4"
       style={{
         height: '28px',
         background: 'var(--surface)',
         borderTop: '1px solid var(--border)',
         flexShrink: 0,
+        display: 'grid',
+        gridTemplateColumns: '1fr auto 1fr',
+        alignItems: 'center',
+        paddingLeft: '16px',
+        paddingRight: '16px',
       }}
     >
       <div className="flex items-center gap-4">
@@ -277,7 +281,26 @@ export function StatusBar({ onLayoutClick, isLayoutMode = false, sidebarVisible 
         ))}
       </div>
 
-      <div className="flex items-center gap-2">
+      {/* Center branding */}
+      <span
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: '10px',
+          fontWeight: 700,
+          letterSpacing: '0.3em',
+          textTransform: 'uppercase',
+          background: 'linear-gradient(135deg, var(--accent), var(--teal))',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          userSelect: 'none',
+          pointerEvents: 'none',
+          opacity: 0.7,
+        }}
+      >
+        NEXUS
+      </span>
+
+      <div className="flex items-center gap-2" style={{ justifySelf: 'end' }}>
         {onToggleSidebar && (
           <SidebarToggleBtn visible={sidebarVisible} onToggle={onToggleSidebar} />
         )}

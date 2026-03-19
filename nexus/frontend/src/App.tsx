@@ -222,6 +222,7 @@ export default function App() {
             maxWidth: sidebarVisible ? '240px' : '0px',
             overflow: 'hidden',
             flexShrink: 0,
+            height: '100%',
             transition: 'max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           }}
         >

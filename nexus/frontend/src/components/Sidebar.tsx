@@ -267,6 +267,19 @@ function UserBlock({ isOpen, onOpenSettings }: { isOpen: boolean; onOpenSettings
 
 export function Sidebar({ isOpen, onToggle, onOpenSettings, onOpenConnections, layoutMode = false, onExitLayout: _onExitLayout }: SidebarProps) {
   const [pulseCount, setPulseCount] = useState(0);
+  const [showTopFade, setShowTopFade] = useState(false);
+  const [showBottomFade, setShowBottomFade] = useState(true);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setShowTopFade(el.scrollTop > 8);
+    setShowBottomFade(el.scrollTop + el.clientHeight < el.scrollHeight - 8);
+  }, []);
+
+  // Check after content renders / sidebar open-state changes
+  useEffect(() => { handleScroll(); }, [handleScroll, isOpen]);
 
   const handleHint = useCallback(() => {
     setPulseCount(n => n + 1);
@@ -290,6 +303,7 @@ export function Sidebar({ isOpen, onToggle, onOpenSettings, onOpenConnections, l
       className="relative flex-shrink-0 flex flex-col transition-all duration-300"
       style={{
         width: isOpen ? '220px' : '60px',
+        height: '100%',
         background: 'var(--surface)',
         borderRight: '1px solid var(--border)',
         transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)',
@@ -325,7 +339,7 @@ export function Sidebar({ isOpen, onToggle, onOpenSettings, onOpenConnections, l
         </div>
 
         {/* Layout mode instructions OR widget chips */}
-        <div style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
+        <div style={{ flex: 1, overflow: 'hidden', minHeight: 0, position: 'relative' }}>
           {layoutMode ? (
             /* ── Layout instructions ── */
             <div
@@ -373,22 +387,53 @@ export function Sidebar({ isOpen, onToggle, onOpenSettings, onOpenConnections, l
 
             </div>
           ) : (
-            /* ── Widget chips grouped by category ── */
-            <div className="h-full overflow-y-auto nexus-scroll" style={{ padding: '2px 8px 0', overflowX: 'hidden' }}>
-              {CATEGORY_ORDER.map(cat => {
-                const configs = WIDGET_CONFIGS.filter(c => c.category === cat);
-                if (configs.length === 0) return null;
-                return (
-                  <CategorySection
-                    key={cat}
-                    category={cat}
-                    configs={configs}
-                    isOpen={isOpen}
-                    pulse={pulseCount}
-                  />
-                );
-              })}
-            </div>
+            /* ── Widget chips grouped by category, with top/bottom fade indicators ── */
+            <>
+              {/* Top fade — appears when scrolled down from the top */}
+              <div
+                aria-hidden
+                style={{
+                  position: 'absolute', top: 0, left: 0, right: 0, height: 32,
+                  background: 'linear-gradient(to bottom, var(--surface) 10%, transparent)',
+                  pointerEvents: 'none', zIndex: 2,
+                  opacity: showTopFade ? 1 : 0,
+                  transition: 'opacity 0.2s ease',
+                }}
+              />
+
+              <div
+                ref={scrollRef}
+                onScroll={handleScroll}
+                className="h-full overflow-y-auto nexus-scroll"
+                style={{ padding: '2px 8px 16px', overflowX: 'hidden' }}
+              >
+                {CATEGORY_ORDER.map(cat => {
+                  const configs = WIDGET_CONFIGS.filter(c => c.category === cat);
+                  if (configs.length === 0) return null;
+                  return (
+                    <CategorySection
+                      key={cat}
+                      category={cat}
+                      configs={configs}
+                      isOpen={isOpen}
+                      pulse={pulseCount}
+                    />
+                  );
+                })}
+              </div>
+
+              {/* Bottom fade — appears when more content is below */}
+              <div
+                aria-hidden
+                style={{
+                  position: 'absolute', bottom: 0, left: 0, right: 0, height: 36,
+                  background: 'linear-gradient(to top, var(--surface) 10%, transparent)',
+                  pointerEvents: 'none', zIndex: 2,
+                  opacity: showBottomFade ? 1 : 0,
+                  transition: 'opacity 0.2s ease',
+                }}
+              />
+            </>
           )}
         </div>
       </div>
