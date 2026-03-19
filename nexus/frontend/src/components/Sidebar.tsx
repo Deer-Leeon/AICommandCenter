@@ -3,6 +3,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { WIDGET_CONFIGS, type WidgetConfig } from '../types';
 import { useAuth } from '../hooks/useAuth';
 import { useProfileContext } from '../contexts/ProfileContext';
+
 interface SidebarProps {
   isOpen: boolean;
   onToggle: () => void;

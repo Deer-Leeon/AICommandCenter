@@ -45,6 +45,9 @@ export default function App() {
   const { initPending, startReveal } = useRevealStore();
   const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarVisible, setSidebarVisible] = useState<boolean>(() => {
+    try { return localStorage.getItem('nexus_sidebar_visible') !== 'false'; } catch { return true; }
+  });
   const [activeDragId, setActiveDragId] = useState<WidgetType | null>(null);
   const [gridRef, setGridRef] = useState<HTMLElement | null>(null);
   const handleGridRef = useCallback((el: HTMLElement | null) => setGridRef(el), []);
@@ -214,14 +217,22 @@ export default function App() {
         className="flex h-screen w-screen overflow-hidden relative"
         style={{ background: 'var(--bg)', zIndex: 1 }}
       >
-        <Sidebar
-          isOpen={sidebarOpen}
-          onToggle={() => setSidebarOpen((o) => !o)}
-          onOpenSettings={() => { setSettingsInitialTab('account'); setShowSettings(true); }}
-          onOpenConnections={() => { setSettingsInitialTab('connections'); setShowSettings(true); }}
-          layoutMode={showLayoutEditor}
-          onExitLayout={() => setShowLayoutEditor(false)}
-        />
+        <div
+          style={{
+            maxWidth: sidebarVisible ? '240px' : '0px',
+            overflow: 'hidden',
+            flexShrink: 0,
+            transition: 'max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          }}
+        >
+          <Sidebar
+            isOpen={sidebarOpen}
+            onToggle={() => setSidebarOpen((o) => !o)}
+            onOpenSettings={() => { setSettingsInitialTab('account'); setShowSettings(true); }}
+            layoutMode={showLayoutEditor}
+            onExitLayout={() => setShowLayoutEditor(false)}
+          />
+        </div>
 
         <div className="flex flex-col flex-1 overflow-hidden min-w-0">
           <div
@@ -307,8 +318,14 @@ export default function App() {
           <StatusBar
             onLayoutClick={() => setShowLayoutEditor(o => !o)}
             isLayoutMode={showLayoutEditor}
-            isSidebarOpen={sidebarOpen}
-            onSidebarToggle={() => setSidebarOpen(o => !o)}
+            sidebarVisible={sidebarVisible}
+            onToggleSidebar={() => {
+              setSidebarVisible(v => {
+                const next = !v;
+                try { localStorage.setItem('nexus_sidebar_visible', String(next)); } catch { /* noop */ }
+                return next;
+              });
+            }}
             onOpenSettings={() => { setSettingsInitialTab('account'); setShowSettings(true); }}
           />
         </div>

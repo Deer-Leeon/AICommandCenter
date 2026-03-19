@@ -1,9 +1,9 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store/useStore';
 import { useTheme } from '../hooks/useTheme';
+import type { ThemeMode } from '../hooks/useTheme';
 import { useAuth } from '../hooks/useAuth';
 import { useProfileContext } from '../contexts/ProfileContext';
-import type { ThemeMode } from '../hooks/useTheme';
 import type { ServiceConnectionState } from '../types';
 
 const SERVICE_LABELS: Record<string, string> = {
@@ -23,8 +23,8 @@ const SERVICE_LABELS: Record<string, string> = {
 // red    = confirmed disconnected (had good data before, now lost it)
 function dotColor(state: ServiceConnectionState): string {
   if (state.connected) return '#3de8b0';
-  if (state.lastConfirmedAt === null) return '#f59e0b';
-  return '#ef4444';
+  if (state.lastConfirmedAt === null) return '#f59e0b'; // never been connected
+  return '#ef4444'; // was connected before, now disconnected
 }
 
 function StatusDot({ state }: { state: ServiceConnectionState }) {
@@ -41,31 +41,52 @@ function StatusDot({ state }: { state: ServiceConnectionState }) {
 }
 
 // ── Sidebar toggle ────────────────────────────────────────────────────────────
-function SidebarToggle({ isOpen, onToggle }: { isOpen: boolean; onToggle: () => void }) {
+function SidebarToggleBtn({ visible, onToggle }: { visible: boolean; onToggle: () => void }) {
   return (
     <button
       onClick={onToggle}
-      title={isOpen ? 'Hide sidebar' : 'Show sidebar'}
+      title={visible ? 'Hide sidebar' : 'Show sidebar'}
       style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        width: 26,
+        padding: '0 6px',
         height: 18,
-        padding: 0,
         border: '1px solid var(--border)',
         borderRadius: 4,
-        background: isOpen ? 'rgba(var(--accent-rgb),0.12)' : 'transparent',
-        color: isOpen ? 'var(--accent)' : 'var(--text-muted)',
+        background: visible ? 'transparent' : 'rgba(var(--accent-rgb),0.12)',
+        color: visible ? 'var(--text-muted)' : 'var(--accent)',
         cursor: 'pointer',
         transition: 'background 0.12s, color 0.12s, border-color 0.12s',
-        flexShrink: 0,
+      }}
+      onMouseEnter={e => {
+        const el = e.currentTarget as HTMLElement;
+        el.style.background = 'rgba(var(--accent-rgb),0.15)';
+        el.style.color = 'var(--accent)';
+        el.style.borderColor = 'rgba(var(--accent-rgb),0.4)';
+      }}
+      onMouseLeave={e => {
+        const el = e.currentTarget as HTMLElement;
+        el.style.background = visible ? 'transparent' : 'rgba(var(--accent-rgb),0.12)';
+        el.style.color = visible ? 'var(--text-muted)' : 'var(--accent)';
+        el.style.borderColor = 'var(--border)';
       }}
     >
-      {/* Panel-layout icon: outer rect + vertical divider */}
-      <svg width="14" height="10" viewBox="0 0 14 10" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-        <rect x="0.7" y="0.7" width="12.6" height="8.6" rx="1.5" />
-        <line x1="4.5" y1="0.7" x2="4.5" y2="9.3" />
+      {/* Sidebar panel icon: outer rect + left column divider */}
+      <svg width="14" height="12" viewBox="0 0 14 12" fill="none" style={{ display: 'block' }}>
+        <rect x="0.6" y="0.6" width="12.8" height="10.8" rx="1.8" stroke="currentColor" strokeWidth="1.2"/>
+        <line x1="4.5" y1="0.6" x2="4.5" y2="11.4" stroke="currentColor" strokeWidth="1.2"/>
+        {visible && (
+          <>
+            <rect x="6" y="3.5" width="5.5" height="1.2" rx="0.6" fill="currentColor" opacity="0.55"/>
+            <rect x="6" y="5.4" width="4" height="1.2" rx="0.6" fill="currentColor" opacity="0.4"/>
+            <rect x="6" y="7.3" width="5" height="1.2" rx="0.6" fill="currentColor" opacity="0.45"/>
+          </>
+        )}
+        {!visible && (
+          /* ▶ arrow indicating panel is hidden */
+          <path d="M6.5 6 L9.5 4 L9.5 8 Z" fill="currentColor" opacity="0.7"/>
+        )}
       </svg>
     </button>
   );
@@ -73,9 +94,9 @@ function SidebarToggle({ isOpen, onToggle }: { isOpen: boolean; onToggle: () => 
 
 // ── Theme toggle ──────────────────────────────────────────────────────────────
 const THEME_OPTIONS: { value: ThemeMode; label: string; title: string }[] = [
-  { value: 'dark',  label: '☾', title: 'Dark mode' },
-  { value: 'auto',  label: '◐', title: 'Auto (follows system)' },
-  { value: 'light', label: '☀', title: 'Light mode' },
+  { value: 'dark',  label: '☾',  title: 'Dark mode' },
+  { value: 'auto',  label: '◐',  title: 'Auto (follows system)' },
+  { value: 'light', label: '☀',  title: 'Light mode' },
 ];
 
 function ThemeToggle() {
@@ -120,93 +141,102 @@ function ThemeToggle() {
   );
 }
 
-// ── Profile button ────────────────────────────────────────────────────────────
-function ProfileButton({ onOpenSettings }: { onOpenSettings: () => void }) {
-  const { user } = useAuth();
-  const profile  = useProfileContext();
-  const [hover, setHover] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+// ── User avatar ───────────────────────────────────────────────────────────────
+function UserAvatarBtn({ onOpenSettings }: { onOpenSettings: () => void }) {
+  const { user, signOut } = useAuth();
+  const profile = useProfileContext();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const avatarUrl = user?.user_metadata?.avatar_url as string | undefined;
+  const displayLabel = profile?.displayName || user?.email?.split('@')[0] || '?';
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
 
   if (!user) return null;
 
-  const avatarUrl    = user.user_metadata?.avatar_url as string | undefined;
-  const displayLabel = profile?.displayName || user.email?.split('@')[0] || '?';
-  const initial      = displayLabel.charAt(0).toUpperCase();
-
-  const handleMouseEnter = () => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    setHover(true);
-  };
-  const handleMouseLeave = () => {
-    timerRef.current = setTimeout(() => setHover(false), 80);
-  };
-
   return (
-    <div
-      style={{ position: 'relative' }}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
+    <div ref={ref} style={{ position: 'relative' }}>
       <button
-        onClick={onOpenSettings}
-        title={`${displayLabel} · Open settings`}
+        onClick={() => setOpen(p => !p)}
+        title={displayLabel}
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: 22,
-          height: 22,
-          padding: 0,
-          border: 'none',
-          borderRadius: '50%',
-          cursor: 'pointer',
-          background: 'none',
-          overflow: 'hidden',
-          flexShrink: 0,
-          outline: hover ? '2px solid rgba(var(--accent-rgb),0.5)' : '2px solid transparent',
-          outlineOffset: '1px',
-          transition: 'outline-color 0.15s',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          width: 20, height: 20, borderRadius: '50%',
+          padding: 0, border: '1px solid var(--border)',
+          background: 'var(--surface2)', cursor: 'pointer',
+          overflow: 'hidden', flexShrink: 0,
+          transition: 'border-color 0.12s, opacity 0.12s',
         }}
+        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = 'rgba(var(--accent-rgb),0.5)'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; }}
       >
         {avatarUrl ? (
-          <img
-            src={avatarUrl}
-            alt={displayLabel}
-            style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }}
-          />
+          <img src={avatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
-          <div style={{
-            width: 22, height: 22, borderRadius: '50%',
-            background: 'var(--surface2)',
-            border: '1px solid var(--border)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 700,
-            color: 'var(--accent)',
-          }}>
-            {initial}
-          </div>
+          <span style={{ fontSize: 9, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>
+            {displayLabel.charAt(0).toUpperCase()}
+          </span>
         )}
       </button>
+
+      {open && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 'calc(100% + 6px)',
+            right: 0,
+            background: 'var(--surface2)',
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            boxShadow: 'var(--shadow-popup)',
+            minWidth: 160,
+            padding: '8px 12px',
+            zIndex: 200,
+          }}
+        >
+          <span style={{ display: 'block', fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {profile?.username ? `@${profile.username}` : displayLabel}
+          </span>
+          <div style={{ borderTop: '1px solid var(--border)', marginBottom: 6 }} />
+          <button
+            onClick={() => { setOpen(false); onOpenSettings(); }}
+            style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', padding: '2px 0', marginBottom: 2 }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'var(--text-muted)'; }}
+          >
+            ⚙ Settings
+          </button>
+          <button
+            onClick={() => { setOpen(false); signOut(); }}
+            style={{ display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--color-danger)', padding: '2px 0' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.opacity = '0.7'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+          >
+            Sign out
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-// ── Props ─────────────────────────────────────────────────────────────────────
 interface StatusBarProps {
   onLayoutClick?: () => void;
   isLayoutMode?: boolean;
-  isSidebarOpen?: boolean;
-  onSidebarToggle?: () => void;
+  sidebarVisible?: boolean;
+  onToggleSidebar?: () => void;
   onOpenSettings?: () => void;
 }
 
-export function StatusBar({
-  onLayoutClick,
-  isLayoutMode = false,
-  isSidebarOpen = false,
-  onSidebarToggle,
-  onOpenSettings,
-}: StatusBarProps) {
+export function StatusBar({ onLayoutClick, isLayoutMode = false, sidebarVisible = true, onToggleSidebar, onOpenSettings }: StatusBarProps) {
   const { serviceStates } = useStore();
   const [clock, setClock] = useState('');
 
@@ -233,7 +263,6 @@ export function StatusBar({
         flexShrink: 0,
       }}
     >
-      {/* Left cluster — service connection indicators */}
       <div className="flex items-center gap-4">
         {Object.entries(serviceStates).map(([service, state]) => (
           <div key={service} className="flex items-center gap-1.5">
@@ -248,17 +277,11 @@ export function StatusBar({
         ))}
       </div>
 
-      {/* Right cluster — controls + clock + profile */}
-      <div className="flex items-center gap-3">
-        {/* Sidebar toggle */}
-        {onSidebarToggle && (
-          <SidebarToggle isOpen={isSidebarOpen} onToggle={onSidebarToggle} />
+      <div className="flex items-center gap-2">
+        {onToggleSidebar && (
+          <SidebarToggleBtn visible={sidebarVisible} onToggle={onToggleSidebar} />
         )}
-
-        {/* Theme toggle */}
         <ThemeToggle />
-
-        {/* Layout mode button */}
         {onLayoutClick && (
           <button
             onClick={onLayoutClick}
@@ -293,17 +316,13 @@ export function StatusBar({
             {isLayoutMode ? '✓ Save' : '⊞ Layout'}
           </button>
         )}
-
-        {/* Clock */}
         <span
           className="font-mono text-xs"
           style={{ color: 'var(--text-muted)', fontSize: '11px' }}
         >
           {clock}
         </span>
-
-        {/* Profile avatar — rightmost */}
-        {onOpenSettings && <ProfileButton onOpenSettings={onOpenSettings} />}
+        {onOpenSettings && <UserAvatarBtn onOpenSettings={onOpenSettings} />}
       </div>
     </div>
   );
