@@ -900,7 +900,11 @@ export function GridLayoutMode({ onClose }: { onClose: () => void }) {
             top = centerY - BAR_H / 2;
           }
 
-          // Capture drag-start values so closure is stable across the full drag
+          // 20% threshold prevents the oscillation that happens when cursor hovers
+          // near a column boundary.  committed mutates in place via closure —
+          // no extra React state needed.
+          const SNAP_THRESH = 0.2;
+
           const startBarResize = (side: 'left' | 'right', e: React.PointerEvent) => {
             e.preventDefault();
             e.stopPropagation();
@@ -908,23 +912,56 @@ export function GridLayoutMode({ onClose }: { onClose: () => void }) {
             const startColSpan  = cfg.colSpan;
             const startPosition = cfg.position;
             const rightEdge     = startColStart + startColSpan;
+            let committed = side === 'right' ? rightEdge : startColStart;
 
             const onMove = (ev: PointerEvent) => {
               const containerEl = containerRef.current;
               if (!containerEl) return;
               const cr   = containerEl.getBoundingClientRect();
-              const relX = ev.clientX - cr.left - PAD;
-              const colF = relX / (cellW + GAP);
+              const colF = (ev.clientX - cr.left - PAD) / (cellW + GAP);
 
-              // Math.floor snaps only at full column boundaries, eliminating
-              // the rapid back-and-forth that Math.round causes near midpoints.
-              if (side === 'left') {
-                const newStart = Math.max(0, Math.min(rightEdge - 1, Math.floor(colF)));
-                setSearchBarConfig({ position: startPosition, colStart: newStart, colSpan: Math.max(1, rightEdge - newStart) });
+              if (side === 'right') {
+                while (colF > committed + SNAP_THRESH       && committed < COLS)            committed++;
+                while (colF < committed - 1 - SNAP_THRESH   && committed > startColStart + 1) committed--;
+                setSearchBarConfig({ position: startPosition, colStart: startColStart, colSpan: committed - startColStart });
               } else {
-                const newEnd = Math.max(startColStart + 1, Math.min(COLS, Math.floor(colF) + 1));
-                setSearchBarConfig({ position: startPosition, colStart: startColStart, colSpan: newEnd - startColStart });
+                while (colF < committed - SNAP_THRESH         && committed > 0)            committed--;
+                while (colF > committed + 1 + SNAP_THRESH     && committed < rightEdge - 1) committed++;
+                setSearchBarConfig({ position: startPosition, colStart: committed, colSpan: Math.max(1, rightEdge - committed) });
               }
+            };
+            const onUp = () => {
+              window.removeEventListener('pointermove', onMove);
+              window.removeEventListener('pointerup', onUp);
+            };
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp);
+          };
+
+          // Drag the bar body → horizontal repositioning (colStart, keeping colSpan)
+          const startIndicatorDrag = (e: React.PointerEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const startColStart = cfg.colStart;
+            const startColSpan  = cfg.colSpan;
+            const startPosition = cfg.position;
+            const startX = e.clientX;
+            const containerEl = containerRef.current;
+            if (!containerEl) return;
+            const cr0       = containerEl.getBoundingClientRect();
+            const startColF = (startX - cr0.left - PAD) / (cellW + GAP);
+            const offsetWithinBar = startColF - startColStart;
+            let committed = startColStart;
+
+            const onMove = (ev: PointerEvent) => {
+              const containerEl2 = containerRef.current;
+              if (!containerEl2) return;
+              const cr   = containerEl2.getBoundingClientRect();
+              const colF = (ev.clientX - cr.left - PAD) / (cellW + GAP);
+              const target = colF - offsetWithinBar;
+              while (target > committed + SNAP_THRESH && committed < COLS - startColSpan) committed++;
+              while (target < committed - SNAP_THRESH && committed > 0)                   committed--;
+              setSearchBarConfig({ position: startPosition, colStart: committed, colSpan: startColSpan });
             };
             const onUp = () => {
               window.removeEventListener('pointermove', onMove);
@@ -937,21 +974,24 @@ export function GridLayoutMode({ onClose }: { onClose: () => void }) {
           const HANDLE_W = 18;
 
           return (
-            <div style={{
-              position: 'absolute', left, top, width, height: BAR_H,
-              background: 'rgba(var(--accent-rgb),0.07)',
-              border: '1.5px dashed rgba(var(--accent-rgb),0.45)',
-              borderRadius: 9999,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700,
-              color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase',
-              zIndex: 60, userSelect: 'none',
-            }}>
+            <div
+              onPointerDown={startIndicatorDrag}
+              title="Drag to reposition · use edge handles to resize"
+              style={{
+                position: 'absolute', left, top, width, height: BAR_H,
+                background: 'rgba(var(--accent-rgb),0.07)',
+                border: '1.5px dashed rgba(var(--accent-rgb),0.45)',
+                borderRadius: 9999,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700,
+                color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase',
+                zIndex: 60, userSelect: 'none', cursor: 'grab',
+              }}>
               ⌕ Search Bar
 
               {/* Left resize grip */}
               <div
-                onPointerDown={(e) => startBarResize('left', e)}
+                onPointerDown={(e) => { e.stopPropagation(); startBarResize('left', e); }}
                 title="Drag to resize"
                 style={{
                   position: 'absolute', left: 0, top: 0, bottom: 0, width: HANDLE_W,
@@ -971,7 +1011,7 @@ export function GridLayoutMode({ onClose }: { onClose: () => void }) {
 
               {/* Right resize grip */}
               <div
-                onPointerDown={(e) => startBarResize('right', e)}
+                onPointerDown={(e) => { e.stopPropagation(); startBarResize('right', e); }}
                 title="Drag to resize"
                 style={{
                   position: 'absolute', right: 0, top: 0, bottom: 0, width: HANDLE_W,

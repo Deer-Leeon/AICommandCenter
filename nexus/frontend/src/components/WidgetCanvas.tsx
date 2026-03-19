@@ -209,77 +209,127 @@ function SearchBarSlot({
   const { searchBarConfig, setSearchBarConfig } = useStore();
   const cfg = searchBarConfig;
 
-  // ── Vertical position drag ─────────────────────────────────────────────────
+  // ── Vertical position drag + horizontal reposition (same grip handle) ────────
   const [isDraggingBar, setIsDraggingBar] = useState(false);
   const [dropZone, setDropZone] = useState<'top' | 'middle' | 'bottom' | null>(null);
-  const dragStartY = useRef(0);
+
+  // Shared snap threshold: only commit a snap when cursor has crossed 20% of a
+  // column width past a boundary. This creates a 40% dead-zone around each
+  // snap point, eliminating all back-and-forth oscillation.
+  const SNAP_THRESH = 0.2;
 
   const startBarDrag = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    dragStartY.current = e.clientY;
-    setIsDraggingBar(true);
+
+    if (!gridEl) return;
+    const startColStart = cfg.colStart;
+    const startColSpan  = cfg.colSpan;
+    const startPosition = cfg.position;
+    const startX        = e.clientX;
+    const startY        = e.clientY;
+    const DIR_PX        = 5; // pixels of movement before the axis is locked
+
+    // Capture bar-relative cursor offset so dragging keeps the bar under the finger
+    const gr0     = gridEl.getBoundingClientRect();
+    const cellW0  = (gr0.width - GRID_PADDING * 2 - GRID_GAP * (COLS - 1)) / COLS;
+    const startColF      = (startX - gr0.left - GRID_PADDING) / (cellW0 + GRID_GAP);
+    const offsetWithinBar = startColF - startColStart; // cursor pos inside bar (columns)
+
+    let axis: 'h' | 'v' | null = null;
+    // committed mutates via closure — one JS variable, no extra React state
+    let committed = startColStart;
 
     const onMove = (ev: PointerEvent) => {
       if (!gridEl) return;
-      const gr = gridEl.getBoundingClientRect();
-      const relY = ev.clientY - gr.top;
-      const pct  = relY / gr.height;
-      setDropZone(pct < 0.33 ? 'top' : pct > 0.67 ? 'bottom' : 'middle');
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+
+      // Lock drag axis once the cursor has moved enough
+      if (axis === null) {
+        if (Math.abs(dx) > DIR_PX || Math.abs(dy) > DIR_PX) {
+          axis = Math.abs(dx) >= Math.abs(dy) ? 'h' : 'v';
+          if (axis === 'v') setIsDraggingBar(true);
+        }
+        return;
+      }
+
+      if (axis === 'h') {
+        // Horizontal → reposition bar (change colStart, keep colSpan)
+        const gr    = gridEl.getBoundingClientRect();
+        const cellW = (gr.width - GRID_PADDING * 2 - GRID_GAP * (COLS - 1)) / COLS;
+        const colF  = (ev.clientX - gr.left - GRID_PADDING) / (cellW + GRID_GAP);
+        const target = colF - offsetWithinBar; // desired colStart in column space
+        // Step committed one column at a time, snapping only after 20% threshold
+        while (target > committed + SNAP_THRESH && committed < COLS - startColSpan) committed++;
+        while (target < committed - SNAP_THRESH && committed > 0)                   committed--;
+        setSearchBarConfig({ position: startPosition, colStart: committed, colSpan: startColSpan });
+      } else {
+        // Vertical → snap to top / middle / bottom drop-zone
+        const gr   = gridEl.getBoundingClientRect();
+        const pct  = (ev.clientY - gr.top) / gr.height;
+        setDropZone(pct < 0.33 ? 'top' : pct > 0.67 ? 'bottom' : 'middle');
+      }
     };
+
     const onUp = (ev: PointerEvent) => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       setIsDraggingBar(false);
-      if (!gridEl) { setDropZone(null); return; }
-      const gr  = gridEl.getBoundingClientRect();
-      const relY = ev.clientY - gr.top;
-      const pct  = relY / gr.height;
-      const pos: 'top' | 'middle' | 'bottom' = pct < 0.33 ? 'top' : pct > 0.67 ? 'bottom' : 'middle';
       setDropZone(null);
-      setSearchBarConfig({ ...cfg, position: pos });
+      if (axis === 'v' && gridEl) {
+        const gr  = gridEl.getBoundingClientRect();
+        const pct = (ev.clientY - gr.top) / gr.height;
+        const pos: 'top' | 'middle' | 'bottom' = pct < 0.33 ? 'top' : pct > 0.67 ? 'bottom' : 'middle';
+        setSearchBarConfig({ position: pos, colStart: startColStart, colSpan: startColSpan });
+      }
+      // Horizontal final position already applied via setSearchBarConfig in onMove
     };
+
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
-  }, [gridEl, cfg, setSearchBarConfig]);
+  }, [gridEl, cfg, setSearchBarConfig, SNAP_THRESH]);
 
-  // ── Horizontal resize ──────────────────────────────────────────────────────
+  // ── Horizontal resize (left / right handles) ──────────────────────────────
   const startResize = useCallback((side: 'left' | 'right', e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
-    // Capture everything needed at the moment the drag starts so the onMove
-    // closure never sees stale values from a later render cycle.
     const startColStart = cfg.colStart;
     const startColSpan  = cfg.colSpan;
     const startPosition = cfg.position;
-    const rightEdge     = startColStart + startColSpan; // fixed anchor for left-handle drags
+    const rightEdge     = startColStart + startColSpan;
+
+    // committed mutates via closure — tracks the last committed snap position
+    let committed = side === 'right' ? rightEdge : startColStart;
 
     const onMove = (ev: PointerEvent) => {
       if (!gridEl) return;
-      const gr     = gridEl.getBoundingClientRect();
-      const availW = gr.width - GRID_PADDING * 2;
-      const cellW  = (availW - GRID_GAP * (COLS - 1)) / COLS;
-      const relX   = ev.clientX - gr.left - GRID_PADDING;
-      const colF   = relX / (cellW + GRID_GAP);
+      const gr    = gridEl.getBoundingClientRect();
+      const cellW = (gr.width - GRID_PADDING * 2 - GRID_GAP * (COLS - 1)) / COLS;
+      const colF  = (ev.clientX - gr.left - GRID_PADDING) / (cellW + GRID_GAP);
 
-      // Math.floor snaps only when the cursor crosses a full column boundary,
-      // eliminating the rapid oscillation that Math.round causes near midpoints.
-      if (side === 'left') {
-        const newStart = Math.max(0, Math.min(rightEdge - 1, Math.floor(colF)));
-        setSearchBarConfig({ position: startPosition, colStart: newStart, colSpan: Math.max(1, rightEdge - newStart) });
+      if (side === 'right') {
+        // Expand: cursor > 20% past the committed right-edge boundary
+        // Contract: cursor > 20% back into the previous column
+        while (colF > committed + SNAP_THRESH       && committed < COLS)            committed++;
+        while (colF < committed - 1 - SNAP_THRESH   && committed > startColStart + 1) committed--;
+        setSearchBarConfig({ position: startPosition, colStart: startColStart, colSpan: committed - startColStart });
       } else {
-        const newEnd = Math.max(startColStart + 1, Math.min(COLS, Math.floor(colF) + 1));
-        setSearchBarConfig({ position: startPosition, colStart: startColStart, colSpan: newEnd - startColStart });
+        // Left handle: expand leftward, contract rightward
+        while (colF < committed - SNAP_THRESH         && committed > 0)            committed--;
+        while (colF > committed + 1 + SNAP_THRESH     && committed < rightEdge - 1) committed++;
+        setSearchBarConfig({ position: startPosition, colStart: committed, colSpan: Math.max(1, rightEdge - committed) });
       }
     };
+
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
-  }, [gridEl, cfg, setSearchBarConfig]);
+  }, [gridEl, cfg, setSearchBarConfig, SNAP_THRESH]);
 
   if (!rect) return null;
 
@@ -326,32 +376,34 @@ function SearchBarSlot({
         alignItems: 'stretch', justifyContent: 'center',
         pointerEvents: 'auto',
       }}>
-        {/* Vertical drag handle — shown on hover above the bar */}
+        {/* Drag handle — spans most of the bar width so it is easy to grab.
+              Drag left/right → repositions the bar (colStart).
+              Drag up/down   → snaps to top / middle / bottom. */}
         <div
           onPointerDown={startBarDrag}
-          title="Drag to reposition search bar"
+          title="Drag left/right to move · Drag up/down to snap to top / middle / bottom"
           style={{
             position: 'absolute',
             top: cfg.position === 'top' ? undefined : -20,
             bottom: cfg.position === 'top' ? -20 : undefined,
-            left: '50%', transform: 'translateX(-50%)',
-            width: 56, height: 14,
+            left: 20, right: 20,   // wide — avoids overlapping the resize handles
+            height: 18,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'grab',
-            borderRadius: 7,
-            background: 'rgba(var(--accent-rgb),0.08)',
-            border: '1px solid rgba(var(--accent-rgb),0.18)',
-            gap: 3,
+            borderRadius: 9,
+            background: 'rgba(var(--accent-rgb),0.07)',
+            border: '1px solid rgba(var(--accent-rgb),0.15)',
+            gap: 4,
             opacity: 0,
             transition: 'opacity 0.15s',
             zIndex: 10,
           }}
           className="nexus-bar-drag-handle"
         >
-          {[0,1,2,3].map(i => (
+          {[0,1,2,3,4,5].map(i => (
             <div key={i} style={{
               width: 3, height: 3, borderRadius: '50%',
-              background: 'var(--accent)', opacity: 0.7,
+              background: 'var(--accent)', opacity: 0.6,
             }} />
           ))}
         </div>
