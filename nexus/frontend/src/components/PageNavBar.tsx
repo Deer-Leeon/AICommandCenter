@@ -67,7 +67,7 @@ function NamePicker({
     if (e.key === 'Escape') onCancel();
   }
 
-  // Position picker above the nav bar (anchored near clicked tab)
+  // Position picker below the nav bar (anchored near clicked tab)
   const vpW = window.innerWidth;
   const PICKER_W = 280;
   const left = Math.max(8, Math.min(state.anchorX - PICKER_W / 2, vpW - PICKER_W - 8));
@@ -77,7 +77,7 @@ function NamePicker({
       ref={pickerRef}
       style={{
         position:   'fixed',
-        bottom:     80,
+        top:        60,
         left,
         width:      PICKER_W,
         zIndex:     1000,
@@ -370,7 +370,7 @@ export function PageNavBar() {
       <div
         style={{
           position:  'fixed',
-          bottom:    20,
+          top:       8,
           left:      '50%',
           transform: 'translateX(-50%)',
           zIndex:    200,
