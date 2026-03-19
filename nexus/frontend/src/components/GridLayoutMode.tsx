@@ -272,7 +272,7 @@ function getContractResults(zone: ZoneInfo, dir: Dir): MergeResult[] {
 }
 
 export function GridLayoutMode({ onClose }: { onClose: () => void }) {
-  const { gridSpans, grid, splitZone, resizeZone, searchBarConfig } = useStore();
+  const { gridSpans, grid, splitZone, resizeZone, searchBarConfig, setSearchBarConfig } = useStore();
   const cfg = searchBarConfig ?? DEFAULT_SEARCH_BAR_CONFIG;
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
@@ -858,7 +858,7 @@ export function GridLayoutMode({ onClose }: { onClose: () => void }) {
           }} />
         )}
 
-        {/* Search bar indicator — shows its current position in the layout */}
+        {/* Search bar indicator — interactive resize in the layout editor */}
         {cw > 0 && (() => {
           const left  = PAD + cfg.colStart * (cellW + GAP);
           const width = cfg.colSpan * cellW + (cfg.colSpan - 1) * GAP;
@@ -873,21 +873,95 @@ export function GridLayoutMode({ onClose }: { onClose: () => void }) {
             top = centerY - BAR_H / 2;
           }
 
+          // Capture drag-start values so closure is stable across the full drag
+          const startBarResize = (side: 'left' | 'right', e: React.PointerEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const startColStart = cfg.colStart;
+            const startColSpan  = cfg.colSpan;
+
+            const onMove = (ev: PointerEvent) => {
+              const containerEl = containerRef.current;
+              if (!containerEl) return;
+              const cr   = containerEl.getBoundingClientRect();
+              const relX = ev.clientX - cr.left - PAD;
+              const colF = relX / (cellW + GAP);
+
+              if (side === 'left') {
+                const newStart = Math.max(0, Math.min(startColStart + startColSpan - 1, Math.round(colF)));
+                const newSpan  = Math.max(1, startColStart + startColSpan - newStart);
+                setSearchBarConfig({ ...cfg, colStart: newStart, colSpan: newSpan });
+              } else {
+                const newEnd  = Math.max(startColStart + 1, Math.min(COLS, Math.round(colF) + 1));
+                setSearchBarConfig({ ...cfg, colSpan: newEnd - startColStart });
+              }
+            };
+            const onUp = () => {
+              window.removeEventListener('pointermove', onMove);
+              window.removeEventListener('pointerup', onUp);
+            };
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp);
+          };
+
+          const HANDLE_W = 18;
+
           return (
             <div style={{
               position: 'absolute', left, top, width, height: BAR_H,
               background: 'rgba(var(--accent-rgb),0.07)',
-              border: '1.5px dashed rgba(var(--accent-rgb),0.4)',
+              border: '1.5px dashed rgba(var(--accent-rgb),0.45)',
               borderRadius: 9999,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700,
               color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase',
-              pointerEvents: 'none', zIndex: 60,
+              zIndex: 60, userSelect: 'none',
             }}>
               ⌕ Search Bar
+
+              {/* Left resize grip */}
+              <div
+                onPointerDown={(e) => startBarResize('left', e)}
+                title="Drag to resize"
+                style={{
+                  position: 'absolute', left: 0, top: 0, bottom: 0, width: HANDLE_W,
+                  cursor: 'ew-resize', borderRadius: '9999px 0 0 9999px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'rgba(var(--accent-rgb),0.0)',
+                  transition: 'background 0.12s',
+                }}
+                className="nexus-sbar-handle"
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {[0,1,2].map(i => (
+                    <div key={i} style={{ width: 2, height: 2, borderRadius: '50%', background: 'var(--accent)', opacity: 0.7 }} />
+                  ))}
+                </div>
+              </div>
+
+              {/* Right resize grip */}
+              <div
+                onPointerDown={(e) => startBarResize('right', e)}
+                title="Drag to resize"
+                style={{
+                  position: 'absolute', right: 0, top: 0, bottom: 0, width: HANDLE_W,
+                  cursor: 'ew-resize', borderRadius: '0 9999px 9999px 0',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'rgba(var(--accent-rgb),0.0)',
+                  transition: 'background 0.12s',
+                }}
+                className="nexus-sbar-handle"
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {[0,1,2].map(i => (
+                    <div key={i} style={{ width: 2, height: 2, borderRadius: '50%', background: 'var(--accent)', opacity: 0.7 }} />
+                  ))}
+                </div>
+              </div>
             </div>
           );
         })()}
+        <style>{`.nexus-sbar-handle:hover { background: rgba(var(--accent-rgb),0.15) !important; }`}</style>
 
       </div>
     </>
