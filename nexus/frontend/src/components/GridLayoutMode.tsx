@@ -879,6 +879,8 @@ export function GridLayoutMode({ onClose }: { onClose: () => void }) {
             e.stopPropagation();
             const startColStart = cfg.colStart;
             const startColSpan  = cfg.colSpan;
+            const startPosition = cfg.position;
+            const rightEdge     = startColStart + startColSpan;
 
             const onMove = (ev: PointerEvent) => {
               const containerEl = containerRef.current;
@@ -887,13 +889,14 @@ export function GridLayoutMode({ onClose }: { onClose: () => void }) {
               const relX = ev.clientX - cr.left - PAD;
               const colF = relX / (cellW + GAP);
 
+              // Math.floor snaps only at full column boundaries, eliminating
+              // the rapid back-and-forth that Math.round causes near midpoints.
               if (side === 'left') {
-                const newStart = Math.max(0, Math.min(startColStart + startColSpan - 1, Math.round(colF)));
-                const newSpan  = Math.max(1, startColStart + startColSpan - newStart);
-                setSearchBarConfig({ ...cfg, colStart: newStart, colSpan: newSpan });
+                const newStart = Math.max(0, Math.min(rightEdge - 1, Math.floor(colF)));
+                setSearchBarConfig({ position: startPosition, colStart: newStart, colSpan: Math.max(1, rightEdge - newStart) });
               } else {
-                const newEnd  = Math.max(startColStart + 1, Math.min(COLS, Math.round(colF) + 1));
-                setSearchBarConfig({ ...cfg, colSpan: newEnd - startColStart });
+                const newEnd = Math.max(startColStart + 1, Math.min(COLS, Math.floor(colF) + 1));
+                setSearchBarConfig({ position: startPosition, colStart: startColStart, colSpan: newEnd - startColStart });
               }
             };
             const onUp = () => {

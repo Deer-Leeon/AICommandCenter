@@ -227,21 +227,29 @@ function SearchBarSlot({
     e.preventDefault();
     e.stopPropagation();
 
+    // Capture everything needed at the moment the drag starts so the onMove
+    // closure never sees stale values from a later render cycle.
+    const startColStart = cfg.colStart;
+    const startColSpan  = cfg.colSpan;
+    const startPosition = cfg.position;
+    const rightEdge     = startColStart + startColSpan; // fixed anchor for left-handle drags
+
     const onMove = (ev: PointerEvent) => {
       if (!gridEl) return;
-      const gr        = gridEl.getBoundingClientRect();
-      const availW    = gr.width - GRID_PADDING * 2;
-      const cellW     = (availW - GRID_GAP * (COLS - 1)) / COLS;
-      const relX      = ev.clientX - gr.left - GRID_PADDING;
-      const colF      = relX / (cellW + GRID_GAP);
+      const gr     = gridEl.getBoundingClientRect();
+      const availW = gr.width - GRID_PADDING * 2;
+      const cellW  = (availW - GRID_GAP * (COLS - 1)) / COLS;
+      const relX   = ev.clientX - gr.left - GRID_PADDING;
+      const colF   = relX / (cellW + GRID_GAP);
 
+      // Math.floor snaps only when the cursor crosses a full column boundary,
+      // eliminating the rapid oscillation that Math.round causes near midpoints.
       if (side === 'left') {
-        const newStart = Math.max(0, Math.min(cfg.colStart + cfg.colSpan - 2, Math.round(colF)));
-        const newSpan  = cfg.colStart + cfg.colSpan - newStart;
-        setSearchBarConfig({ ...cfg, colStart: newStart, colSpan: Math.max(1, newSpan) });
+        const newStart = Math.max(0, Math.min(rightEdge - 1, Math.floor(colF)));
+        setSearchBarConfig({ position: startPosition, colStart: newStart, colSpan: Math.max(1, rightEdge - newStart) });
       } else {
-        const newEnd  = Math.max(cfg.colStart + 1, Math.min(COLS, Math.round(colF) + 1));
-        setSearchBarConfig({ ...cfg, colSpan: newEnd - cfg.colStart });
+        const newEnd = Math.max(startColStart + 1, Math.min(COLS, Math.floor(colF) + 1));
+        setSearchBarConfig({ position: startPosition, colStart: startColStart, colSpan: newEnd - startColStart });
       }
     };
     const onUp = () => {
