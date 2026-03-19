@@ -12,6 +12,7 @@ import { MobileSpotifyCard } from './MobileSpotifyCard';
 import { WordleWidget } from '../../components/widgets/WordleWidget';
 import { MobileSharedChessCard } from './MobileSharedChessCard';
 import { F1Widget } from '../../components/widgets/F1Widget';
+import { GmailWidget } from '../../components/widgets/GmailWidget';
 
 export function MobileCardContent({ widgetType }: { widgetType: WidgetType }) {
   switch (widgetType) {
@@ -24,8 +25,10 @@ export function MobileCardContent({ widgetType }: { widgetType: WidgetType }) {
     case 'notes':        return <MobileNotesCard />;
     case 'lofi':         return <MobileLofiCard />;
     case 'spotify':      return <MobileSpotifyCard />;
+    // These widgets use ResizeObserver internally and fill any container size.
     case 'wordle':       return <WordleWidget onClose={() => {}} />;
     case 'f1':           return <F1Widget onClose={() => {}} />;
+    case 'gmail':        return <GmailWidget onClose={() => {}} />;
     case 'shared_chess': return <MobileSharedChessCard />;
     default:             return <MobileFallbackCard widgetType={widgetType} />;
   }
