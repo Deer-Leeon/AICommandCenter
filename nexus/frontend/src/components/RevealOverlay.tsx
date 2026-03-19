@@ -28,9 +28,10 @@ export function RevealOverlay() {
   }, []);
 
   // Start the finishReveal timer when the wave animation begins.
+  // Must match the animation duration in index.css (.nexus-reveal-overlay: 0.6s).
   useEffect(() => {
     if (!revealing) return;
-    timerRef.current = setTimeout(finishReveal, 300);
+    timerRef.current = setTimeout(finishReveal, 600);
     return () => {
       if (timerRef.current !== null) clearTimeout(timerRef.current);
     };
