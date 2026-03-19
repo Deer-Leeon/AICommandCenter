@@ -15,6 +15,7 @@ import { useState, useEffect } from 'react';
 export type ThemeMode = 'dark' | 'light' | 'auto';
 
 export const THEME_KEY = 'nexus_theme';
+const THEME_EVENT = 'nexus:theme-change';
 
 // ── Prevent flash-of-wrong-theme (FOWT) ─────────────────────────────────────
 // Runs synchronously at import time, before the first React render.
@@ -48,6 +49,13 @@ export function useTheme() {
     return () => mq.removeEventListener('change', handler);
   }, []);
 
+  // Sync with other useTheme instances in the same tab when any one of them calls setTheme
+  useEffect(() => {
+    const handler = (e: Event) => setThemeState((e as CustomEvent<ThemeMode>).detail);
+    window.addEventListener(THEME_EVENT, handler);
+    return () => window.removeEventListener(THEME_EVENT, handler);
+  }, []);
+
   // Sync data-theme attribute on <html> whenever the user's choice changes
   useEffect(() => {
     if (theme === 'auto') {
@@ -62,6 +70,8 @@ export function useTheme() {
   const setTheme = (next: ThemeMode) => {
     setThemeState(next);
     localStorage.setItem(THEME_KEY, next);
+    // Notify every other useTheme instance in this tab so they re-render immediately
+    window.dispatchEvent(new CustomEvent<ThemeMode>(THEME_EVENT, { detail: next }));
   };
 
   return { theme, resolvedTheme, setTheme };
