@@ -54,7 +54,7 @@ function migrateV2toV3(v2: LayoutV2, existingPages?: Page[]): PagesLayout {
 }
 
 export function useLayoutPersistence(userId?: string) {
-  const { setPages } = useStore();
+  const { setPages, setServerLayoutSynced } = useStore();
 
   const loadedRef        = useRef(false);
   const saveTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -140,6 +140,10 @@ export function useLayoutPersistence(userId?: string) {
       .finally(() => {
         loadedRef.current = true;
         useStore.getState().setLayoutLoaded(true);
+        // Signal that the authoritative server layout has been applied.
+        // SearchBarSlot waits for this before becoming visible to avoid
+        // a position flash from default → saved config on page load.
+        setServerLayoutSynced(true);
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);

@@ -199,6 +199,8 @@ function computeSearchBarRect(
 // All search-bar layout editing (resize + reposition) lives exclusively in
 // GridLayoutMode so it can only be changed when the user enters layout edit mode.
 function SearchBarSlot({ rect }: { rect: WidgetRect | null }) {
+  const serverLayoutSynced = useStore((s) => s.serverLayoutSynced);
+
   if (!rect) return null;
 
   return (
@@ -208,6 +210,11 @@ function SearchBarSlot({ rect }: { rect: WidgetRect | null }) {
       display: 'flex', flexDirection: 'column',
       alignItems: 'stretch', justifyContent: 'center',
       pointerEvents: 'auto',
+      // Stay invisible until the server layout has been applied so the bar
+      // never flashes at the default/cached position before jumping to the
+      // user's saved position.
+      opacity: serverLayoutSynced ? 1 : 0,
+      transition: 'opacity 0.15s ease',
     }}>
       <AIResponseCard />
       <AIInputBar />

@@ -92,6 +92,12 @@ interface NexusStore {
   searchBarConfig: SearchBarConfig;
   setSearchBarConfig: (config: SearchBarConfig) => void;
 
+  // True once the server layout has been applied at least once — used to
+  // suppress the search bar until its authoritative position is known,
+  // preventing a position flash from default → saved config.
+  serverLayoutSynced: boolean;
+  setServerLayoutSynced: (v: boolean) => void;
+
   // Shared widget connection bindings
   gridConnections: Record<string, string>;
   setGridConnections: (conns: Record<string, string>) => void;
@@ -558,6 +564,9 @@ export const useStore = create<NexusStore>((set, get) => ({
       );
       return { searchBarConfig: config, pages: newPages };
     }),
+
+  serverLayoutSynced: false,
+  setServerLayoutSynced: (v) => set({ serverLayoutSynced: v }),
 
   swapNotifyEnabled: localStorage.getItem('nexus_swap_notify') !== 'false',
   setSwapNotifyEnabled: (v) => {
