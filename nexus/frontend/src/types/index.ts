@@ -16,7 +16,7 @@ export interface SearchBarConfig {
 export const DEFAULT_SEARCH_BAR_CONFIG: SearchBarConfig = {
   position: 'middle',
   colStart: 1,
-  colSpan:  4,
+  colSpan:  3,   // columns 2–4, as before
 };
 
 // ── Multi-page dashboard types ─────────────────────────────────────────────

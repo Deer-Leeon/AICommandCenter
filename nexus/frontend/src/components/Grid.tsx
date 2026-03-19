@@ -9,6 +9,8 @@ export const COLS = 6;
 const BAR_H       = 54;
 const BAR_MARGIN  = 8;   // gap between bar edge and nearest widget row
 const GRID_PAD    = 16;
+// Reserve space so the bottom-positioned search bar + its drag handle sit above the PageNavBar pill
+const PAGE_NAV_BAR_RESERVE = 70;
 
 /** Returns the set of cell keys that are "covered" (inside a merged zone but not the top-left). */
 export function getCoveredCells(gridSpans: Record<string, { colSpan: number; rowSpan: number }>): Set<string> {
@@ -88,9 +90,10 @@ export function Grid({ onOpenPicker }: GridProps) {
     : new Set<number>();
   const notch = cfg.position === 'middle' ? 30 : 0;
 
-  // When bar is at top/bottom, push the grid inward so widgets don't collide
+  // When bar is at top/bottom, push the grid inward so widgets don't collide.
+  // Bottom also reserves space for the PageNavBar so the bar's drag handle stays reachable.
   const extraTopPad    = cfg.position === 'top'    ? BAR_H + BAR_MARGIN : 0;
-  const extraBottomPad = cfg.position === 'bottom' ? BAR_H + BAR_MARGIN : 0;
+  const extraBottomPad = cfg.position === 'bottom' ? BAR_H + BAR_MARGIN + PAGE_NAV_BAR_RESERVE : 0;
 
   const cells: React.ReactNode[] = [];
   for (let row = 0; row < ROWS; row++) {
