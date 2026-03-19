@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, lazy, Suspense, useRef, useMemo, Comp
 import type { ReactNode } from 'react';
 import { useStore } from '../store/useStore';
 import { useRevealStore } from '../store/useRevealStore';
-import { WIDGET_CONFIGS, type WidgetType, type GridSpan } from '../types';
+import { WIDGET_CONFIGS, DEFAULT_SEARCH_BAR_CONFIG, type WidgetType, type GridSpan, type SearchBarConfig } from '../types';
 import { AIInputBar } from './AIInputBar';
 import { AIResponseCard } from './AIResponseCard';
 import { getCoveredCells } from './Grid';
@@ -74,19 +74,48 @@ const ROWS = 2;
 const COLS = 6;
 const GRID_PADDING = 16;
 const GRID_GAP = 10;
-const NOTCH_COLS = new Set([1, 2, 3]);
-const NOTCH = 30;
+const BAR_H      = 54;
+const BAR_MARGIN = 8;   // gap between bar edge and the nearest widget row (top/bottom modes)
+const NOTCH      = 30;  // per-side notch when bar is in 'middle' mode
+
+// ── Geometry helpers ──────────────────────────────────────────────────────────
+interface GridGeometry {
+  cellWidth:  number;
+  cellHeight: number;
+  topPad:     number;
+  bottomPad:  number;
+}
+
+function getGridGeometry(gridEl: HTMLElement, cfg: SearchBarConfig): GridGeometry {
+  const gridRect = gridEl.getBoundingClientRect();
+  const availWidth = gridRect.width - GRID_PADDING * 2;
+
+  const extraTop    = cfg.position === 'top'    ? BAR_H + BAR_MARGIN : 0;
+  const extraBottom = cfg.position === 'bottom' ? BAR_H + BAR_MARGIN : 0;
+  const topPad      = GRID_PADDING + extraTop;
+  const bottomPad   = GRID_PADDING + extraBottom;
+  const availHeight = gridRect.height - topPad - bottomPad;
+
+  return {
+    cellWidth:  (availWidth  - GRID_GAP * (COLS - 1)) / COLS,
+    cellHeight: (availHeight - GRID_GAP * (ROWS - 1)) / ROWS,
+    topPad,
+    bottomPad,
+  };
+}
 
 // ── Geometry ──────────────────────────────────────────────────────────────────
 function computeRects(
   gridEl: HTMLElement,
   gridSpans: Record<string, GridSpan>,
+  cfg: SearchBarConfig,
 ): Record<string, WidgetRect> {
-  const gridRect   = gridEl.getBoundingClientRect();
-  const availWidth  = gridRect.width  - GRID_PADDING * 2;
-  const availHeight = gridRect.height - GRID_PADDING * 2;
-  const cellWidth   = (availWidth  - GRID_GAP * (COLS - 1)) / COLS;
-  const cellHeight  = (availHeight - GRID_GAP * (ROWS - 1)) / ROWS;
+  const { cellWidth, cellHeight, topPad } = getGridGeometry(gridEl, cfg);
+
+  // Notch only applies when bar is in 'middle' (sits between the two rows)
+  const notchCols = cfg.position === 'middle'
+    ? new Set(Array.from({ length: cfg.colSpan }, (_, i) => cfg.colStart + i))
+    : new Set<number>();
 
   const rects: Record<string, WidgetRect> = {};
   for (let row = 0; row < ROWS; row++) {
@@ -94,15 +123,15 @@ function computeRects(
       const key  = `${row},${col}`;
       const span = gridSpans[key] ?? { colSpan: 1, rowSpan: 1 };
 
-      let top    = GRID_PADDING + row * (cellHeight + GRID_GAP);
+      let top    = topPad + row * (cellHeight + GRID_GAP);
       let height = span.rowSpan * cellHeight + (span.rowSpan - 1) * GRID_GAP;
 
       // A widget must be notched if ANY of its columns overlaps a notch column —
       // not just its top-left column. Otherwise a widget starting at col 0 that
       // spans into cols 1-3 won't be shortened and will slide behind the search bar.
       const inNotchCol = span.colSpan === 1
-        ? NOTCH_COLS.has(col)
-        : Array.from({ length: span.colSpan }, (_, i) => col + i).some(c => NOTCH_COLS.has(c));
+        ? notchCols.has(col)
+        : Array.from({ length: span.colSpan }, (_, i) => col + i).some(c => notchCols.has(c));
       const singleRow  = span.rowSpan === 1;
       if (inNotchCol && singleRow) {
         if (row === 0) { height -= NOTCH; }
@@ -120,39 +149,221 @@ function computeRects(
   return rects;
 }
 
-function computeSearchBarRect(gridEl: HTMLElement): WidgetRect {
-  const gridRect    = gridEl.getBoundingClientRect();
-  const availWidth  = gridRect.width  - GRID_PADDING * 2;
-  const availHeight = gridRect.height - GRID_PADDING * 2;
-  const cellWidth   = (availWidth  - GRID_GAP * (COLS - 1)) / COLS;
-  const cellHeight  = (availHeight - GRID_GAP * (ROWS - 1)) / ROWS;
-  const BAR_H  = 54;
-  const centerY = GRID_PADDING + cellHeight + GRID_GAP / 2;
-  return {
-    top:   centerY - BAR_H / 2,
-    left:  GRID_PADDING + 1 * (cellWidth + GRID_GAP),
-    width: 3 * cellWidth + 2 * GRID_GAP,
-    height: BAR_H,
-  };
+function computeSearchBarRect(
+  gridEl: HTMLElement,
+  cfg: SearchBarConfig,
+): WidgetRect {
+  const gridRect = gridEl.getBoundingClientRect();
+  const { cellWidth, cellHeight, topPad } = getGridGeometry(gridEl, cfg);
+
+  const left  = GRID_PADDING + cfg.colStart * (cellWidth + GRID_GAP);
+  const width = cfg.colSpan * cellWidth + (cfg.colSpan - 1) * GRID_GAP;
+
+  let top: number;
+  if (cfg.position === 'top') {
+    top = GRID_PADDING;
+  } else if (cfg.position === 'bottom') {
+    top = gridRect.height - GRID_PADDING - BAR_H;
+  } else {
+    // middle: bar floats at the boundary between row 0 and row 1
+    const centerY = topPad + cellHeight + GRID_GAP / 2;
+    top = centerY - BAR_H / 2;
+  }
+
+  return { top, left, width, height: BAR_H };
 }
 
 // ── Search-bar slot ────────────────────────────────────────────────────────────
-// Rendered in its own z=55 layer (see WidgetCanvas return) so it sits ABOVE
-// the RevealOverlay (z=50) from the very first frame — the user can type
-// immediately without waiting for the wave animation to finish.
-function SearchBarSlot({ rect }: { rect: WidgetRect | null }) {
+// Rendered in its own z=55 layer so it sits ABOVE the RevealOverlay (z=50).
+// Supports:
+//   • Vertical drag (grip handle) → snaps to 'top' | 'middle' | 'bottom'
+//   • Horizontal resize (left/right handles) → adjusts colStart / colSpan
+function SearchBarSlot({
+  rect,
+  gridEl,
+}: {
+  rect: WidgetRect | null;
+  gridEl: HTMLElement | null;
+}) {
+  const { searchBarConfig, setSearchBarConfig } = useStore();
+  const cfg = searchBarConfig;
+
+  // ── Vertical position drag ─────────────────────────────────────────────────
+  const [isDraggingBar, setIsDraggingBar] = useState(false);
+  const [dropZone, setDropZone] = useState<'top' | 'middle' | 'bottom' | null>(null);
+  const dragStartY = useRef(0);
+
+  const startBarDrag = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragStartY.current = e.clientY;
+    setIsDraggingBar(true);
+
+    const onMove = (ev: PointerEvent) => {
+      if (!gridEl) return;
+      const gr = gridEl.getBoundingClientRect();
+      const relY = ev.clientY - gr.top;
+      const pct  = relY / gr.height;
+      setDropZone(pct < 0.33 ? 'top' : pct > 0.67 ? 'bottom' : 'middle');
+    };
+    const onUp = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      setIsDraggingBar(false);
+      if (!gridEl) { setDropZone(null); return; }
+      const gr  = gridEl.getBoundingClientRect();
+      const relY = ev.clientY - gr.top;
+      const pct  = relY / gr.height;
+      const pos: 'top' | 'middle' | 'bottom' = pct < 0.33 ? 'top' : pct > 0.67 ? 'bottom' : 'middle';
+      setDropZone(null);
+      setSearchBarConfig({ ...cfg, position: pos });
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }, [gridEl, cfg, setSearchBarConfig]);
+
+  // ── Horizontal resize ──────────────────────────────────────────────────────
+  const startResize = useCallback((side: 'left' | 'right', e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const onMove = (ev: PointerEvent) => {
+      if (!gridEl) return;
+      const gr        = gridEl.getBoundingClientRect();
+      const availW    = gr.width - GRID_PADDING * 2;
+      const cellW     = (availW - GRID_GAP * (COLS - 1)) / COLS;
+      const relX      = ev.clientX - gr.left - GRID_PADDING;
+      const colF      = relX / (cellW + GRID_GAP);
+
+      if (side === 'left') {
+        const newStart = Math.max(0, Math.min(cfg.colStart + cfg.colSpan - 2, Math.round(colF)));
+        const newSpan  = cfg.colStart + cfg.colSpan - newStart;
+        setSearchBarConfig({ ...cfg, colStart: newStart, colSpan: Math.max(1, newSpan) });
+      } else {
+        const newEnd  = Math.max(cfg.colStart + 1, Math.min(COLS, Math.round(colF) + 1));
+        setSearchBarConfig({ ...cfg, colSpan: newEnd - cfg.colStart });
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }, [gridEl, cfg, setSearchBarConfig]);
+
   if (!rect) return null;
+
+  // ── Drop zone overlays shown while dragging bar ────────────────────────────
+  const dropZoneOverlays = isDraggingBar && gridEl ? (() => {
+    const gr = gridEl.getBoundingClientRect();
+    const h  = gr.height;
+    const zones: Array<{ pos: 'top' | 'middle' | 'bottom'; label: string; top: number; height: number }> = [
+      { pos: 'top',    label: 'Top',    top: 0,         height: h * 0.33 },
+      { pos: 'middle', label: 'Middle', top: h * 0.33,  height: h * 0.34 },
+      { pos: 'bottom', label: 'Bottom', top: h * 0.67,  height: h * 0.33 },
+    ];
+    return zones.map(z => (
+      <div key={z.pos} style={{
+        position: 'fixed',
+        left: gr.left, top: gr.top + z.top,
+        width: gr.width, height: z.height,
+        background: dropZone === z.pos
+          ? 'rgba(var(--accent-rgb),0.18)'
+          : 'rgba(var(--accent-rgb),0.05)',
+        border: dropZone === z.pos
+          ? '2px dashed rgba(var(--accent-rgb),0.7)'
+          : '1px dashed rgba(var(--accent-rgb),0.2)',
+        borderRadius: 12,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 13, fontFamily: 'var(--font-mono)',
+        color: dropZone === z.pos ? 'var(--accent)' : 'var(--text-muted)',
+        transition: 'background 0.12s, border 0.12s, color 0.12s',
+        pointerEvents: 'none', zIndex: 9999,
+        letterSpacing: '0.06em',
+      }}>
+        {dropZone === z.pos ? z.label.toUpperCase() : ''}
+      </div>
+    ));
+  })() : null;
+
   return (
-    <div style={{
-      position: 'absolute', top: rect.top, left: rect.left,
-      width: rect.width, height: rect.height,
-      display: 'flex', flexDirection: 'column',
-      alignItems: 'stretch', justifyContent: 'center',
-      pointerEvents: 'auto',
-    }}>
-      <AIResponseCard />
-      <AIInputBar />
-    </div>
+    <>
+      {dropZoneOverlays}
+      <div style={{
+        position: 'absolute', top: rect.top, left: rect.left,
+        width: rect.width, height: rect.height,
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'stretch', justifyContent: 'center',
+        pointerEvents: 'auto',
+      }}>
+        {/* Vertical drag handle — shown on hover above the bar */}
+        <div
+          onPointerDown={startBarDrag}
+          title="Drag to reposition search bar"
+          style={{
+            position: 'absolute',
+            top: cfg.position === 'bottom' ? undefined : -18,
+            bottom: cfg.position === 'bottom' ? -18 : undefined,
+            left: '50%', transform: 'translateX(-50%)',
+            width: 56, height: 14,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'grab',
+            borderRadius: 7,
+            background: 'rgba(var(--accent-rgb),0.08)',
+            border: '1px solid rgba(var(--accent-rgb),0.18)',
+            gap: 3,
+            opacity: 0,
+            transition: 'opacity 0.15s',
+            zIndex: 10,
+          }}
+          className="nexus-bar-drag-handle"
+        >
+          {[0,1,2,3].map(i => (
+            <div key={i} style={{
+              width: 3, height: 3, borderRadius: '50%',
+              background: 'var(--accent)', opacity: 0.7,
+            }} />
+          ))}
+        </div>
+
+        {/* Left resize handle */}
+        <div
+          onPointerDown={(e) => startResize('left', e)}
+          style={{
+            position: 'absolute', left: -6, top: 6, bottom: 6, width: 12,
+            cursor: 'ew-resize', borderRadius: 6,
+            background: 'rgba(var(--accent-rgb),0.0)',
+            transition: 'background 0.15s',
+            zIndex: 10,
+          }}
+          className="nexus-bar-resize-handle"
+        />
+
+        {/* Right resize handle */}
+        <div
+          onPointerDown={(e) => startResize('right', e)}
+          style={{
+            position: 'absolute', right: -6, top: 6, bottom: 6, width: 12,
+            cursor: 'ew-resize', borderRadius: 6,
+            background: 'rgba(var(--accent-rgb),0.0)',
+            transition: 'background 0.15s',
+            zIndex: 10,
+          }}
+          className="nexus-bar-resize-handle"
+        />
+
+        <AIResponseCard />
+        <AIInputBar />
+      </div>
+
+      <style>{`
+        .nexus-bar-drag-handle { opacity: 0 !important; }
+        div:hover > .nexus-bar-drag-handle,
+        .nexus-bar-drag-handle:hover { opacity: 1 !important; }
+        .nexus-bar-resize-handle:hover { background: rgba(var(--accent-rgb),0.15) !important; }
+      `}</style>
+    </>
   );
 }
 
@@ -397,7 +608,7 @@ function PlacedWidget({
 interface WidgetCanvasProps { gridEl: HTMLElement | null; }
 
 export function WidgetCanvas({ gridEl }: WidgetCanvasProps) {
-  const { grid, gridSpans, gridConnections, removeWidget, moveWidget, swapWidgets, swapNotifyEnabled } = useStore();
+  const { grid, gridSpans, gridConnections, removeWidget, moveWidget, swapWidgets, swapNotifyEnabled, searchBarConfig } = useStore();
   const { revealing, revealed } = useRevealStore();
   const [rects, setRects]               = useState<Record<string, WidgetRect>>({});
   const [searchBarRect, setSearchBarRect] = useState<WidgetRect | null>(null);
@@ -424,9 +635,9 @@ export function WidgetCanvas({ gridEl }: WidgetCanvasProps) {
   // ── Rect computation ─────────────────────────────────────────────────────────
   const recomputeRects = useCallback(() => {
     if (!gridEl) return;
-    setRects(computeRects(gridEl, gridSpans));
-    setSearchBarRect(computeSearchBarRect(gridEl));
-  }, [gridEl, gridSpans]);
+    setRects(computeRects(gridEl, gridSpans, searchBarConfig));
+    setSearchBarRect(computeSearchBarRect(gridEl, searchBarConfig));
+  }, [gridEl, gridSpans, searchBarConfig]);
 
   useEffect(() => { recomputeRects(); }, [recomputeRects]);
 
@@ -849,7 +1060,7 @@ export function WidgetCanvas({ gridEl }: WidgetCanvasProps) {
             : { opacity: 0, pointerEvents: 'none' }),
         }}
       >
-        <SearchBarSlot rect={searchBarRect} />
+        <SearchBarSlot rect={searchBarRect} gridEl={gridEl} />
       </div>
 
       {/* z=58 — swap confirmation modal */}

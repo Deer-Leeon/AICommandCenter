@@ -6,6 +6,19 @@ export interface GridSpan {
   rowSpan: number; // ≥ 1
 }
 
+// ── Search bar layout config (per page) ───────────────────────────────────
+export interface SearchBarConfig {
+  position: 'top' | 'middle' | 'bottom';
+  colStart: number;   // 0-based column index (0–5)
+  colSpan:  number;   // number of columns (1–6)
+}
+
+export const DEFAULT_SEARCH_BAR_CONFIG: SearchBarConfig = {
+  position: 'middle',
+  colStart: 1,
+  colSpan:  4,
+};
+
 // ── Multi-page dashboard types ─────────────────────────────────────────────
 
 export interface Page {
@@ -15,6 +28,7 @@ export interface Page {
   grid: Record<string, WidgetType>;
   spans: Record<string, GridSpan>;
   connections: Record<string, string>;
+  searchBar?: SearchBarConfig;   // per-page bar position/span; absent = default middle
   createdAt: string;   // ISO-8601
 }
 

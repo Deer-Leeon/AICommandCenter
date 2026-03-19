@@ -10,7 +10,9 @@ import type {
   ServiceConnectionState,
   Page,
   PagesLayout,
+  SearchBarConfig,
 } from '../types';
+import { DEFAULT_SEARCH_BAR_CONFIG } from '../types';
 import { API_BASE_URL } from '../config';
 import { apiFetch } from '../lib/api';
 import { wcRead, WC_KEY } from '../lib/widgetCache';
@@ -86,6 +88,10 @@ interface NexusStore {
   moveWidget: (fromKey: string, toKey: string) => void;
   swapWidgets: (keyA: string, keyB: string) => void;
 
+  // Search bar position/span (per page, persisted in Page.searchBar)
+  searchBarConfig: SearchBarConfig;
+  setSearchBarConfig: (config: SearchBarConfig) => void;
+
   // Shared widget connection bindings
   gridConnections: Record<string, string>;
   setGridConnections: (conns: Record<string, string>) => void;
@@ -153,10 +159,17 @@ function syncToPages(
   grid: Record<string, WidgetType | null>,
   gridSpans: Record<string, GridSpan>,
   gridConnections: Record<string, string>,
+  searchBarConfig?: SearchBarConfig,
 ): Page[] {
   return pages.map((p) =>
     p.id === activePage
-      ? { ...p, grid: grid as Record<string, WidgetType>, spans: gridSpans, connections: gridConnections }
+      ? {
+          ...p,
+          grid: grid as Record<string, WidgetType>,
+          spans: gridSpans,
+          connections: gridConnections,
+          ...(searchBarConfig !== undefined ? { searchBar: searchBarConfig } : {}),
+        }
       : p
   );
 }
@@ -189,6 +202,7 @@ interface BootResult {
   pages: Page[];
   activePage: string;
   layoutLoaded: boolean;
+  searchBarConfig: SearchBarConfig;
 }
 
 interface LayoutV2 {
@@ -201,6 +215,7 @@ interface LayoutV2 {
 function bootLayout(): BootResult {
   const empty: BootResult = {
     grid: {}, gridSpans: {}, gridConnections: {}, pages: [], activePage: '', layoutLoaded: false,
+    searchBarConfig: DEFAULT_SEARCH_BAR_CONFIG,
   };
   try {
     const userId = getBootUserId();
@@ -220,6 +235,7 @@ function bootLayout(): BootResult {
           pages:           parsed.pages,
           activePage:      activePg.id,
           layoutLoaded:    true,
+          searchBarConfig: activePg.searchBar ?? DEFAULT_SEARCH_BAR_CONFIG,
         };
       }
     }
@@ -248,6 +264,7 @@ function bootLayout(): BootResult {
           pages:           [page],
           activePage:      page.id,
           layoutLoaded:    true,
+          searchBarConfig: DEFAULT_SEARCH_BAR_CONFIG,
         };
       }
     }
@@ -291,6 +308,7 @@ export const useStore = create<NexusStore>((set, get) => ({
       grid:              targetPage.grid ?? {},
       gridSpans:         targetPage.spans ?? {},
       gridConnections:   targetPage.connections ?? {},
+      searchBarConfig:   targetPage.searchBar ?? DEFAULT_SEARCH_BAR_CONFIG,
     });
 
     // Clear transition direction after animation completes
@@ -373,6 +391,7 @@ export const useStore = create<NexusStore>((set, get) => ({
       grid:            targetPage.grid ?? {},
       gridSpans:       targetPage.spans ?? {},
       gridConnections: targetPage.connections ?? {},
+      searchBarConfig: targetPage.searchBar ?? DEFAULT_SEARCH_BAR_CONFIG,
       layoutLoaded:    true,
     });
   },
@@ -525,6 +544,19 @@ export const useStore = create<NexusStore>((set, get) => ({
         gridConnections: newConns,
         pages:           syncToPages(state.pages, state.activePage, state.grid, state.gridSpans, newConns),
       };
+    }),
+
+  // ── Search bar config ──────────────────────────────────────────────────────
+  searchBarConfig: _boot.searchBarConfig,
+
+  setSearchBarConfig: (config) =>
+    set((state) => {
+      const newPages = syncToPages(
+        state.pages, state.activePage,
+        state.grid, state.gridSpans, state.gridConnections,
+        config,
+      );
+      return { searchBarConfig: config, pages: newPages };
     }),
 
   swapNotifyEnabled: localStorage.getItem('nexus_swap_notify') !== 'false',
