@@ -4,6 +4,7 @@ import {
 } from 'react';
 import { useAI } from '../hooks/useAI';
 import { useOmnibarStore } from '../store/useOmnibarStore';
+import { useRevealStore } from '../store/useRevealStore';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
 import { isExtension, getExtensionId } from '../lib/platform';
@@ -34,7 +35,64 @@ const SEARCH_URLS: Record<string, string> = {
   perplexity: 'https://www.perplexity.ai/search?q=',
 };
 
+type BufferedTypeOp =
+  | { t: 'ins'; v: string }
+  | { t: 'back' }
+  | { t: 'del' };
+
+type TypeBufferWindow = Window & {
+  __nexusTypeBuffer?: string;
+  __nexusTypeBufferActive?: boolean;
+  __nexusTypeOps?: unknown[];
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function readBufferedTypeOps(w: TypeBufferWindow): BufferedTypeOp[] {
+  const parsed: BufferedTypeOp[] = [];
+  const rawOps = w.__nexusTypeOps;
+
+  if (Array.isArray(rawOps) && rawOps.length > 0) {
+    for (const raw of rawOps) {
+      if (!raw || typeof raw !== 'object') continue;
+      const op = raw as { t?: unknown; v?: unknown };
+      if (op.t === 'ins' && typeof op.v === 'string' && op.v.length > 0) {
+        parsed.push({ t: 'ins', v: op.v });
+      } else if (op.t === 'back') {
+        parsed.push({ t: 'back' });
+      } else if (op.t === 'del') {
+        parsed.push({ t: 'del' });
+      }
+    }
+
+    // Queue is consumed atomically on each drain.
+    w.__nexusTypeOps = [];
+    w.__nexusTypeBuffer = '';
+    return parsed;
+  }
+
+  // Legacy fallback for sessions that only set the string mirror.
+  const legacy = w.__nexusTypeBuffer;
+  if (typeof legacy === 'string' && legacy.length > 0) {
+    w.__nexusTypeBuffer = '';
+    return [{ t: 'ins', v: legacy }];
+  }
+  return parsed;
+}
+
+function applyBufferedTypeOps(base: string, ops: BufferedTypeOp[]): string {
+  let next = base;
+  for (const op of ops) {
+    if (op.t === 'ins') {
+      next += op.v;
+    } else if (op.t === 'back') {
+      if (next.length > 0) next = next.slice(0, -1);
+    } else {
+      // Delete at end-of-input is a no-op in the buffered replay model.
+    }
+  }
+  return next;
+}
 
 function extractDomain(url: string): string {
   try {
@@ -68,6 +126,7 @@ const SOURCE_LABEL: Record<Suggestion['type'], string> = {
 export function AIInputBar() {
   const { user } = useAuth();
   const hasAIAccess = ALLOWED_AI_EMAILS.has((user?.email ?? '').toLowerCase());
+  const { revealed } = useRevealStore();
 
   const [mode, setMode]               = useState<Mode>('google');
   const [input, setInput]             = useState('');
@@ -83,7 +142,7 @@ export function AIInputBar() {
   const inputRef          = useRef<HTMLInputElement>(null);
   const containerRef      = useRef<HTMLDivElement>(null);
   const userInteractedRef = useRef(false);
-  const bufferFlushedRef  = useRef(false);
+  const handoffCompleteRef = useRef(false);
 
   // Track container width to adapt layout at small colSpan sizes
   const [containerWidth, setContainerWidth] = useState(0);
@@ -107,53 +166,97 @@ export function AIInputBar() {
   // Load omnibar data on first mount
   useEffect(() => { load(); }, [load]);
 
-  // Drain the pre-React type-ahead buffer (window.__nexusTypeBuffer).
-  // Called on every focus attempt; safe to call multiple times — guard ref
-  // ensures only the first call actually flushes and sets the input value.
-  function drainTypeBuffer() {
-    if (bufferFlushedRef.current) return;
-    bufferFlushedRef.current = true;
-
-    const w = window as unknown as {
-      __nexusTypeBuffer?: string;
-      __nexusTypeBufferActive?: boolean;
-    };
-    w.__nexusTypeBufferActive = false; // stop buffering — input owns keys now
-    const buffered = w.__nexusTypeBuffer ?? '';
-    delete w.__nexusTypeBuffer;
-
-    if (buffered) {
-      setInput(buffered);
-      // Place cursor at end of the replayed text
-      requestAnimationFrame(() => {
-        inputRef.current?.setSelectionRange(buffered.length, buffered.length);
-      });
-    }
+  function getTypeBufferWindow(): TypeBufferWindow {
+    return window as unknown as TypeBufferWindow;
   }
 
-  // Auto-focus — fires immediately, then again at 150 ms and 700 ms.
-  // The 700 ms retry is the decisive one: it outlasts every lazy-loaded widget
-  // (TypingWidget, NotesWidget, etc.) that tries to steal focus on mount.
-  // It only fires if the user hasn't deliberately clicked/tapped anything first.
-  useEffect(() => {
-    const markInteracted = () => { userInteractedRef.current = true; };
-    document.addEventListener('pointerdown', markInteracted, { capture: true, once: true });
+  function ensureTypeBufferEnabled() {
+    if (handoffCompleteRef.current) return;
+    const w = getTypeBufferWindow();
+    w.__nexusTypeBufferActive = true;
+  }
 
-    const raf = requestAnimationFrame(() => { inputRef.current?.focus(); drainTypeBuffer(); });
-    const t1  = setTimeout(() => { inputRef.current?.focus(); drainTypeBuffer(); }, 150);
-    const t2  = setTimeout(() => {
-      if (!userInteractedRef.current) { inputRef.current?.focus(); drainTypeBuffer(); }
-    }, 700);
+  function maybeFinalizeTypeBufferHandoff() {
+    if (handoffCompleteRef.current) return;
+    if (!revealed) return;
+    if (document.activeElement !== inputRef.current) return;
+
+    const w = getTypeBufferWindow();
+    w.__nexusTypeBufferActive = false;
+    handoffCompleteRef.current = true;
+  }
+
+  // Drain the pre-React type-ahead queue into the live input.
+  // Safe to call repeatedly; each call consumes only new buffered ops.
+  function drainTypeBuffer() {
+    const w = getTypeBufferWindow();
+    const bufferedOps = readBufferedTypeOps(w);
+
+    if (bufferedOps.length > 0) {
+      setInput((prev) => applyBufferedTypeOps(prev, bufferedOps));
+      // Keep caret pinned to end after replay.
+      requestAnimationFrame(() => {
+        const el = inputRef.current;
+        if (!el) return;
+        const end = el.value.length;
+        el.setSelectionRange(end, end);
+      });
+    }
+
+    maybeFinalizeTypeBufferHandoff();
+  }
+
+  // Keep retrying focus/drain while the dashboard is still stabilizing.
+  // This survives slow network/widget mounts without dropping any early typing.
+  useEffect(() => {
+    ensureTypeBufferEnabled();
+
+    let retry: ReturnType<typeof setInterval> | null = null;
+
+    const markInteracted = (e: PointerEvent) => {
+      const target = e.target as Node | null;
+      const inputEl = inputRef.current;
+      if (target && inputEl && inputEl.contains(target)) return;
+      userInteractedRef.current = true;
+    };
+
+    const focusAndDrain = () => {
+      if (document.visibilityState !== 'visible') return;
+
+      if (!handoffCompleteRef.current) {
+        ensureTypeBufferEnabled();
+      }
+
+      if (!userInteractedRef.current && !handoffCompleteRef.current) {
+        const el = inputRef.current;
+        if (el && document.activeElement !== el) el.focus();
+      }
+
+      drainTypeBuffer();
+
+      if (handoffCompleteRef.current && retry) {
+        clearInterval(retry);
+        retry = null;
+      }
+    };
+
+    document.addEventListener('pointerdown', markInteracted, true);
+    window.addEventListener('focus', focusAndDrain);
+    document.addEventListener('visibilitychange', focusAndDrain);
+
+    const raf = requestAnimationFrame(focusAndDrain);
+    const t1  = setTimeout(focusAndDrain, 150);
+    retry = setInterval(focusAndDrain, 250);
 
     return () => {
       cancelAnimationFrame(raf);
       clearTimeout(t1);
-      clearTimeout(t2);
-      document.removeEventListener('pointerdown', markInteracted, { capture: true });
+      if (retry) clearInterval(retry);
+      document.removeEventListener('pointerdown', markInteracted, true);
+      window.removeEventListener('focus', focusAndDrain);
+      document.removeEventListener('visibilitychange', focusAndDrain);
     };
-  // drainTypeBuffer is defined in render scope — stable reference via ref
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [revealed]);
 
   // ── Suggestions ───────────────────────────────────────────────────────────
   const suggestions = useMemo<Suggestion[]>(() => {
@@ -419,7 +522,10 @@ export function AIInputBar() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            onFocus={() => setFocused(true)}
+            onFocus={() => {
+              setFocused(true);
+              drainTypeBuffer();
+            }}
             onBlur={() => setFocused(false)}
             placeholder={placeholder}
             disabled={isDisabled}

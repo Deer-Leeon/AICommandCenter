@@ -153,28 +153,55 @@
     <div id="nexus-preload" style="position:fixed;inset:0;background:var(--bg);z-index:9997;pointer-events:all;"></div>
     <div id="root"></div>
     <!--
-      Type-ahead buffer: captures every printable keystroke from the very first
-      byte of HTML — before React, before fonts, before any JS bundle loads.
-      AIInputBar drains window.__nexusTypeBuffer on its first focus and replays
-      every character as if the user typed them into the focused input.
-      __nexusTypeBufferActive is flipped to false the instant AIInputBar takes over,
-      so no keystroke is ever counted twice.
+      Type-ahead buffer: captures keystrokes from the first byte of HTML —
+      before React and before bundles load.
+      We store an op queue (__nexusTypeOps) so Backspace/Delete semantics are
+      preserved even when latency is high and focus hops between widgets.
+      AIInputBar drains and applies these ops repeatedly until focus stabilizes.
     -->
     <script>
     (function(){
+      // Legacy string mirror kept for backward compatibility.
       window.__nexusTypeBuffer='';
+      // Canonical op queue consumed by AIInputBar.
+      window.__nexusTypeOps=[];
       window.__nexusTypeBufferActive=true;
+
+      function isEditableTarget(target){
+        if(!target||target.nodeType!==1)return false;
+        var el=target;
+        var tag=(el.tagName||'').toLowerCase();
+        if(tag==='input'||tag==='textarea'||tag==='select')return true;
+        return !!el.isContentEditable;
+      }
+
+      function pushTypeOp(op){
+        if(!Array.isArray(window.__nexusTypeOps))window.__nexusTypeOps=[];
+        window.__nexusTypeOps.push(op);
+
+        // Keep the legacy mirror in sync.
+        if(op.t==='ins'){
+          window.__nexusTypeBuffer+=op.v;
+        }else if(op.t==='back'&&window.__nexusTypeBuffer.length>0){
+          window.__nexusTypeBuffer=window.__nexusTypeBuffer.slice(0,-1);
+        }
+      }
+
       document.addEventListener('keydown',function(e){
         if(!window.__nexusTypeBufferActive)return;
-        // Never capture keystrokes typed into a focused form field (login, search, etc.)
-        var tag=document.activeElement&&document.activeElement.tagName.toLowerCase();
-        if(tag==='input'||tag==='textarea'||tag==='select')return;
-        if(document.activeElement&&document.activeElement.isContentEditable)return;
-        // Ignore shortcuts (Ctrl/Meta/Alt), non-printable keys (F-keys, arrows, etc.)
+        if(e.isComposing)return;
+
+        var target=e.target||document.activeElement;
+        // Never capture keystrokes typed into focused form fields.
+        if(isEditableTarget(target))return;
+
+        // Ignore shortcuts (Ctrl/Meta/Alt), capture printable chars + edit keys.
         if(e.key.length===1&&!e.ctrlKey&&!e.metaKey&&!e.altKey){
-          window.__nexusTypeBuffer+=e.key;
-        }else if(e.key==='Backspace'&&window.__nexusTypeBuffer.length>0){
-          window.__nexusTypeBuffer=window.__nexusTypeBuffer.slice(0,-1);
+          pushTypeOp({t:'ins',v:e.key});
+        }else if(e.key==='Backspace'){
+          pushTypeOp({t:'back'});
+        }else if(e.key==='Delete'){
+          pushTypeOp({t:'del'});
         }
       },true); // capture phase — fires before any React handler
     })();

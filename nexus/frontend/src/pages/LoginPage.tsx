@@ -8,9 +8,14 @@ export default function LoginPage() {
   const { signInWithGoogle } = useAuth();
 
   useEffect(() => {
-    const w = window as unknown as { __nexusTypeBufferActive?: boolean; __nexusTypeBuffer?: string };
+    const w = window as unknown as {
+      __nexusTypeBufferActive?: boolean;
+      __nexusTypeBuffer?: string;
+      __nexusTypeOps?: unknown[];
+    };
     w.__nexusTypeBufferActive = false;
     w.__nexusTypeBuffer = '';
+    w.__nexusTypeOps = [];
   }, []);
 
   const [mode, setMode]           = useState<'login' | 'signup'>('login');
