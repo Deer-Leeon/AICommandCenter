@@ -1,7 +1,7 @@
-// newtab.js — offline UI only.
+// newtab.js — offline UI helpers.
 //
-// redirect.js (in <head>) already handled the online case and redirected
-// before this script ran. This script only runs when the user is offline.
+// redirect.js handles the online redirect/capture path in <head>.
+// This file keeps the offline fallback UI working and retries when connectivity returns.
 
 const NEXUS_URL =
   'https://nexus.lj-buchmiller.com?source=extension&extid=' + chrome.runtime.id;

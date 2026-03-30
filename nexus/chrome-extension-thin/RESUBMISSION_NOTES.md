@@ -27,9 +27,24 @@ externally_connectable mechanism:
 This is the documented approach for allowing a trusted web page to invoke
 extension capabilities.
 
+## Keystroke handoff for new-tab typing
+To prevent dropped keystrokes when network latency is high:
+  1. `redirect.js` captures early keystrokes on the extension new-tab page
+     before redirect completes.
+  2. It stores a sanitized op queue (`insert`/`backspace`/`delete`) in the
+     extension background worker using a one-time token.
+  3. The website receives the token in the redirect URL and consumes the queue
+     via `chrome.runtime.sendMessage(extensionId, ...)`.
+  4. The website replays the queue into the NEXUS search bar and then removes
+     the one-time token from the URL.
+
+No keystroke content is embedded directly in the URL.
+
 ## Permissions used
 - search:  required for chrome.search.query in the background service worker
 - alarms:  used for periodic cache warming fetch to improve load speed
+- storage: stores one-time pre-redirect keystroke buffers keyed by token for
+  reliable handoff from extension page to website
 
 ## externally_connectable
 Declared for https://nexus.lj-buchmiller.com/* to allow the website to send

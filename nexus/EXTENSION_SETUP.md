@@ -28,8 +28,9 @@ nexus/chrome-extension-thin/
 2. Enable **Developer mode** (top-right toggle)
 3. Click **Load unpacked**
 4. Select `nexus/chrome-extension-thin/` ← the source folder, not `dist/`
-5. Open a new tab — it shows the dark NEXUS background for a split second,
-   then redirects to the NEXUS website
+5. Open a new tab — it shows the dark NEXUS background, then redirects to the
+   NEXUS website. If you type immediately, the extension buffers those
+   keystrokes and replays them into the website search bar after redirect.
 
 ---
 

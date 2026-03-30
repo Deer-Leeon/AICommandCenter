@@ -153,6 +153,57 @@
     <div id="nexus-preload" style="position:fixed;inset:0;background:var(--bg);z-index:9997;pointer-events:all;"></div>
     <div id="root"></div>
     <!--
+      Extension handoff (tokenized): if the new-tab extension captured keystrokes
+      before redirect, pull them now and append to the same pre-React queue used
+      by the website buffer.
+    -->
+    <script>
+    (function(){
+      try{
+        var p=new URLSearchParams(window.location.search);
+        if(p.get('source')!=='extension')return;
+        var extid=p.get('extid');
+        var boot=p.get('boot');
+        if(!extid||!boot)return;
+        if(!window.chrome||!chrome.runtime||typeof chrome.runtime.sendMessage!=='function')return;
+
+        chrome.runtime.sendMessage(extid,{type:'NEXUS_TYPE_BUFFER_CONSUME',token:boot},function(res){
+          try{
+            if(chrome.runtime.lastError)return;
+            if(!res||!Array.isArray(res.ops)||res.ops.length===0)return;
+
+            if(!Array.isArray(window.__nexusTypeOps))window.__nexusTypeOps=[];
+            if(typeof window.__nexusTypeBuffer!=='string')window.__nexusTypeBuffer='';
+
+            for(var i=0;i<res.ops.length;i++){
+              var op=res.ops[i];
+              if(!op||typeof op!=='object')continue;
+              if(op.t==='ins'&&typeof op.v==='string'&&op.v.length>0){
+                window.__nexusTypeOps.push({t:'ins',v:op.v});
+                window.__nexusTypeBuffer+=op.v;
+              }else if(op.t==='back'){
+                window.__nexusTypeOps.push({t:'back'});
+                if(window.__nexusTypeBuffer.length>0){
+                  window.__nexusTypeBuffer=window.__nexusTypeBuffer.slice(0,-1);
+                }
+              }else if(op.t==='del'){
+                window.__nexusTypeOps.push({t:'del'});
+              }
+            }
+
+            window.dispatchEvent(new Event('nexus-type-buffer-updated'));
+          }catch(e){}
+        });
+
+        // Remove one-time boot token from URL while preserving source/extid.
+        p.delete('boot');
+        var cleanQs=p.toString();
+        var cleanUrl=window.location.pathname+(cleanQs?('?'+cleanQs):'')+window.location.hash;
+        window.history.replaceState({},'',cleanUrl);
+      }catch(e){}
+    })();
+    </script>
+    <!--
       Type-ahead buffer: captures keystrokes from the first byte of HTML —
       before React and before bundles load.
       We store an op queue (__nexusTypeOps) so Backspace/Delete semantics are
@@ -162,9 +213,9 @@
     <script>
     (function(){
       // Legacy string mirror kept for backward compatibility.
-      window.__nexusTypeBuffer='';
+      if(typeof window.__nexusTypeBuffer!=='string')window.__nexusTypeBuffer='';
       // Canonical op queue consumed by AIInputBar.
-      window.__nexusTypeOps=[];
+      if(!Array.isArray(window.__nexusTypeOps))window.__nexusTypeOps=[];
       window.__nexusTypeBufferActive=true;
 
       function isEditableTarget(target){

@@ -258,6 +258,16 @@ export function AIInputBar() {
     };
   }, [revealed]);
 
+  // Extension handoff may land slightly after mount; drain again whenever the
+  // pre-React queue is updated by index.html's token-consume bridge.
+  useEffect(() => {
+    const onBufferUpdate = () => { drainTypeBuffer(); };
+    window.addEventListener('nexus-type-buffer-updated', onBufferUpdate);
+    return () => window.removeEventListener('nexus-type-buffer-updated', onBufferUpdate);
+  // drainTypeBuffer is render-scoped but stable enough here (ref-driven internals)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Suggestions ───────────────────────────────────────────────────────────
   const suggestions = useMemo<Suggestion[]>(() => {
     if (!input.trim() || mode !== 'google' || !settings.showSuggestions) return [];

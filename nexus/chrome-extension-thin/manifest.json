@@ -11,7 +11,8 @@
   },
   "permissions": [
     "alarms",
-    "search"
+    "search",
+    "storage"
   ],
   "externally_connectable": {
     "matches": ["https://nexus.lj-buchmiller.com/*"]
